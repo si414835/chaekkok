@@ -185,6 +185,21 @@ button {
   height: 56px;
   border-radius: 2px;
   box-shadow: 1px 1px 0 rgba(43, 38, 32, 0.15);
+  object-fit: cover;
+  background: var(--rule);
+  display: block;
+}
+
+.cover-swatch--empty {
+  background: var(--rule);
+}
+
+.detail__cover.cover-swatch {
+  width: 96px;
+  height: 136px;
+  border-radius: 3px;
+  margin-bottom: 16px;
+  box-shadow: 2px 2px 0 rgba(43, 38, 32, 0.15);
 }
 
 .book-info {
