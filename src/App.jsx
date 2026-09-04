@@ -142,4 +142,114 @@ function Home({ books, loading, error, onSelect }) {
         {!loading &&
           !error &&
           filtered.map((book, i) => (
-            <BookRow key={book.isbn13} rank={i + 1} book={book}
+            <BookRow key={book.isbn13} rank={i + 1} book={book} onSelect={onSelect} />
+          ))}
+      </div>
+      <AdBanner />
+    </>
+  )
+}
+
+function Detail({ book, onBack }) {
+  return (
+    <div className="detail">
+      <button className="back-link" onClick={onBack}>
+        ← 목록으로
+      </button>
+      <BookCover src={book.cover_url} alt={book.title} size="detail" />
+      <h2 className="detail__title">{book.title}</h2>
+      <p className="detail__meta">
+        {book.author} · {book.publisher} · {book.categoryLabel}
+      </p>
+      <div className="detail__stat-row">
+        <div>
+          <p className="stat__label">지난주 대비</p>
+          <p className="stat__value stat__value--growth">+{book.rank_diff}계단</p>
+        </div>
+        <div>
+          <p className="stat__label">이번 주 순위</p>
+          <p className="stat__value">{book.base_week_rank ?? '-'}위</p>
+        </div>
+        <div>
+          <p className="stat__label">지난 주 순위</p>
+          <p className="stat__value">{book.past_week_rank ?? '-'}위</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function extractCategoryLabel(classNameFull) {
+  if (!classNameFull) return '미분류'
+  const parts = classNameFull.split('>').map((s) => s.trim())
+  return parts[parts.length - 1] || '미분류'
+}
+
+export default function App() {
+  const [selected, setSelected] = useState(null)
+  const [books, setBooks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      setError(null)
+
+      const { data, error: fetchError } = await supabase
+        .from('trend_scores')
+        .select(
+          'rank_diff, base_week_rank, past_week_rank, snapshot_date, trend_type, books ( isbn13, title, author, publisher, class_name, cover_url, detail_url )'
+        )
+        .order('snapshot_date', { ascending: false })
+
+      if (cancelled) return
+
+      if (fetchError) {
+        setError(fetchError.message)
+        setLoading(false)
+        return
+      }
+
+      const rows = data ?? []
+      const latestDate = rows[0]?.snapshot_date
+
+      const mapped = rows
+        .filter((r) => r.snapshot_date === latestDate && r.books)
+        .map((r) => ({
+          isbn13: r.books.isbn13,
+          title: r.books.title,
+          author: r.books.author,
+          publisher: r.books.publisher,
+          classNameFull: r.books.class_name,
+          categoryLabel: extractCategoryLabel(r.books.class_name),
+          cover_url: r.books.cover_url,
+          detail_url: r.books.detail_url,
+          rank_diff: r.rank_diff,
+          base_week_rank: r.base_week_rank,
+          past_week_rank: r.past_week_rank,
+          trendType: r.trend_type,
+        }))
+
+      setBooks(mapped)
+      setLoading(false)
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <div className="app">
+      {selected ? (
+        <Detail book={selected} onBack={() => setSelected(null)} />
+      ) : (
+        <Home books={books} loading={loading} error={error} onSelect={setSelected} />
+      )}
+    </div>
+  )
+}
