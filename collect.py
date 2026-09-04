@@ -6,6 +6,7 @@ v3: 인기대출도서(loanItemSrch) 수집 추가 -> '꾸준한 인기' 탭 + �
 """
 
 import os
+import time
 from datetime import datetime, timedelta, timezone
 import requests
 from supabase import create_client
@@ -34,6 +35,22 @@ def kst_today_str():
 
 
 # ---------- 공통 유틸 ----------
+
+def get_with_retry(url, params, max_retries=3, timeout=30):
+    """일시적인 타임아웃/네트워크 오류에 대비해 최대 3번까지 재시도."""
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            res = requests.get(url, params=params, timeout=timeout)
+            res.raise_for_status()
+            return res.json()
+        except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
+            last_error = e
+            wait = attempt * 5
+            print(f"  [재시도 {attempt}/{max_retries}] 연결 실패, {wait}초 후 재시도: {e}")
+            time.sleep(wait)
+    raise last_error
+
 
 def clean_class_nm(class_nm):
     if class_nm and "null" in class_nm:
@@ -70,9 +87,7 @@ def fetch_hot_trend():
         "format": "json",
         "searchDt": kst_yesterday_str(),
     }
-    res = requests.get(HOT_TREND_URL, params=params, timeout=15)
-    res.raise_for_status()
-    return res.json()
+    return get_with_retry(HOT_TREND_URL, params)
 
 
 def collect_hot_trend():
@@ -116,9 +131,7 @@ def fetch_loan_items(page_no: int, page_size: int = 50):
         "pageNo": page_no,
         "pageSize": page_size,
     }
-    res = requests.get(LOAN_ITEM_URL, params=params, timeout=15)
-    res.raise_for_status()
-    return res.json()
+    return get_with_retry(LOAN_ITEM_URL, params)
 
 
 def collect_loan_items():
@@ -149,7 +162,13 @@ def collect_loan_items():
 
 def main():
     collect_hot_trend()
-    collect_loan_items()
+
+    try:
+        collect_loan_items()
+    except Exception as e:
+        # loanItemSrch가 실패해도 hotTrend 결과는 이미 저장됐으니 전체 실패로 처리하지 않음
+        print(f"[loanItemSrch] 수집 실패 (다음 실행에서 재시도됨): {e}")
+
     print("\n전체 수집 완료")
 
 
