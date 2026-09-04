@@ -121,10 +121,14 @@ function Home({ books, loading, error, onSelect }) {
   const [trendType, setTrendType] = useState('rising')
 
   const filtered = useMemo(() => {
-    return books
+    const list = books
       .filter((b) => b.trendType === trendType)
       .filter((b) => category === '전체' || (b.classNameFull && b.classNameFull.includes(category)))
-      .sort((a, b) => (b.rank_diff ?? 0) - (a.rank_diff ?? 0))
+
+    if (trendType === 'popular') {
+      return [...list].sort((a, b) => (b.loan_count ?? 0) - (a.loan_count ?? 0))
+    }
+    return [...list].sort((a, b) => (b.rank_diff ?? 0) - (a.rank_diff ?? 0))
   }, [books, category, trendType])
 
   return (
