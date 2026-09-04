@@ -1,5 +1,13 @@
-import { useMemo, useState } from 'react'
-import { CATEGORIES, TREND_TYPES, filterBooks } from './data/mockBooks'
+import { useEffect, useMemo, useState } from 'react'
+import { supabase } from './lib/supabase'
+
+const CATEGORIES = ['전체', '소설', '에세이', '자기계발', '경제경영', '인문학']
+
+const TREND_TYPES = [
+  { id: 'rising', label: '급상승' },
+  { id: 'popular', label: '꾸준한 인기' },
+  { id: 'new', label: '신간 화제작' },
+]
 
 const today = new Date()
 const dateLabel = `${today.getMonth() + 1}월 ${today.getDate()}일 기준`
@@ -49,18 +57,29 @@ function Filters({ category, setCategory, trendType, setTrendType }) {
   )
 }
 
+function BookCover({ src, alt, size = 'row' }) {
+  const [failed, setFailed] = useState(false)
+  const className = size === 'detail' ? 'cover-swatch detail__cover' : 'cover-swatch'
+  if (!src || failed) {
+    return <span className={className + ' cover-swatch--empty'} aria-hidden="true" />
+  }
+  return (
+    <img src={src} alt={alt} className={className} loading="lazy" onError={() => setFailed(true)} />
+  )
+}
+
 function BookRow({ rank, book, onSelect }) {
   return (
     <button className="book-row" onClick={() => onSelect(book)}>
       <span className="stamp">{rank}</span>
-      <span className="cover-swatch" style={{ background: book.coverTone }} />
+      <BookCover src={book.cover_url} alt={book.title} />
       <span className="book-info">
         <p className="book-title">{book.title}</p>
         <p className="book-meta">
-          {book.category} · {book.author}
+          {book.categoryLabel} · {book.author}
         </p>
       </span>
-      <span className="growth">{book.growth}%</span>
+      <span className="growth">{book.rank_diff}계단</span>
     </button>
   )
 }
@@ -79,14 +98,25 @@ function AdBanner() {
   )
 }
 
-function Home({ onSelect }) {
+function EmptyState({ trendType }) {
+  const label = TREND_TYPES.find((t) => t.id === trendType)?.label ?? ''
+  return (
+    <p style={{ color: 'var(--ink-soft)', fontSize: 13, padding: '20px 0' }}>
+      아직 '{label}' 데이터가 없어요. 곧 채워질 예정이에요.
+    </p>
+  )
+}
+
+function Home({ books, loading, error, onSelect }) {
   const [category, setCategory] = useState('전체')
   const [trendType, setTrendType] = useState('rising')
 
-  const books = useMemo(
-    () => filterBooks({ category, trendType }),
-    [category, trendType]
-  )
+  const filtered = useMemo(() => {
+    return books
+      .filter((b) => b.trendType === trendType)
+      .filter((b) => category === '전체' || (b.classNameFull && b.classNameFull.includes(category)))
+      .sort((a, b) => (b.rank_diff ?? 0) - (a.rank_diff ?? 0))
+  }, [books, category, trendType])
 
   return (
     <>
@@ -98,56 +128,18 @@ function Home({ onSelect }) {
         setTrendType={setTrendType}
       />
       <div className="card-list">
-        {books.length === 0 && (
+        {loading && (
           <p style={{ color: 'var(--ink-soft)', fontSize: 13, padding: '20px 0' }}>
-            아직 이 카테고리엔 데이터가 없어요.
+            불러오는 중...
           </p>
         )}
-        {books.map((book, i) => (
-          <BookRow key={book.isbn13} rank={i + 1} book={book} onSelect={onSelect} />
-        ))}
-      </div>
-      <AdBanner />
-    </>
-  )
-}
-
-function Detail({ book, onBack }) {
-  return (
-    <div className="detail">
-      <button className="back-link" onClick={onBack}>
-        ← 목록으로
-      </button>
-      <span className="detail__cover" style={{ background: book.coverTone }} />
-      <h2 className="detail__title">{book.title}</h2>
-      <p className="detail__meta">
-        {book.author} · {book.publisher} · {book.category}
-      </p>
-      <div className="detail__stat-row">
-        <div>
-          <p className="stat__label">이번 주 상승률</p>
-          <p className="stat__value stat__value--growth">+{book.growth}%</p>
-        </div>
-        <div>
-          <p className="stat__label">누적 대출</p>
-          <p className="stat__value">{book.loanCount.toLocaleString()}</p>
-        </div>
-      </div>
-      <p className="detail__desc">{book.description}</p>
-    </div>
-  )
-}
-
-export default function App() {
-  const [selected, setSelected] = useState(null)
-
-  return (
-    <div className="app">
-      {selected ? (
-        <Detail book={selected} onBack={() => setSelected(null)} />
-      ) : (
-        <Home onSelect={setSelected} />
-      )}
-    </div>
-  )
-}
+        {!loading && error && (
+          <p style={{ color: 'var(--stamp-red)', fontSize: 13, padding: '20px 0' }}>
+            데이터를 불러오지 못했어요: {error}
+          </p>
+        )}
+        {!loading && !error && filtered.length === 0 && <EmptyState trendType={trendType} />}
+        {!loading &&
+          !error &&
+          filtered.map((book, i) => (
+            <BookRow key={book.isbn13} rank={i + 1} book={book}
