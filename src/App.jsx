@@ -68,6 +68,13 @@ function BookCover({ src, alt, size = 'row' }) {
   )
 }
 
+function formatMetric(book) {
+  if (book.trendType === 'popular') {
+    return `${book.loan_count ?? 0}회 대출`
+  }
+  return `${book.rank_diff ?? 0}계단`
+}
+
 function BookRow({ rank, book, onSelect }) {
   return (
     <button className="book-row" onClick={() => onSelect(book)}>
@@ -79,7 +86,9 @@ function BookRow({ rank, book, onSelect }) {
           {book.categoryLabel} · {book.author}
         </p>
       </span>
-      <span className="growth">{book.rank_diff}계단</span>
+      <span className={`growth${book.trendType === 'popular' ? ' growth--plain' : ''}`}>
+        {formatMetric(book)}
+      </span>
     </button>
   )
 }
@@ -162,18 +171,33 @@ function Detail({ book, onBack }) {
         {book.author} · {book.publisher} · {book.categoryLabel}
       </p>
       <div className="detail__stat-row">
-        <div>
-          <p className="stat__label">지난주 대비</p>
-          <p className="stat__value stat__value--growth">+{book.rank_diff}계단</p>
-        </div>
-        <div>
-          <p className="stat__label">이번 주 순위</p>
-          <p className="stat__value">{book.base_week_rank ?? '-'}위</p>
-        </div>
-        <div>
-          <p className="stat__label">지난 주 순위</p>
-          <p className="stat__value">{book.past_week_rank ?? '-'}위</p>
-        </div>
+        {book.trendType === 'popular' ? (
+          <>
+            <div>
+              <p className="stat__label">최근 30일 대출</p>
+              <p className="stat__value stat__value--growth">{book.loan_count ?? '-'}회</p>
+            </div>
+            <div>
+              <p className="stat__label">인기 순위</p>
+              <p className="stat__value">{book.rank ?? '-'}위</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="stat__label">지난주 대비</p>
+              <p className="stat__value stat__value--growth">+{book.rank_diff}계단</p>
+            </div>
+            <div>
+              <p className="stat__label">이번 주 순위</p>
+              <p className="stat__value">{book.base_week_rank ?? '-'}위</p>
+            </div>
+            <div>
+              <p className="stat__label">지난 주 순위</p>
+              <p className="stat__value">{book.past_week_rank ?? '-'}위</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -201,7 +225,7 @@ export default function App() {
       const { data, error: fetchError } = await supabase
         .from('trend_scores')
         .select(
-          'rank_diff, base_week_rank, past_week_rank, snapshot_date, trend_type, books ( isbn13, title, author, publisher, class_name, cover_url, detail_url )'
+          'rank_diff, base_week_rank, past_week_rank, loan_count, rank, snapshot_date, trend_type, books ( isbn13, title, author, publisher, class_name, cover_url, detail_url )'
         )
         .order('snapshot_date', { ascending: false })
 
@@ -214,10 +238,19 @@ export default function App() {
       }
 
       const rows = data ?? []
-      const latestDate = rows[0]?.snapshot_date
+
+      // trend_type별로 각각의 최신 snapshot_date를 따로 계산
+      // (급상승은 매일, 인기대출은 다른 주기로 갱신될 수 있어서 하나의 날짜로 묶으면 안 됨)
+      const latestDateByType = {}
+      for (const r of rows) {
+        const t = r.trend_type
+        if (!latestDateByType[t] || r.snapshot_date > latestDateByType[t]) {
+          latestDateByType[t] = r.snapshot_date
+        }
+      }
 
       const mapped = rows
-        .filter((r) => r.snapshot_date === latestDate && r.books)
+        .filter((r) => r.books && r.snapshot_date === latestDateByType[r.trend_type])
         .map((r) => ({
           isbn13: r.books.isbn13,
           title: r.books.title,
@@ -230,6 +263,8 @@ export default function App() {
           rank_diff: r.rank_diff,
           base_week_rank: r.base_week_rank,
           past_week_rank: r.past_week_rank,
+          loan_count: r.loan_count,
+          rank: r.rank,
           trendType: r.trend_type,
         }))
 
