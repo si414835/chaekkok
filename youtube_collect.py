@@ -7,6 +7,7 @@
 """
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 import requests
 from supabase import create_client
@@ -70,9 +71,42 @@ def get_target_books():
     return targets
 
 
+def clean_title(title: str) -> str:
+    """정보나루 제목에 붙은 부제/저자 정보(':', '=', '/' 뒤쪽)를 잘라내고 핵심 제목만 남긴다.
+    예: "체리새우 :황영미 장편소설 " -> "체리새우", "할매 =황석영 장편소설 /Grandma " -> "할매"
+    """
+    title = title or ""
+    for sep in [":", "=", "/"]:
+        idx = title.find(sep)
+        if idx != -1:
+            title = title[:idx]
+    return title.strip()
+
+
+def clean_author(author: str) -> str:
+    """"지은이: 김애란" 같은 역할 라벨을 제거하고 첫 번째 저자 이름만 남긴다."""
+    if not author:
+        return ""
+    author = re.sub(r"(지은이|지음|글쓴이|저자|옮긴이|엮은이|원작|글|그림)\s*[:：]?", "", author)
+    author = re.split(r"[;,]", author)[0]
+    return author.strip()
+
+
 def search_youtube_count(title: str, author: str):
-    """책 제목으로 유튜브 검색 후, 대략적인 전체 결과 수(totalResults)를 반환."""
-    query = f'"{title}" 책'
+    """정제된 책 제목(+짧으면 저자 보조)으로 유튜브 검색 후, 대략적인 전체 결과 수(totalResults)를 반환.
+    큰따옴표(완전일치)는 쓰지 않는다 - 유튜브 검색은 구글만큼 정확한 완전일치를 지원하지
+    않아서, 따옴표를 쓰면 오히려 결과가 과도하게 걸러진다.
+    """
+    query = clean_title(title)
+
+    # 제목이 2글자 이하로 너무 짧아 흔한 단어와 겹칠 위험이 있으면 저자명을 보조로 붙임
+    if len(query) <= 2:
+        a = clean_author(author)
+        if a:
+            query = f"{query} {a}"
+
+    query = f"{query} 책"
+
     params = {
         "key": YOUTUBE_API_KEY,
         "part": "snippet",
