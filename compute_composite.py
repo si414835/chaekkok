@@ -108,5 +108,7 @@ def main():
     }
 
     # 실제로 데이터가 있는 신호만 사용 + 가중치 재조정
-    active = {k: v for k, v in raw_signals.items() if v}
-    if not
+       active = {k: v for k, v in raw_signals.items() if v}
+    if not active:
+        print("사용 가능한 신호가 없습니다. 종료합니다.")
+        return
