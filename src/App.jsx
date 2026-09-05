@@ -3,6 +3,23 @@ import { supabase } from './lib/supabase'
 
 const CATEGORIES = ['전체', '소설', '에세이', '자기계발', '경제경영', '인문학']
 
+// 우리 탭 이름과 정보나루 실제 분류명(KDC)이 표현이 달라서, 탭마다 매칭될
+// 키워드를 여러 개 등록해둔다. 이 중 하나라도 class_name에 포함되면 그 탭으로 분류.
+const CATEGORY_KEYWORDS = {
+  소설: ['소설'],
+  에세이: ['수필', '에세이'],
+  자기계발: ['처세', '자기계발', '인간관계'],
+  경제경영: ['경제', '경영', '금융'],
+  인문학: ['철학', '역사', '인문', '언어'],
+}
+
+function matchesCategory(classNameFull, category) {
+  if (category === '전체') return true
+  if (!classNameFull) return false
+  const keywords = CATEGORY_KEYWORDS[category] || [category]
+  return keywords.some((kw) => classNameFull.includes(kw))
+}
+
 const TREND_TYPES = [
   { id: 'composite', label: '종합 추천' },
   { id: 'rising', label: '급상승' },
@@ -127,7 +144,7 @@ function Home({ books, loading, error, onSelect }) {
   const filtered = useMemo(() => {
     const list = books
       .filter((b) => b.trendType === trendType)
-      .filter((b) => category === '전체' || (b.classNameFull && b.classNameFull.includes(category)))
+      .filter((b) => matchesCategory(b.classNameFull, category))
 
     if (trendType === 'composite') {
       return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
