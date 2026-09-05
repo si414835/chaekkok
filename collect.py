@@ -120,7 +120,12 @@ def collect_hot_trend():
 
 # ---------- 2. 인기대출도서 (loanItemSrch) ----------
 
-def fetch_loan_items(page_no: int, page_size: int = 50):
+# KDC(도서 분류) 코드별로 나눠서 요청 - 분야가 골고루 섞이도록.
+# 1=철학(자기계발/인문학 일부), 3=사회과학(경제경영), 8=문학(소설/에세이), 9=역사(인문학 일부)
+KDC_CODES = [1, 3, 8, 9]
+
+
+def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None):
     end_dt = kst_yesterday_str()
     start_dt = (kst_today() - timedelta(days=30)).strftime("%Y-%m-%d")
     params = {
@@ -131,33 +136,42 @@ def fetch_loan_items(page_no: int, page_size: int = 50):
         "pageNo": page_no,
         "pageSize": page_size,
     }
+    if kdc is not None:
+        params["kdc"] = kdc
     return get_with_retry(LOAN_ITEM_URL, params)
 
 
 def collect_loan_items():
-    """최근 30일 인기대출도서 상위 50권을 가져와 'popular' 트렌드로 저장."""
-    data = fetch_loan_items(page_no=1, page_size=50)
-    docs = data.get("response", {}).get("docs", [])
+    """분야(KDC)별로 나눠서 인기대출도서를 가져와 'popular' 트렌드로 저장.
+    분야를 나누지 않으면 소설/아동과학 위주로만 쏠려서 다른 분야 탭이 텅 비게 됨."""
     snapshot_date = kst_today_str()
+    total_count = 0
 
-    count = 0
-    for item in docs:
-        doc = item.get("doc", {})
-        isbn13 = upsert_book(doc)
-        if not isbn13:
-            continue
-        trend_row = {
-            "isbn13": isbn13,
-            "snapshot_date": snapshot_date,
-            "loan_count": doc.get("loan_count"),
-            "rank": doc.get("ranking"),
-            "trend_type": "popular",
-        }
-        supabase.table("trend_scores").upsert(
-            trend_row, on_conflict="isbn13,snapshot_date,trend_type"
-        ).execute()
-        count += 1
-    print(f"[loanItemSrch] {count}건 저장")
+    for kdc in KDC_CODES:
+        data = fetch_loan_items(page_no=1, page_size=30, kdc=kdc)
+        docs = data.get("response", {}).get("docs", [])
+
+        count = 0
+        for item in docs:
+            doc = item.get("doc", {})
+            isbn13 = upsert_book(doc)
+            if not isbn13:
+                continue
+            trend_row = {
+                "isbn13": isbn13,
+                "snapshot_date": snapshot_date,
+                "loan_count": doc.get("loan_count"),
+                "rank": doc.get("ranking"),
+                "trend_type": "popular",
+            }
+            supabase.table("trend_scores").upsert(
+                trend_row, on_conflict="isbn13,snapshot_date,trend_type"
+            ).execute()
+            count += 1
+        print(f"[loanItemSrch] kdc={kdc}: {count}건 저장")
+        total_count += count
+
+    print(f"[loanItemSrch] 총 {total_count}건 저장")
 
 
 def main():
