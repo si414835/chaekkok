@@ -11,6 +11,7 @@ source='google_trends'로 저장합니다.
 """
 
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from pytrends.request import TrendReq
@@ -34,7 +35,7 @@ def get_target_books():
     """오늘 급상승/인기대출 상위 도서 중 최대 MAX_BOOKS_PER_RUN권을 뽑는다 (중복 제목 제거)."""
     rows = (
         supabase.table("trend_scores")
-        .select("isbn13, trend_type, snapshot_date, rank_diff, loan_count, books(isbn13, title)")
+        .select("isbn13, trend_type, snapshot_date, rank_diff, loan_count, books(isbn13, title, author)")
         .order("snapshot_date", desc=True)
         .execute()
         .data
@@ -59,14 +60,14 @@ def get_target_books():
         reverse=True,
     )
 
-    seen_titles = set()
+    seen_queries = set()
     targets = []
     for r in rising + popular:
-        title = clean_title(r["books"]["title"])
-        if title in seen_titles:
+        query = build_query(r["books"]["title"], r["books"].get("author") or "")
+        if query in seen_queries:
             continue
-        seen_titles.add(title)
-        targets.append({"isbn13": r["books"]["isbn13"], "title": title})
+        seen_queries.add(query)
+        targets.append({"isbn13": r["books"]["isbn13"], "title": r["books"]["title"], "query": query})
         if len(targets) >= MAX_BOOKS_PER_RUN:
             break
 
@@ -82,14 +83,33 @@ def clean_title(title: str) -> str:
     return title.strip()
 
 
+def clean_author(author: str) -> str:
+    """"지은이: 김애란" 같은 역할 라벨을 제거하고 첫 번째 저자 이름만 남긴다."""
+    if not author:
+        return ""
+    author = re.sub(r"(지은이|지음|글쓴이|저자|옮긴이|엮은이|원작|글|그림)\s*[:：]?", "", author)
+    author = re.split(r"[;,]", author)[0]
+    return author.strip()
+
+
+def build_query(title: str, author: str) -> str:
+    """제목이 짧고 흔한 단어(예: '모순')일 때 관계없는 검색어와 섞이지 않도록
+    항상 저자명을 같이 붙여서 검색한다."""
+    title_only = clean_title(title)
+    a = clean_author(author)
+    return f"{title_only} {a}".strip() if a else title_only
+
+
 def fetch_trend_score(pytrends, query: str):
-    """최근 1개월 검색 관심도 중 가장 최근 값(0~100)을 반환. 실패 시 None."""
+    """최근 7일 검색 관심도의 평균(0~100)을 반환. 하루짜리 우연한 스파이크에
+    점수가 크게 흔들리지 않도록 보수적으로 평균을 낸다. 실패 시 None."""
     try:
         pytrends.build_payload([query], timeframe="today 1-m", geo="KR")
         df = pytrends.interest_over_time()
         if df.empty:
             return 0
-        return int(df[query].iloc[-1])
+        recent = df[query].tail(7)
+        return round(recent.mean())
     except Exception as e:
         print(f"  [경고] '{query}' 조회 실패: {e}")
         return None
@@ -104,7 +124,7 @@ def main():
     saved = 0
 
     for i, book in enumerate(targets):
-        score = fetch_trend_score(pytrends, book["title"])
+        score = fetch_trend_score(pytrends, book["query"])
         if score is None:
             continue
 
@@ -118,7 +138,7 @@ def main():
             row, on_conflict="isbn13,signal_date,source"
         ).execute()
         saved += 1
-        print(f"  {book['title']}: {score}점")
+        print(f"  {book['title']} (검색어: '{book['query']}'): {score}점")
 
         if i < len(targets) - 1:
             time.sleep(REQUEST_DELAY_SEC)  # 차단 방지용 대기
