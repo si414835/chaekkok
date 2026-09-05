@@ -2,10 +2,8 @@ name: 책콕 데이터 수집
 
 on:
   schedule:
-    # 매일 한국시간 오전 7시 (UTC 22시, 하루 전날)에 실행
     - cron: '0 22 * * *'
   workflow_dispatch:
-    # 이 버튼을 누르면 지금 바로 수동 실행도 가능
 
 jobs:
   collect:
@@ -22,9 +20,16 @@ jobs:
       - name: 필요한 패키지 설치
         run: pip install requests supabase
 
-      - name: 데이터 수집 실행
+      - name: 정보나루 데이터 수집 실행
         env:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python collect.py
+
+      - name: 유튜브 언급량 수집 실행
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python youtube_collect.py
