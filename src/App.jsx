@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase'
 const CATEGORIES = ['전체', '소설', '에세이', '자기계발', '경제경영', '인문학']
 
 const TREND_TYPES = [
+  { id: 'composite', label: '종합 추천' },
   { id: 'rising', label: '급상승' },
   { id: 'popular', label: '꾸준한 인기' },
   { id: 'new', label: '신간 화제작' },
@@ -69,6 +70,9 @@ function BookCover({ src, alt, size = 'row' }) {
 }
 
 function formatMetric(book) {
+  if (book.trendType === 'composite') {
+    return `${book.score ?? 0}점`
+  }
   if (book.trendType === 'popular') {
     return `${book.loan_count ?? 0}회 대출`
   }
@@ -86,7 +90,7 @@ function BookRow({ rank, book, onSelect }) {
           {book.categoryLabel} · {book.author}
         </p>
       </span>
-      <span className={`growth${book.trendType === 'popular' ? ' growth--plain' : ''}`}>
+      <span className={`growth${book.trendType !== 'rising' ? ' growth--plain' : ''}`}>
         {formatMetric(book)}
       </span>
     </button>
@@ -118,13 +122,16 @@ function EmptyState({ trendType }) {
 
 function Home({ books, loading, error, onSelect }) {
   const [category, setCategory] = useState('전체')
-  const [trendType, setTrendType] = useState('rising')
+  const [trendType, setTrendType] = useState('composite')
 
   const filtered = useMemo(() => {
     const list = books
       .filter((b) => b.trendType === trendType)
       .filter((b) => category === '전체' || (b.classNameFull && b.classNameFull.includes(category)))
 
+    if (trendType === 'composite') {
+      return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    }
     if (trendType === 'popular') {
       return [...list].sort((a, b) => (b.loan_count ?? 0) - (a.loan_count ?? 0))
     }
@@ -175,7 +182,12 @@ function Detail({ book, onBack }) {
         {book.author} · {book.publisher} · {book.categoryLabel}
       </p>
       <div className="detail__stat-row">
-        {book.trendType === 'popular' ? (
+        {book.trendType === 'composite' ? (
+          <div>
+            <p className="stat__label">종합 트렌드 점수</p>
+            <p className="stat__value stat__value--growth">{book.score ?? '-'}점</p>
+          </div>
+        ) : book.trendType === 'popular' ? (
           <>
             <div>
               <p className="stat__label">최근 30일 대출</p>
@@ -229,7 +241,7 @@ export default function App() {
       const { data, error: fetchError } = await supabase
         .from('trend_scores')
         .select(
-          'rank_diff, base_week_rank, past_week_rank, loan_count, rank, snapshot_date, trend_type, books ( isbn13, title, author, publisher, class_name, cover_url, detail_url )'
+          'rank_diff, base_week_rank, past_week_rank, loan_count, rank, score, snapshot_date, trend_type, books ( isbn13, title, author, publisher, class_name, cover_url, detail_url )'
         )
         .order('snapshot_date', { ascending: false })
 
@@ -269,6 +281,7 @@ export default function App() {
           past_week_rank: r.past_week_rank,
           loan_count: r.loan_count,
           rank: r.rank,
+          score: r.score,
           trendType: r.trend_type,
         }))
 
