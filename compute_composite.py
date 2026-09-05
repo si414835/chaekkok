@@ -108,7 +108,47 @@ def main():
     }
 
     # 실제로 데이터가 있는 신호만 사용 + 가중치 재조정
-       active = {k: v for k, v in raw_signals.items() if v}
+    active = {k: v for k, v in raw_signals.items() if v}
     if not active:
         print("사용 가능한 신호가 없습니다. 종료합니다.")
         return
+
+    active_weight_sum = sum(MASTER_WEIGHTS[k] for k in active)
+    normalized_weights = {k: MASTER_WEIGHTS[k] / active_weight_sum for k in active}
+
+    print("이번 계산에 사용된 신호와 재조정된 가중치:")
+    for k, w in normalized_weights.items():
+        print(f"  {k}: {w * 100:.1f}% (원래 {MASTER_WEIGHTS[k]}%)")
+
+    # 신호별로 0~100 정규화
+    normalized_values = {k: min_max_normalize(v) for k, v in active.items()}
+
+    # 후보 도서 전체 집합 (하나라도 신호가 있으면 포함)
+    all_isbns = set()
+    for v in active.values():
+        all_isbns.update(v.keys())
+
+    today = kst_today_str()
+    saved = 0
+
+    for isbn13 in all_isbns:
+        score = sum(
+            normalized_values[k].get(isbn13, 0) * normalized_weights[k]
+            for k in active
+        )
+        row = {
+            "isbn13": isbn13,
+            "snapshot_date": today,
+            "trend_type": "composite",
+            "score": round(score, 1),
+        }
+        supabase.table("trend_scores").upsert(
+            row, on_conflict="isbn13,snapshot_date,trend_type"
+        ).execute()
+        saved += 1
+
+    print(f"\n[composite] {saved}건 저장")
+
+
+if __name__ == "__main__":
+    main()
