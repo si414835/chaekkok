@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: 필요한 패키지 설치
-        run: pip install requests supabase
+        run: pip install requests supabase pytrends
 
       - name: 정보나루 데이터 수집 실행
         env:
@@ -33,3 +33,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python youtube_collect.py
+
+      - name: 구글 트렌드 수집 실행
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python google_trends_collect.py
