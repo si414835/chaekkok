@@ -121,9 +121,9 @@ def collect_hot_trend():
 
 # ---------- 2. 인기대출도서 (loanItemSrch) ----------
 
-# KDC(도서 분류) 코드별로 나눠서 요청 - 분야가 골고루 섞이도록.
-# 1=철학(자기계발/인문학 일부), 3=사회과학(경제경영), 8=문학(소설/에세이), 9=역사(인문학 일부)
-KDC_CODES = [1, 3, 8, 9]
+# KDC(도서 분류) 10개 대분류 전부 수집 - 탭마다 빈 곳이 없도록.
+# 0=총류 1=철학 2=종교 3=사회과학 4=자연과학 5=기술과학 6=예술 7=언어 8=문학 9=역사
+KDC_CODES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None):
@@ -149,7 +149,7 @@ def collect_loan_items():
     total_count = 0
 
     for kdc in KDC_CODES:
-        data = fetch_loan_items(page_no=1, page_size=30, kdc=kdc)
+        data = fetch_loan_items(page_no=1, page_size=20, kdc=kdc)
         docs = data.get("response", {}).get("docs", [])
 
         count = 0
