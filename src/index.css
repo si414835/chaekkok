@@ -89,13 +89,9 @@ button {
 
 .filters__row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
   padding-bottom: 10px;
-  scrollbar-width: none;
-}
-.filters__row::-webkit-scrollbar {
-  display: none;
 }
 
 .chip {
