@@ -126,7 +126,7 @@ def collect_hot_trend():
 KDC_CODES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
-def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None):
+def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None, from_age=20, to_age=99):
     end_dt = kst_yesterday_str()
     start_dt = (kst_today() - timedelta(days=30)).strftime("%Y-%m-%d")
     params = {
@@ -136,43 +136,57 @@ def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None):
         "endDt": end_dt,
         "pageNo": page_no,
         "pageSize": page_size,
-        "from_age": 20,  # 20세부터
-        "to_age": 99,    # 상한 없이 전 연령 성인 포함 -> 20대만이 아니라 전체 성인
+        "from_age": from_age,
+        "to_age": to_age,
     }
     if kdc is not None:
         params["kdc"] = kdc
     return get_with_retry(LOAN_ITEM_URL, params)
 
 
+def _save_loan_docs(docs, snapshot_date):
+    count = 0
+    for item in docs:
+        doc = item.get("doc", {})
+        isbn13 = upsert_book(doc)
+        if not isbn13:
+            continue
+        trend_row = {
+            "isbn13": isbn13,
+            "snapshot_date": snapshot_date,
+            "loan_count": doc.get("loan_count"),
+            "rank": doc.get("ranking"),
+            "trend_type": "popular",
+        }
+        supabase.table("trend_scores").upsert(
+            trend_row, on_conflict="isbn13,snapshot_date,trend_type"
+        ).execute()
+        count += 1
+    return count
+
+
 def collect_loan_items():
-    """분야(KDC)별로 나눠서 인기대출도서를 가져와 'popular' 트렌드로 저장.
-    분야를 나누지 않으면 소설/아동과학 위주로만 쏠려서 다른 분야 탭이 텅 비게 됨."""
+    """분야(KDC)별 성인(20세 이상) 인기대출도서 + 어린이(0~13세) 인기대출도서를
+    각각 따로 가져와 'popular' 트렌드로 저장.
+    - 성인 데이터는 20세 이상으로 필터링해서 어린이책이 섞이지 않게 함
+    - 어린이책은 별도로 한 번 더 가져와서 '어린이' 탭 전용으로 채움
+    """
     snapshot_date = kst_today_str()
     total_count = 0
 
     for kdc in KDC_CODES:
-        data = fetch_loan_items(page_no=1, page_size=30, kdc=kdc)
+        data = fetch_loan_items(page_no=1, page_size=30, kdc=kdc, from_age=14, to_age=99)
         docs = data.get("response", {}).get("docs", [])
-
-        count = 0
-        for item in docs:
-            doc = item.get("doc", {})
-            isbn13 = upsert_book(doc)
-            if not isbn13:
-                continue
-            trend_row = {
-                "isbn13": isbn13,
-                "snapshot_date": snapshot_date,
-                "loan_count": doc.get("loan_count"),
-                "rank": doc.get("ranking"),
-                "trend_type": "popular",
-            }
-            supabase.table("trend_scores").upsert(
-                trend_row, on_conflict="isbn13,snapshot_date,trend_type"
-            ).execute()
-            count += 1
-        print(f"[loanItemSrch] kdc={kdc}: {count}건 저장")
+        count = _save_loan_docs(docs, snapshot_date)
+        print(f"[loanItemSrch] kdc={kdc} (14세 이상): {count}건 저장")
         total_count += count
+
+    # 어린이(0~13세) 인기대출도서 - KDC 구분 없이 한 번에 가져와 '어린이' 탭 전용으로 채움
+    child_data = fetch_loan_items(page_no=1, page_size=40, kdc=None, from_age=0, to_age=13)
+    child_docs = child_data.get("response", {}).get("docs", [])
+    child_count = _save_loan_docs(child_docs, snapshot_date)
+    print(f"[loanItemSrch] 어린이(0~13세): {child_count}건 저장")
+    total_count += child_count
 
     print(f"[loanItemSrch] 총 {total_count}건 저장")
 
