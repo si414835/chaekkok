@@ -31,11 +31,17 @@ def kst_today_str():
     return datetime.now(kst).strftime("%Y-%m-%d")
 
 
+def is_child_book(book):
+    """addition_symbol(형식기호)이 '7'로 시작하면 아동/청소년물 -> 검색 대상에서 제외"""
+    sym = book.get("addition_symbol") or ""
+    return sym.startswith("7")
+
+
 def get_target_books():
     """오늘 급상승/인기대출 상위 도서 중 최대 MAX_BOOKS_PER_RUN권을 뽑는다 (중복 제목 제거)."""
     rows = (
         supabase.table("trend_scores")
-        .select("isbn13, trend_type, snapshot_date, rank_diff, loan_count, books(isbn13, title, author)")
+        .select("isbn13, trend_type, snapshot_date, rank_diff, loan_count, books(isbn13, title, author, addition_symbol)")
         .order("snapshot_date", desc=True)
         .execute()
         .data
@@ -47,7 +53,12 @@ def get_target_books():
         if t not in latest_by_type or r["snapshot_date"] > latest_by_type[t]:
             latest_by_type[t] = r["snapshot_date"]
 
-    latest = [r for r in rows if r["books"] and r["snapshot_date"] == latest_by_type.get(r["trend_type"])]
+    latest = [
+        r for r in rows
+        if r["books"]
+        and r["snapshot_date"] == latest_by_type.get(r["trend_type"])
+        and not is_child_book(r["books"])
+    ]
 
     rising = sorted(
         [r for r in latest if r["trend_type"] == "rising"],
