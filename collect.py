@@ -136,6 +136,8 @@ def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None):
         "endDt": end_dt,
         "pageNo": page_no,
         "pageSize": page_size,
+        "from_age": 20,  # 20세부터
+        "to_age": 99,    # 상한 없이 전 연령 성인 포함 -> 20대만이 아니라 전체 성인
     }
     if kdc is not None:
         params["kdc"] = kdc
@@ -149,7 +151,7 @@ def collect_loan_items():
     total_count = 0
 
     for kdc in KDC_CODES:
-        data = fetch_loan_items(page_no=1, page_size=20, kdc=kdc)
+        data = fetch_loan_items(page_no=1, page_size=30, kdc=kdc)
         docs = data.get("response", {}).get("docs", [])
 
         count = 0
