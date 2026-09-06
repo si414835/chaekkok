@@ -39,11 +39,17 @@ def kst_today_str():
     return datetime.now(kst).strftime("%Y-%m-%d")
 
 
+def is_child_book(book):
+    """addition_symbol(형식기호)이 '7'로 시작하면 아동/청소년물 -> 검색 대상에서 제외"""
+    sym = book.get("addition_symbol") or ""
+    return sym.startswith("7")
+
+
 def get_target_books():
     """오늘 급상승/인기대출에 있는 책 중 최대 MAX_BOOKS_PER_RUN권을 뽑는다."""
     rows = (
         supabase.table("trend_scores")
-        .select("isbn13, trend_type, snapshot_date, rank_diff, loan_count, books(isbn13, title, author)")
+        .select("isbn13, trend_type, snapshot_date, rank_diff, loan_count, books(isbn13, title, author, addition_symbol)")
         .order("snapshot_date", desc=True)
         .execute()
         .data
@@ -55,7 +61,12 @@ def get_target_books():
         if t not in latest_by_type or r["snapshot_date"] > latest_by_type[t]:
             latest_by_type[t] = r["snapshot_date"]
 
-    latest = [r for r in rows if r["books"] and r["snapshot_date"] == latest_by_type.get(r["trend_type"])]
+    latest = [
+        r for r in rows
+        if r["books"]
+        and r["snapshot_date"] == latest_by_type.get(r["trend_type"])
+        and not is_child_book(r["books"])
+    ]
 
     rising = sorted(
         [r for r in latest if r["trend_type"] == "rising"],
@@ -149,12 +160,14 @@ def main():
 
         if query in query_cache:
             count = query_cache[query]
+            if count is None:
+                continue  # 이전에 이미 실패한 검색어 - 같은 실행 안에서 재시도 안 함
             print(f"  {book['title']}: {count}건 (캐시 재사용, 쿼리='{query}')")
         else:
             count = search_book_mentions(query)
+            query_cache[query] = count  # 실패(None)도 캐시해서 중복 재시도 방지
             if count is None:
                 continue
-            query_cache[query] = count
             print(f"  {book['title']}: {count}건 (쿼리='{query}')")
 
         row = {
