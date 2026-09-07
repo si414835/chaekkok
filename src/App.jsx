@@ -31,7 +31,7 @@ const TREND_TYPES = [
   { id: 'composite', label: '종합 추천' },
   { id: 'rising', label: '급상승' },
   { id: 'popular', label: '꾸준한 인기' },
-  { id: 'new', label: '신간 화제작' },
+  { id: 'recommended', label: '신간 화제작' },
 ]
 
 const today = new Date()
@@ -94,6 +94,9 @@ function BookCover({ src, alt, size = 'row' }) {
 }
 
 function formatMetric(book) {
+  if (book.trendType === 'recommended') {
+    return '사서 PICK'
+  }
   if (book.trendType === 'composite') {
     return `${book.score ?? 0}점`
   }
@@ -153,6 +156,9 @@ function Home({ books, loading, error, onSelect }) {
       .filter((b) => b.trendType === trendType)
       .filter((b) => matchesCategory(b, category))
 
+    if (trendType === 'recommended') {
+      return [...list].sort((a, b) => (b.snapshotDate ?? '').localeCompare(a.snapshotDate ?? ''))
+    }
     if (trendType === 'composite') {
       return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
     }
@@ -206,7 +212,12 @@ function Detail({ book, onBack }) {
         {book.author} · {book.publisher} · {book.categoryLabel}
       </p>
       <div className="detail__stat-row">
-        {book.trendType === 'composite' ? (
+        {book.trendType === 'recommended' ? (
+          <div>
+            <p className="stat__label">국립중앙도서관 사서 추천</p>
+            <p className="stat__value stat__value--growth">{book.snapshotDate ?? '-'}</p>
+          </div>
+        ) : book.trendType === 'composite' ? (
           <div>
             <p className="stat__label">종합 트렌드 점수</p>
             <p className="stat__value stat__value--growth">{book.score ?? '-'}점</p>
@@ -290,7 +301,11 @@ export default function App() {
       }
 
       const mapped = rows
-        .filter((r) => r.books && r.snapshot_date === latestDateByType[r.trend_type])
+        .filter(
+          (r) =>
+            r.books &&
+            (r.trend_type === 'recommended' || r.snapshot_date === latestDateByType[r.trend_type])
+        )
         .map((r) => ({
           isbn13: r.books.isbn13,
           title: r.books.title,
@@ -307,6 +322,7 @@ export default function App() {
           loan_count: r.loan_count,
           rank: r.rank,
           score: r.score,
+          snapshotDate: r.snapshot_date,
           trendType: r.trend_type,
         }))
 
