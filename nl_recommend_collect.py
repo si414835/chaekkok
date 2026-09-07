@@ -11,6 +11,7 @@ snapshot_date는 수집 실행일이 아니라, 실제 "추천 등록일(regdate
 import os
 import re
 import html
+import time
 from datetime import datetime, timedelta, timezone
 import requests
 import xml.etree.ElementTree as ET
@@ -23,6 +24,22 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 SASEO_URL = "https://nl.go.kr/NL/search/openApi/saseoApi.do"
+
+
+def get_with_retry(url, params, max_retries=3, timeout=60):
+    """국립중앙도서관 서버가 느리거나 순간적으로 끊길 때를 대비해 재시도."""
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            res = requests.get(url, params=params, timeout=timeout)
+            res.raise_for_status()
+            return res.text
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
+            last_error = e
+            wait = attempt * 10
+            print(f"  [재시도 {attempt}/{max_retries}] 응답 지연, {wait}초 후 재시도: {e}")
+            time.sleep(wait)
+    raise last_error
 
 
 def kst_today():
@@ -59,9 +76,7 @@ def fetch_recommendations():
         "start_date": start_dt.strftime("%Y%m%d"),
         "end_date": end_dt.strftime("%Y%m%d"),
     }
-    res = requests.get(SASEO_URL, params=params, timeout=20)
-    res.raise_for_status()
-    return res.text
+    return get_with_retry(SASEO_URL, params)
 
 
 def upsert_book(item):
