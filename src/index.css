@@ -1,11 +1,11 @@
 :root {
-  --paper: #f7f4ea;
-  --paper-card: #fdfbf5;
-  --ink: #2b2620;
-  --ink-soft: #6b6255;
-  --stamp-red: #c1432a;
-  --shelf-green: #566246;
-  --gold: #b08d57;
+  --paper: #f4efe0;
+  --paper-card: #fffdf7;
+  --ink: #1c1712;
+  --ink-soft: #5c5245;
+  --stamp-red: #e8422a;
+  --shelf-green: #12915c;
+  --gold: #e0a52e;
   --rule: #cdc4ac;
 
   --font-display: 'Noto Serif KR', serif;
@@ -44,7 +44,26 @@ button {
   flex-direction: column;
 }
 
-/* ---------- Header ---------- */
+@media (min-width: 900px) {
+  .app {
+    max-width: 1100px;
+    padding: 0 32px;
+  }
+  .header,
+  .filters,
+  .ad-banner {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .card-list {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .detail {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+}
 
 .header {
   padding: 28px 20px 18px;
@@ -80,8 +99,6 @@ button {
   padding: 3px 8px;
   white-space: nowrap;
 }
-
-/* ---------- Filters ---------- */
 
 .filters {
   padding: 16px 20px 0;
@@ -136,10 +153,88 @@ button {
   font-weight: 700;
 }
 
-/* ---------- Book list (index card) ---------- */
+.hero-section {
+  padding: 4px 20px 20px;
+}
 
-.card-list {
-  padding: 8px 20px 16px;
+.hero-section__title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.hero-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+
+.hero-card {
+  flex-shrink: 0;
+  width: 150px;
+  scroll-snap-align: start;
+  background: var(--paper-card);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: left;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hero-card:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 16px rgba(28, 23, 18, 0.18);
+  z-index: 2;
+  position: relative;
+}
+
+.hero-card__cover {
+  width: 100%;
+  height: 190px;
+  border-radius: 5px;
+  object-fit: cover;
+  display: block;
+  background: var(--rule);
+  box-shadow: 2px 3px 0 rgba(28, 23, 18, 0.18);
+}
+
+.hero-card__rank {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--stamp-red);
+  margin: 8px 0 2px;
+  line-height: 1;
+}
+
+.hero-card__title {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hero-card__metric {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--shelf-green);
+}
+
+@media (min-width: 900px) {
+  .hero-card {
+    width: 200px;
+  }
+  .hero-card__cover {
+    height: 260px;
+  }
 }
 
 .book-row {
@@ -173,12 +268,7 @@ button {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 15px;
-  transform: rotate(-6deg);
-}
-
-.book-row:nth-child(4n) .stamp,
-.book-row:nth-child(4n + 1) .stamp {
-  transform: rotate(4deg);
+  transform: none;
 }
 
 .cover-swatch {
@@ -243,8 +333,6 @@ button {
   content: '';
 }
 
-/* ---------- Ad banner ---------- */
-
 .ad-banner {
   margin: 4px 20px 20px;
   padding: 14px;
@@ -303,8 +391,6 @@ button {
   font-size: 12px;
 }
 
-/* ---------- Detail view ---------- */
-
 .detail {
   padding: 20px;
 }
@@ -315,14 +401,6 @@ button {
   color: var(--ink-soft);
   font-size: 13px;
   padding: 0 0 20px;
-}
-
-.detail__cover {
-  width: 96px;
-  height: 136px;
-  border-radius: 3px;
-  margin-bottom: 16px;
-  box-shadow: 2px 2px 0 rgba(43, 38, 32, 0.15);
 }
 
 .detail__title {
