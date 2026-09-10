@@ -151,21 +151,24 @@ function Home({ books, loading, error, onSelect }) {
   const [category, setCategory] = useState('전체')
   const [trendType, setTrendType] = useState('composite')
 
+  const MAX_BOOKS_PER_VIEW = 20
+
   const filtered = useMemo(() => {
     const list = books
       .filter((b) => b.trendType === trendType)
       .filter((b) => matchesCategory(b, category))
 
+    let sorted
     if (trendType === 'recommended') {
-      return [...list].sort((a, b) => (b.snapshotDate ?? '').localeCompare(a.snapshotDate ?? ''))
+      sorted = [...list].sort((a, b) => (b.snapshotDate ?? '').localeCompare(a.snapshotDate ?? ''))
+    } else if (trendType === 'composite') {
+      sorted = [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    } else if (trendType === 'popular') {
+      sorted = [...list].sort((a, b) => (b.loan_count ?? 0) - (a.loan_count ?? 0))
+    } else {
+      sorted = [...list].sort((a, b) => (b.rank_diff ?? 0) - (a.rank_diff ?? 0))
     }
-    if (trendType === 'composite') {
-      return [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    }
-    if (trendType === 'popular') {
-      return [...list].sort((a, b) => (b.loan_count ?? 0) - (a.loan_count ?? 0))
-    }
-    return [...list].sort((a, b) => (b.rank_diff ?? 0) - (a.rank_diff ?? 0))
+    return sorted.slice(0, MAX_BOOKS_PER_VIEW)
   }, [books, category, trendType])
 
   return (
