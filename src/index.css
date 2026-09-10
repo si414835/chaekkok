@@ -162,8 +162,8 @@ button {
 
 .stamp {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: 1.5px solid var(--stamp-red);
   color: var(--stamp-red);
@@ -172,7 +172,7 @@ button {
   justify-content: center;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   transform: rotate(-6deg);
 }
 
@@ -183,10 +183,10 @@ button {
 
 .cover-swatch {
   flex-shrink: 0;
-  width: 40px;
-  height: 56px;
-  border-radius: 2px;
-  box-shadow: 1px 1px 0 rgba(43, 38, 32, 0.15);
+  width: 56px;
+  height: 80px;
+  border-radius: 3px;
+  box-shadow: 1px 2px 0 rgba(43, 38, 32, 0.18);
   object-fit: cover;
   background: var(--rule);
   display: block;
@@ -197,11 +197,11 @@ button {
 }
 
 .detail__cover.cover-swatch {
-  width: 96px;
-  height: 136px;
-  border-radius: 3px;
+  width: 120px;
+  height: 172px;
+  border-radius: 4px;
   margin-bottom: 16px;
-  box-shadow: 2px 2px 0 rgba(43, 38, 32, 0.15);
+  box-shadow: 2px 3px 0 rgba(43, 38, 32, 0.18);
 }
 
 .book-info {
@@ -227,8 +227,10 @@ button {
 
 .growth {
   flex-shrink: 0;
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--shelf-green);
   font-variant-numeric: tabular-nums;
 }
