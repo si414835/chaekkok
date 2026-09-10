@@ -123,7 +123,13 @@ def collect_hot_trend():
 
 # KDC(도서 분류) 10개 대분류 전부 수집 - 탭마다 빈 곳이 없도록.
 # 0=총류 1=철학 2=종교 3=사회과학 4=자연과학 5=기술과학 6=예술 7=언어 8=문학 9=역사
+# 기본은 30권씩. 다만 총류(0)/종교(2)/자연과학(4)/언어(7)는 상위권이 거의
+# 아동서로 채워져서 성인책이 안 보이는 게 확인됐음 -> 더 깊이(100권)까지 파봐서
+# 순위가 낮더라도 성인 대상 도서가 있는지 확인해본다.
 KDC_CODES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+DEEP_SEARCH_KDC = {0, 2, 4, 7}
+DEFAULT_PAGE_SIZE = 30
+DEEP_PAGE_SIZE = 100
 
 
 def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None, from_age=20, to_age=99):
@@ -175,7 +181,8 @@ def collect_loan_items():
     total_count = 0
 
     for kdc in KDC_CODES:
-        data = fetch_loan_items(page_no=1, page_size=30, kdc=kdc, from_age=14, to_age=99)
+        page_size = DEEP_PAGE_SIZE if kdc in DEEP_SEARCH_KDC else DEFAULT_PAGE_SIZE
+        data = fetch_loan_items(page_no=1, page_size=page_size, kdc=kdc, from_age=14, to_age=99)
         docs = data.get("response", {}).get("docs", [])
         count = _save_loan_docs(docs, snapshot_date)
         print(f"[loanItemSrch] kdc={kdc} (14세 이상): {count}건 저장")
