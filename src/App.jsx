@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
 
-// KDC(도서관 표준분류) 10개 대분류를 그대로 사용. 정보나루 class_name의
-// 맨 앞 단어가 이미 이 이름 그대로 오기 때문에(예: "문학 > 한국문학 > 소설"),
-// 키워드를 추측해서 매칭하는 대신 첫 단어를 그대로 비교하면 훨씬 안정적이다.
+// KDC(도서관 표준분류) 10개 대분류를 기본으로 쓰되, 데이터가 적은 두 분야는
+// 인접한 분야에 합쳐서 보여준다: 언어(700)->문학(800), 종교(200)->철학(100).
+// 실제로 국립중앙도서관 사서추천도서도 "어문학"처럼 언어+문학을 묶어서 분류함.
 const CATEGORIES = [
-  '전체', '어린이', '총류', '철학', '종교', '사회과학',
-  '자연과학', '기술과학', '예술', '언어', '문학', '역사',
+  '전체', '어린이', '총류', '철학', '사회과학',
+  '자연과학', '기술과학', '예술', '문학', '역사',
 ]
+
+const CATEGORY_MERGE = {
+  언어: '문학',
+  종교: '철학',
+}
 
 function isChildBook(book) {
   // addition_symbol(형식기호)이 '7'로 시작하면 아동/청소년물
@@ -16,7 +21,8 @@ function isChildBook(book) {
 
 function topLevelCategory(classNameFull) {
   if (!classNameFull) return null
-  return classNameFull.split('>')[0].trim()
+  const top = classNameFull.split('>')[0].trim()
+  return CATEGORY_MERGE[top] || top
 }
 
 function matchesCategory(book, category) {
