@@ -147,6 +147,36 @@ function EmptyState({ trendType }) {
   )
 }
 
+function HeroRow({ books, onSelect }) {
+  const top3 = books.slice(0, 3)
+  if (top3.length === 0) return null
+
+  return (
+    <div className="hero-section">
+      <p className="hero-section__title">오늘의 콕</p>
+      <div className="hero-row">
+        {top3.map((book, i) => (
+          <button key={book.isbn13} className="hero-card" onClick={() => onSelect(book)}>
+            <img
+              src={book.cover_url}
+              alt={book.title}
+              className="hero-card__cover"
+              loading="lazy"
+              onError={(e) => {
+                e.target.style.background = 'var(--rule)'
+                e.target.src = ''
+              }}
+            />
+            <p className="hero-card__rank">{i + 1}</p>
+            <p className="hero-card__title">{book.title}</p>
+            <p className="hero-card__metric">{formatMetric(book)}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function Home({ books, loading, error, onSelect }) {
   const [category, setCategory] = useState('전체')
   const [trendType, setTrendType] = useState('composite')
@@ -171,9 +201,17 @@ function Home({ books, loading, error, onSelect }) {
     return sorted.slice(0, MAX_BOOKS_PER_VIEW)
   }, [books, category, trendType])
 
+  const heroBooks = useMemo(() => {
+    return books
+      .filter((b) => b.trendType === 'composite')
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .slice(0, 3)
+  }, [books])
+
   return (
     <>
       <Header />
+      {!loading && !error && <HeroRow books={heroBooks} onSelect={onSelect} />}
       <Filters
         category={category}
         setCategory={setCategory}
