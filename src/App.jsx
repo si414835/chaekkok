@@ -320,58 +320,61 @@ export default function App() {
       setLoading(true)
       setError(null)
 
-      const { data, error: fetchError } = await supabase
-        .from('trend_scores')
-        .select(
-          'rank_diff, base_week_rank, past_week_rank, loan_count, rank, score, snapshot_date, trend_type, books ( isbn13, title, author, publisher, class_name, cover_url, detail_url, addition_symbol )'
+      // v_feed 뷰는 탭(trend_type)마다 '올바른 날짜'의 데이터만 돌려준다.
+      // - 인기대출/종합점수: 10개 분야가 끝까지 수집된 가장 최근 날짜
+      // - 급상승: 최근 3일치
+      // Supabase는 한 번에 최대 1,000건만 주므로 탭별로 나눠서 받는다.
+      const TYPES = ['composite', 'rising', 'popular', 'recommended']
+      const results = await Promise.all(
+        TYPES.map((t) =>
+          supabase
+            .from('v_feed')
+            .select('*')
+            .eq('trend_type', t)
+            .order('snapshot_date', { ascending: false })
+            .limit(1000)
         )
-        .order('snapshot_date', { ascending: false })
+      )
 
       if (cancelled) return
 
-      if (fetchError) {
-        setError(fetchError.message)
+      const failed = results.find((r) => r.error)
+      if (failed) {
+        setError(failed.error.message)
         setLoading(false)
         return
       }
 
-      const rows = data ?? []
+      const rows = results.flatMap((r) => r.data ?? [])
 
-      // trend_type별로 각각의 최신 snapshot_date를 따로 계산
-      // (급상승은 매일, 인기대출은 다른 주기로 갱신될 수 있어서 하나의 날짜로 묶으면 안 됨)
-      const latestDateByType = {}
-      for (const r of rows) {
-        const t = r.trend_type
-        if (!latestDateByType[t] || r.snapshot_date > latestDateByType[t]) {
-          latestDateByType[t] = r.snapshot_date
-        }
+      let mapped = rows.map((r) => ({
+        isbn13: r.isbn13,
+        title: r.title,
+        author: r.author,
+        publisher: r.publisher,
+        classNameFull: r.class_name,
+        additionSymbol: r.addition_symbol,
+        categoryLabel: extractCategoryLabel(r.class_name),
+        cover_url: r.cover_url,
+        detail_url: r.detail_url,
+        rank_diff: r.rank_diff,
+        base_week_rank: r.base_week_rank,
+        past_week_rank: r.past_week_rank,
+        loan_count: r.loan_count,
+        rank: r.rank,
+        score: r.score,
+        snapshotDate: r.snapshot_date,
+        trendType: r.trend_type,
+      }))
+
+      // 급상승은 3일치라 같은 책이 겹칠 수 있음 -> 상승폭이 가장 큰 기록 하나만 남김
+      const bestRising = new Map()
+      for (const b of mapped) {
+        if (b.trendType !== 'rising') continue
+        const prev = bestRising.get(b.isbn13)
+        if (!prev || (b.rank_diff ?? 0) > (prev.rank_diff ?? 0)) bestRising.set(b.isbn13, b)
       }
-
-      const mapped = rows
-        .filter(
-          (r) =>
-            r.books &&
-            (r.trend_type === 'recommended' || r.snapshot_date === latestDateByType[r.trend_type])
-        )
-        .map((r) => ({
-          isbn13: r.books.isbn13,
-          title: r.books.title,
-          author: r.books.author,
-          publisher: r.books.publisher,
-          classNameFull: r.books.class_name,
-          additionSymbol: r.books.addition_symbol,
-          categoryLabel: extractCategoryLabel(r.books.class_name),
-          cover_url: r.books.cover_url,
-          detail_url: r.books.detail_url,
-          rank_diff: r.rank_diff,
-          base_week_rank: r.base_week_rank,
-          past_week_rank: r.past_week_rank,
-          loan_count: r.loan_count,
-          rank: r.rank,
-          score: r.score,
-          snapshotDate: r.snapshot_date,
-          trendType: r.trend_type,
-        }))
+      mapped = mapped.filter((b) => b.trendType !== 'rising').concat([...bestRising.values()])
 
       setBooks(mapped)
       setLoading(false)
