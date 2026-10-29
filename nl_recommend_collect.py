@@ -34,7 +34,7 @@ def get_with_retry(url, params, max_retries=3, timeout=60):
             res = requests.get(url, params=params, timeout=timeout)
             res.raise_for_status()
             return res.text
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
+        except requests.exceptions.RequestException as e:
             last_error = e
             wait = attempt * 10
             print(f"  [재시도 {attempt}/{max_retries}] 응답 지연, {wait}초 후 재시도: {e}")
@@ -96,10 +96,36 @@ def upsert_book(item):
     return isbn13
 
 
+def log_run(status, rows_saved=0, error=None):
+    try:
+        supabase.table("collect_runs").insert({
+            "run_date": kst_today().strftime("%Y-%m-%d"),
+            "source": "recommended",
+            "part": None,
+            "status": status,
+            "rows_saved": rows_saved,
+            "error": (str(error)[:500] if error else None),
+        }).execute()
+    except Exception as e:
+        print(f"  [기록 실패] collect_runs: {e}")
+
+
 def collect():
     xml_text = fetch_recommendations()
-    root = ET.fromstring(xml_text)
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as e:
+        # 키가 없거나 틀리면 XML 대신 오류 페이지가 올 수 있다
+        snippet = xml_text[:300].replace("\n", " ")
+        log_run("failed", 0, f"XML 아님: {snippet}")
+        print(f"::warning::사서추천 응답이 XML이 아님 (API 키 확인 필요): {snippet}")
+        return
     items = root.findall(".//item")
+    if not items:
+        snippet = ET.tostring(root, encoding="unicode")[:300]
+        log_run("failed", 0, f"0건: {snippet}")
+        print(f"::warning::사서추천 0건. 응답 앞부분: {snippet}")
+        return
 
     count = 0
     for item in items:
@@ -136,7 +162,12 @@ def collect():
         count += 1
 
     print(f"[사서추천도서] {count}건 저장 (전체 {len(items)}건 중)")
+    log_run("ok", count)
 
 
 if __name__ == "__main__":
-    collect()
+    try:
+        collect()
+    except Exception as e:
+        log_run("failed", 0, e)
+        print(f"::warning::사서추천 수집 실패: {e}")

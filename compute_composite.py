@@ -69,6 +69,26 @@ def get_latest_trend_scores(trend_type: str, value_field: str) -> dict:
     if not rows:
         return {}
     latest_date = rows[0]["snapshot_date"]
+    if trend_type == "popular":
+        # 일부 분야만 수집된 날은 건너뛰고, 10개 분야가 다 온 가장 최근 날짜를 쓴다
+        complete = (
+            supabase.table("v_popular_complete_dates")
+            .select("snapshot_date")
+            .order("snapshot_date", desc=True)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if complete:
+            latest_date = complete[0]["snapshot_date"]
+            rows = (
+                supabase.table("trend_scores")
+                .select(f"isbn13, snapshot_date, {value_field}")
+                .eq("trend_type", "popular")
+                .eq("snapshot_date", latest_date)
+                .execute()
+                .data
+            )
     return {
         r["isbn13"]: (r[value_field] or 0)
         for r in rows
