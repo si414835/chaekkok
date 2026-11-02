@@ -1,0 +1,20 @@
+name: 정보나루 API 점검 (1회용)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install requests supabase
+      - name: API 점검 실행
+        env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python api_probe.py
