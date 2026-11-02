@@ -1933,3 +1933,11 @@ p {
   color: var(--ink-soft);
   line-height: 1.4;
 }
+
+.row__meta--wrap {
+  white-space: normal;
+  line-height: 1.45;
+}
+.lead b {
+  font-size: 18px;
+}

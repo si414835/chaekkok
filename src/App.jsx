@@ -609,13 +609,13 @@ function Hits({ stats, index }) {
                 <Cover src={b.cover_url || index.get(b.isbn13)?.cover_url} alt="" className="row__cover" title={b.title} />
                 <span className="row__info">
                   <span className="row__title">{shortTitle(b.title)}</span>
-                  <span className="row__meta">
-                    {fmtDate(b.first_spotted)} {b.first_stage} · {b.rank_at_spot ? `${b.rank_at_spot}위일 때` : '목록 밖일 때'} → {fmtDate(b.top10_date)} TOP10
+                  <span className="row__meta row__meta--wrap">
+                    {fmtDate(b.first_spotted)} {b.first_stage}({b.rank_at_spot ? `${b.rank_at_spot}위` : '순위 밖'}) → {fmtDate(b.top10_date)} TOP10
                   </span>
                 </span>
                 <span className="lead num">
-                  <b>{b.lead_days}</b>일
-                  <small>먼저</small>
+                  <b>{b.lead_days}일</b>
+                  <small>먼저 포착</small>
                 </span>
               </a>
             ))}
