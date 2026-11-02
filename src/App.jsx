@@ -48,9 +48,10 @@ function topCategory(cls) {
 function categoryLabel(cls) {
   return topCategory(cls) || '미분류'
 }
+// 어린이 책(ISBN 부가기호 7로 시작)은 순위 노이즈가 커서 '어린이 책' 분야에서만 보여준다
 function matchesCategory(b, cat) {
-  if (cat === '전체') return true
   if (cat === '어린이') return isChildBook(b)
+  if (cat === '전체') return !isChildBook(b)
   if (isChildBook(b)) return false
   return topCategory(b.classNameFull) === cat
 }
@@ -322,8 +323,8 @@ function Carousel({ books }) {
 }
 
 function Home({ feed, keywords, loading, error }) {
-  const top5 = feed.composite.slice(0, 5)
-  const rising3 = feed.rising.slice(0, 3)
+  const top5 = feed.composite.filter((b) => !isChildBook(b)).slice(0, 5)
+  const rising3 = feed.rising.filter((b) => !isChildBook(b)).slice(0, 3)
   return (
     <>
       <header className="topbar">
@@ -404,7 +405,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo
           )}
           {cats.map((c) => (
             <button key={c} className={`chip${cat === c ? ' is-on' : ''}`} aria-pressed={cat === c} onClick={() => setCat(c)}>
-              {c === '전체' ? '전체 분야' : c}
+              {c === '전체' ? '전체 분야' : c === '어린이' ? '어린이 책' : c}
             </button>
           ))}
         </div>
