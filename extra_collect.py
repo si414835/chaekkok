@@ -189,7 +189,57 @@ def collect_demographics():
     return total
 
 
-# ---------- 3. 도서별 이용분석 ----------
+# ---------- 3. 정보나루 참여 도서관 목록 (주 1회) ----------
+
+def to_float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def collect_libraries():
+    """'내 도서관' 고르기에 쓰는 도서관 목록. 자주 바뀌지 않으니 7일마다 새로 받는다."""
+    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    fresh = supabase.table("libraries").select("lib_code").gte("updated_at", since).limit(1).execute().data
+    if fresh:
+        print("[도서관 목록] 최근에 받아서 건너뜀")
+        return 0
+    rows, page = {}, 1
+    try:
+        while page <= 20:
+            data = call("libSrch", {"pageNo": page, "pageSize": 500})
+            libs = [d for d in find_dicts_with(data, "libCode") if d.get("libName")]
+            if not libs:
+                break
+            for d in libs:
+                code = str(d["libCode"]).strip()
+                rows[code] = {
+                    "lib_code": code,
+                    "name": d.get("libName", "").strip(),
+                    "address": d.get("address"),
+                    "tel": d.get("tel"),
+                    "homepage": d.get("homepage"),
+                    "latitude": to_float(d.get("latitude")),
+                    "longitude": to_float(d.get("longitude")),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            if len(libs) < 500:
+                break
+            page += 1
+        items = list(rows.values())
+        for i in range(0, len(items), 500):
+            supabase.table("libraries").upsert(items[i:i + 500], on_conflict="lib_code").execute()
+        log_run("libraries", "ok", len(items))
+        print(f"[도서관 목록] {len(items)}곳")
+        return len(items)
+    except Exception as e:
+        log_run("libraries", "failed", len(rows), e)
+        print(f"::warning::도서관 목록 실패: {safe_err(e)}")
+        return 0
+
+
+# ---------- 4. 도서별 이용분석 ----------
 
 def pick_usage_targets():
     """종합 상위 + 급상승 책 중, 최근에 받지 않은 책."""
@@ -255,7 +305,7 @@ def collect_usage():
 
 
 def main():
-    for step in (collect_keywords, collect_demographics, collect_usage):
+    for step in (collect_keywords, collect_demographics, collect_libraries, collect_usage):
         try:
             step()
         except Exception as e:

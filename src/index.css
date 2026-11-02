@@ -722,7 +722,18 @@ p {
 .hero__top {
   display: flex;
   gap: 18px;
-  align-items: flex-end;
+  align-items: flex-start;
+}
+.hero__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.tag--sm {
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 14px;
 }
 .hero__cover {
   width: 108px;
@@ -1064,4 +1075,111 @@ p {
   .app {
     box-shadow: 0 0 0 1px var(--line);
   }
+}
+
+/* ---------- 내 도서관 ---------- */
+
+.libs {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+.libs--scroll {
+  max-height: 46vh;
+  overflow-y: auto;
+  min-height: 120px;
+}
+.lib {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  border-bottom: 1px solid var(--line-2);
+}
+.lib__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.lib__info strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+.lib__info .sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib__go {
+  width: 36px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.pill {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--line-2);
+  color: var(--ink-3);
+  border: 0;
+}
+.pill--up {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.pill--warn {
+  background: #fff4e5;
+  color: #a35200;
+}
+.pill--muted {
+  color: var(--ink-soft);
+}
+.pill--btn {
+  min-height: 36px;
+  padding: 0 12px;
+}
+.pill--btn.is-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.pill--btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.btn--full {
+  width: 100%;
+  margin-top: 12px;
+}
+.search input {
+  width: 100%;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #f9fafb;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  margin-top: 12px;
+}
+.search input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--card);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

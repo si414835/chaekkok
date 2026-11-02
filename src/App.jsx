@@ -551,7 +551,7 @@ function LoanChart({ history }) {
         {rows.map((r, i) => (
           <div key={r.month} className="bars__col">
             <div className={`bars__bar${i === rows.length - 1 ? ' is-last' : ''}`} style={{ height: `${Math.round((r.loanCnt / max) * 120)}px` }} title={`${r.month} ${r.loanCnt}회`} />
-            <span>{(r.month.match(/(\d+)월/) || [])[1]}월</span>
+            <span>{Number((r.month.match(/(\d+)월/) || [])[1])}월</span>
           </div>
         ))}
       </div>
@@ -593,9 +593,10 @@ function shopLinks(isbn) {
   ]
 }
 
-function Detail({ isbn, index, wish, toggleWish }) {
+function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
   const { book, usage, coCovers, loading } = useBook(isbn, index)
   const buyRef = useRef(null)
+  const [libOpen, setLibOpen] = useState(false)
   const back = () => (window.history.length > 1 ? window.history.back() : go('/'))
   if (!book) {
     return (
@@ -635,6 +636,13 @@ function Detail({ isbn, index, wish, toggleWish }) {
                 {cleanAuthor(book.author)}
                 {book.classNameFull ? ` · ${book.classNameFull.split('>').slice(0, 2).join(' > ')}` : ''}
               </span>
+              {keywords.length > 0 && (
+                <div className="hero__tags">
+                  {keywords.slice(0, 6).map((k, i) => (
+                    <span key={k.word} className={`tag tag--sm${i < 2 ? ' tag--accent' : ''}`}>#{k.word}</span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="statgrid">
@@ -646,17 +654,6 @@ function Detail({ isbn, index, wish, toggleWish }) {
             ))}
           </div>
         </section>
-
-        {keywords.length > 0 && (
-          <section className="card">
-            <h2 className="h2">이 책의 키워드</h2>
-            <div className="kw__tags">
-              {keywords.map((k, i) => (
-                <span key={k.word} className={`tag${i < 2 ? ' tag--accent' : ''}`}>#{k.word}</span>
-              ))}
-            </div>
-          </section>
-        )}
 
         <LoanChart history={usage?.loan_history} />
         <Groups groups={usage?.loan_grps} />
@@ -703,16 +700,195 @@ function Detail({ isbn, index, wish, toggleWish }) {
       </div>
 
       <div className="actionbar">
-        {book.detail_url && (
-          <a className="btn btn--soft" href={book.detail_url} target="_blank" rel="noopener noreferrer">
-            도서관에서 빌리기
-          </a>
-        )}
+        <button className="btn btn--soft" onClick={() => setLibOpen(true)}>
+          도서관에서 빌리기
+        </button>
         <button className="btn btn--primary" onClick={() => buyRef.current?.scrollIntoView({ behavior: 'smooth' })}>
           구매하기
         </button>
       </div>
+      {libOpen && (
+        <LibraryStatusSheet
+          book={book}
+          libs={libs}
+          onClose={() => setLibOpen(false)}
+          onPick={() => {
+            setLibOpen(false)
+            onPickLibrary()
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+/* ================= 내 도서관 ================= */
+
+const MAX_LIBS = 3
+
+function Sheet({ label, onClose, children }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div className="sheet" role="dialog" aria-modal="true" aria-label={label}>
+      <button className="sheet__dim" aria-label="닫기" onClick={onClose} />
+      <div className="sheet__panel">
+        <span className="sheet__grip" aria-hidden="true" />
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// 이 책이 내 도서관에 있는지, 지금 빌릴 수 있는지 (Edge Function book-exist -> 정보나루 bookExist)
+function LibraryStatusSheet({ book, libs, onClose, onPick }) {
+  const [state, setState] = useState({ loading: libs.length > 0, results: {}, error: null })
+  useEffect(() => {
+    if (libs.length === 0) return
+    let off = false
+    supabase.functions
+      .invoke('book-exist', { body: { isbn13: firstIsbn(book.isbn13), libCodes: libs.map((l) => l.libCode) } })
+      .then(({ data, error }) => {
+        if (off) return
+        if (error || !data?.results) return setState({ loading: false, results: {}, error: '지금은 확인할 수 없어요. 잠시 후 다시 시도해 주세요.' })
+        setState({ loading: false, results: Object.fromEntries(data.results.map((r) => [r.libCode, r])), error: null })
+      })
+    return () => {
+      off = true
+    }
+  }, [book.isbn13, libs])
+
+  const status = (r) => {
+    if (!r || r.error) return ['확인 실패', 'muted']
+    if (!r.hasBook) return ['소장 안 함', 'muted']
+    return r.loanAvailable ? ['대출 가능', 'up'] : ['대출 중', 'warn']
+  }
+
+  return (
+    <Sheet label="내 도서관 소장 현황" onClose={onClose}>
+      <div className="sheet__head">
+        <div>
+          <h2 className="h2">내 도서관에 있을까요</h2>
+          <p className="sub">{shortTitle(book.title)}</p>
+        </div>
+      </div>
+      {libs.length === 0 ? (
+        <div className="empty">
+          <p>아직 찜한 도서관이 없어요.</p>
+          <p className="sub">자주 가는 도서관을 최대 {MAX_LIBS}곳까지 찜할 수 있어요.</p>
+          <button className="btn btn--primary" onClick={onPick}>도서관 찾기</button>
+        </div>
+      ) : (
+        <div className="libs">
+          {state.error && <p className="state state--error">{state.error}</p>}
+          {libs.map((l) => {
+            const [label, tone] = status(state.results[l.libCode])
+            return (
+              <div key={l.libCode} className="lib">
+                <div className="lib__info">
+                  <strong>{l.name}</strong>
+                  <span className="sub">{l.address}</span>
+                </div>
+                {state.loading ? <span className="pill">확인 중…</span> : <span className={`pill pill--${tone}`}>{label}</span>}
+                {l.homepage && (
+                  <a className="lib__go" href={l.homepage} target="_blank" rel="noopener noreferrer" aria-label={`${l.name} 홈페이지`}>
+                    {Icon.chev()}
+                  </a>
+                )}
+              </div>
+            )
+          })}
+          <p className="sub small">소장·대출 정보는 도서관 정보나루 기준이라 실제와 조금 다를 수 있어요.</p>
+        </div>
+      )}
+      <div className="sheet__actions">
+        {libs.length > 0 && <button className="btn btn--soft" onClick={onPick}>도서관 관리</button>}
+        {book.detail_url && (
+          <a className="btn btn--soft" href={book.detail_url} target="_blank" rel="noopener noreferrer">
+            다른 도서관 보기
+          </a>
+        )}
+      </div>
+    </Sheet>
+  )
+}
+
+function LibraryPicker({ libs, setLibs, onClose }) {
+  const [q, setQ] = useState('')
+  const [found, setFound] = useState({ list: [], loading: false, empty: false })
+  useEffect(() => {
+    const term = q.replace(/[%,()*]/g, ' ').trim()
+    if (term.length < 2) return setFound({ list: [], loading: false, empty: false })
+    let off = false
+    setFound((f) => ({ ...f, loading: true }))
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from('libraries')
+        .select('lib_code,name,address,homepage')
+        .or(`name.ilike.%${term}%,address.ilike.%${term}%`)
+        .order('name')
+        .limit(30)
+      if (!off) setFound({ list: data || [], loading: false, empty: (data || []).length === 0 })
+    }, 300)
+    return () => {
+      off = true
+      clearTimeout(t)
+    }
+  }, [q])
+  const has = (code) => libs.some((l) => l.libCode === code)
+  const toggle = (r) =>
+    setLibs((cur) =>
+      cur.some((l) => l.libCode === r.lib_code)
+        ? cur.filter((l) => l.libCode !== r.lib_code)
+        : cur.length >= MAX_LIBS
+          ? cur
+          : [...cur, { libCode: r.lib_code, name: r.name, address: r.address, homepage: r.homepage }],
+    )
+  return (
+    <Sheet label="도서관 찾기" onClose={onClose}>
+      <div className="sheet__head">
+        <div>
+          <h2 className="h2">내 도서관 찜하기</h2>
+          <p className="sub">
+            최대 {MAX_LIBS}곳 · 지금 {libs.length}곳 찜함
+          </p>
+        </div>
+      </div>
+      <label className="search">
+        <span className="sr-only">도서관 이름이나 지역</span>
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="도서관 이름이나 지역 (예: 수원, 선경)" />
+      </label>
+      <div className="libs libs--scroll">
+        {found.loading && <p className="state">찾는 중…</p>}
+        {found.empty && <p className="state">찾는 도서관이 없어요. 다른 이름으로 검색해 보세요.</p>}
+        {!found.loading &&
+          found.list.map((r) => {
+            const on = has(r.lib_code)
+            return (
+              <div key={r.lib_code} className="lib">
+                <div className="lib__info">
+                  <strong>{r.name}</strong>
+                  <span className="sub">{r.address}</span>
+                </div>
+                <button
+                  className={`pill pill--btn${on ? ' is-on' : ''}`}
+                  aria-pressed={on}
+                  disabled={!on && libs.length >= MAX_LIBS}
+                  onClick={() => toggle(r)}
+                >
+                  {on ? '찜함' : '찜하기'}
+                </button>
+              </div>
+            )
+          })}
+      </div>
+      <div className="sheet__actions">
+        <button className="btn btn--primary" onClick={onClose}>완료</button>
+      </div>
+    </Sheet>
   )
 }
 
@@ -788,7 +964,7 @@ function Wish({ wish, index, toggleWish }) {
 
 /* ================= 마이 ================= */
 
-function My({ prefs, interests, setInterests, onOpenFilter }) {
+function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary }) {
   const [openInfo, setOpenInfo] = useState(null)
   const toggle = (c) => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])
   const infos = [
@@ -815,6 +991,27 @@ function My({ prefs, interests, setInterests, onOpenFilter }) {
             <strong>로그인 없이 쓰는 중</strong>
             <p className="sub">찜과 취향 설정은 이 기기에 저장돼요</p>
           </div>
+        </section>
+
+        <section className="card">
+          <h2 className="h3">내 도서관</h2>
+          {libs.length === 0 && <p className="sub">자주 가는 도서관을 찜하면 책 상세에서 바로 소장·대출 여부를 볼 수 있어요.</p>}
+          {libs.map((l) => (
+            <div key={l.libCode} className="line line--static">
+              <span className="lib__info">
+                <strong>{l.name}</strong>
+                <span className="sub">{l.address}</span>
+              </span>
+              <button className="pill pill--btn" onClick={() => setLibs(libs.filter((x) => x.libCode !== l.libCode))}>
+                삭제
+              </button>
+            </div>
+          ))}
+          {libs.length < MAX_LIBS && (
+            <button className="btn btn--soft btn--full" onClick={onPickLibrary}>
+              도서관 찾아서 찜하기
+            </button>
+          )}
         </section>
 
         <section className="card">
@@ -1009,6 +1206,8 @@ export default function App() {
   const [interests, setInterests] = useStored('chaekkok.interests', [])
   const [wish, setWish] = useStored('chaekkok.wish', [])
   const [sheet, setSheet] = useState(false)
+  const [libs, setLibs] = useStored('chaekkok.libs', [])
+  const [libPicker, setLibPicker] = useState(false)
   const demo = useDemo(prefs)
 
   const toggleWish = (b) => {
@@ -1037,11 +1236,12 @@ export default function App() {
         {route.name === 'trend' && (
           <Trend tab={trendTab} feed={feed} loading={loading} error={error} prefs={prefs} interests={interests} demo={demo} onOpenFilter={() => setSheet(true)} />
         )}
-        {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} />}
+        {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} onPickLibrary={() => setLibPicker(true)} />}
         {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} />}
-        {route.name === 'my' && <My prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={() => setSheet(true)} />}
+        {route.name === 'my' && <My prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={() => setSheet(true)} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} />}
       </main>
       {navTab && <BottomNav current={navTab} />}
+      {libPicker && <LibraryPicker libs={libs} setLibs={setLibs} onClose={() => setLibPicker(false)} />}
       {sheet && (
         <FilterSheet
           prefs={prefs}
