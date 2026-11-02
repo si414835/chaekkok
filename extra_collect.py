@@ -1,7 +1,7 @@
 """
 책콕: 추가 데이터 수집 (정보나루)
 
-1) 이달의 키워드 (monthlyKeywords)      -> monthly_keywords
+1) (사용 안 함) 이달의 키워드 (monthlyKeywords) -> monthly_keywords
 2) 연령·성별 인기대출 (loanItemSrch)     -> demo_popular (+ books)
 3) 도서별 이용분석 (usageAnalysisList)   -> book_usage
    같이 빌린 책, 키워드, 월별 대출 추이, 연령·성별 대출 그룹
@@ -305,7 +305,8 @@ def collect_usage():
 
 
 def main():
-    for step in (collect_keywords, collect_demographics, collect_libraries, collect_usage):
+    # 정보나루 '이달의 키워드'는 어린이 책이 섞여 화면에서 쓰지 않으므로 수집하지 않는다 (홈 키워드는 v_home_keywords)
+    for step in (collect_demographics, collect_libraries, collect_usage):
         try:
             step()
         except Exception as e:

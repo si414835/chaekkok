@@ -28,7 +28,7 @@ const TABS = [
   { id: 'composite', label: '종합', desc: '여러 신호를 합친 종합 점수순이에요' },
   { id: 'popular', label: '꾸준한 인기', desc: '최근 30일 대출이 많은 순이에요' },
   { id: 'rising', label: '급상승', desc: '최근 2주 사이 대출순위가 많이 오른 책을 모두 모았어요' },
-  { id: 'recommended', label: '신간', desc: '국립중앙도서관 사서가 추천한 새 책이에요' },
+  { id: 'recommended', label: '사서 추천', desc: '국립중앙도서관 사서가 최근 6개월 동안 추천한 책이에요' },
 ]
 
 const LIST_SIZE = 30
@@ -144,6 +144,9 @@ const Icon = {
   chev: (dir = 'right') => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={dir === 'left' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'} /></svg>
   ),
+  search: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+  ),
   filter: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
   ),
@@ -160,11 +163,16 @@ function coverCandidates(src) {
   }
   return [src]
 }
-function Cover({ src, alt, className = '' }) {
+function Cover({ src, alt, className = '', title }) {
   const list = useMemo(() => coverCandidates(src), [src])
   const [i, setI] = useState(0)
   useEffect(() => setI(0), [src])
-  if (i >= list.length) return <span className={`cover cover--empty ${className}`} aria-hidden="true" />
+  if (i >= list.length)
+    return (
+      <span className={`cover cover--empty ${className}`} aria-hidden="true">
+        {title && <span className="cover__title">{shortTitle(title)}</span>}
+      </span>
+    )
   return (
     <img
       key={list[i]}
@@ -203,8 +211,8 @@ function BottomNav({ current }) {
 function BookRow({ rank, book, value, valueTone }) {
   return (
     <a className="row" href={`#/book/${encodeURIComponent(book.isbn13)}`}>
-      <span className="row__rank">{rank}</span>
-      <Cover src={book.cover_url} alt="" className="row__cover" />
+      {rank != null && <span className="row__rank">{rank}</span>}
+      <Cover src={book.cover_url} alt="" className="row__cover" title={book.title} />
       <span className="row__info">
         <span className="row__title">{shortTitle(book.title)}</span>
         <span className="row__meta">
@@ -297,7 +305,7 @@ function Carousel({ books }) {
               onClick={onClick}
               aria-label={o === 0 ? `${shortTitle(b.title)} 상세 보기` : `${i + 1}위 ${shortTitle(b.title)}`}
             >
-              <Cover src={b.cover_url} alt="" className="carousel__cover" />
+              <Cover src={b.cover_url} alt="" className="carousel__cover" title={b.title} />
               <span className="carousel__rank">{i + 1}</span>
             </button>
           )
@@ -329,7 +337,12 @@ function Home({ feed, keywords, loading, error }) {
     <>
       <header className="topbar">
         <span className="logo">책콕</span>
-        <span className="sub">{DATE_LABEL}</span>
+        <span className="topbar__right">
+          <span className="sub">{DATE_LABEL}</span>
+          <a className="iconbtn" href="#/search" aria-label="책 검색">
+            {Icon.search()}
+          </a>
+        </span>
       </header>
       <div className="stack">
         <KeywordHero keywords={keywords} />
@@ -380,7 +393,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo
     if (tab === 'composite') return [`${b.score ?? 0}점`]
     if (tab === 'rising') return [`▲${b.rank_diff ?? 0}`, 'up']
     if (tab === 'popular') return [`${(b.loan_count ?? 0).toLocaleString()}회`]
-    return ['사서 PICK', 'accent']
+    return [b.snapshotDate ? `${Number(b.snapshotDate.slice(5, 7))}월 추천` : '사서 추천', 'accent']
   }
   const desc = demoActive ? `${demoLabel(prefs)}이 최근 30일 많이 빌린 순이에요` : TABS.find((t) => t.id === tab).desc
   const waiting = loading || (demoActive && demo.loading)
@@ -650,7 +663,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
       <div className="stack">
         <section className="card hero">
           <div className="hero__top">
-            <Cover src={book.cover_url} alt={shortTitle(book.title)} className="hero__cover" />
+            <Cover src={book.cover_url} alt={shortTitle(book.title)} className="hero__cover" title={book.title} />
             <div className="hero__text">
               {book.trendType === 'recommended' && <span className="badge badge--accent">사서 추천</span>}
               <h1 className="hero__title">{shortTitle(book.title)}</h1>
@@ -691,7 +704,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
             <div className="hscroll">
               {co.map((c) => (
                 <a key={c.isbn13 || c.title} className="mini" href={`#/book/${encodeURIComponent(c.isbn13)}`}>
-                  <Cover src={coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} alt="" className="mini__cover" />
+                  <Cover src={coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} alt="" className="mini__cover" title={c.title} />
                   <span className="mini__title">{shortTitle(c.title)}</span>
                   <span className="mini__author">{cleanAuthor(c.author)}</span>
                 </a>
@@ -741,6 +754,60 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
         />
       )}
     </div>
+  )
+}
+
+/* ================= 검색 ================= */
+
+function Search() {
+  const [q, setQ] = useState('')
+  const [res, setRes] = useState({ list: [], loading: false, done: false })
+  useEffect(() => {
+    const term = q.replace(/[%,()*]/g, ' ').trim()
+    if (term.length < 2) return setRes({ list: [], loading: false, done: false })
+    let off = false
+    setRes((r) => ({ ...r, loading: true }))
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from('books')
+        .select('isbn13,title,author,class_name,cover_url,addition_symbol')
+        .or(`title.ilike.%${term}%,author.ilike.%${term}%`)
+        .limit(40)
+      if (off) return
+      const list = (data || []).map((r) => ({
+        isbn13: r.isbn13,
+        title: r.title,
+        author: r.author,
+        classNameFull: r.class_name,
+        additionSymbol: r.addition_symbol,
+        categoryLabel: isChildBook({ additionSymbol: r.addition_symbol }) ? '어린이 책' : categoryLabel(r.class_name),
+        cover_url: r.cover_url,
+      }))
+      setRes({ list, loading: false, done: true })
+    }, 300)
+    return () => {
+      off = true
+      clearTimeout(t)
+    }
+  }, [q])
+  return (
+    <>
+      <header className="searchbar">
+        <button className="iconbtn" onClick={() => (window.history.length > 1 ? window.history.back() : go('/'))} aria-label="뒤로">
+          {Icon.back()}
+        </button>
+        <label className="search search--bar">
+          <span className="sr-only">책 제목이나 저자</span>
+          <input autoFocus type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="책 제목이나 저자" />
+        </label>
+      </header>
+      <div className="list">
+        {q.trim().length < 2 && <p className="state">두 글자 이상 입력해 주세요. 책콕이 모은 책 중에서 찾아요.</p>}
+        {res.loading && <Loading />}
+        {!res.loading && res.done && res.list.length === 0 && <p className="state">찾는 책이 없어요. 다른 단어로 검색해 보세요.</p>}
+        {!res.loading && res.list.map((b) => <BookRow key={b.isbn13} rank={null} book={b} value="" />)}
+      </div>
+    </>
   )
 }
 
@@ -953,7 +1020,7 @@ function Wish({ wish, index, toggleWish }) {
           {items.map((w) => (
             <div key={w.isbn13} className="row row--wish">
               <a className="row__link" href={`#/book/${encodeURIComponent(w.isbn13)}`}>
-                <Cover src={w.cover_url} alt="" className="row__cover" />
+                <Cover src={w.cover_url} alt="" className="row__cover" title={w.title} />
                 <span className="row__info">
                   <span className="row__title">{shortTitle(w.title)}</span>
                   <span className="row__meta">
@@ -1049,7 +1116,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
           <div className="chips chips--wrap">
             {CATEGORIES.filter((c) => c !== '전체').map((c) => (
               <button key={c} className={`chip${interests.includes(c) ? ' is-picked' : ''}`} aria-pressed={interests.includes(c)} onClick={() => toggle(c)}>
-                {c}
+                {c === '어린이' ? '어린이 책' : c}
               </button>
             ))}
           </div>
@@ -1261,6 +1328,7 @@ export default function App() {
         )}
         {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} onPickLibrary={() => setLibPicker(true)} />}
         {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} />}
+        {route.name === 'search' && <Search />}
         {route.name === 'my' && <My prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={() => setSheet(true)} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} />}
       </main>
       {navTab && <BottomNav current={navTab} />}

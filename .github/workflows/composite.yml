@@ -1,0 +1,19 @@
+name: 종합 점수만 다시 계산
+
+on:
+  workflow_dispatch:
+
+jobs:
+  composite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install supabase
+      - name: 종합 점수 계산
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python compute_composite.py

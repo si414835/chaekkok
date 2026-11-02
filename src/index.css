@@ -147,6 +147,29 @@ p {
   justify-content: space-between;
   padding: 16px 20px 0;
 }
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: -10px;
+}
+.searchbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px 8px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.search--bar {
+  flex: 1;
+}
+.search--bar input {
+  margin-top: 0;
+}
 .logo {
   font-size: 22px;
   font-weight: 800;
@@ -347,7 +370,32 @@ p {
   background: var(--line);
 }
 .cover--empty {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: linear-gradient(160deg, #e5e8ec, #d1d6db);
+  overflow: hidden;
+}
+.cover__title {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink-3);
+  text-align: center;
+  word-break: keep-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hero__cover .cover__title,
+.carousel__cover .cover__title {
+  font-size: 15px;
+  -webkit-line-clamp: 6;
+}
+.mini__cover .cover__title {
+  font-size: 13px;
 }
 .row__cover {
   width: 48px;
