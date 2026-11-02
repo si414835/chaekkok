@@ -123,6 +123,49 @@ const go = (path) => {
   window.location.hash = path
 }
 
+/* ================= 모션 도우미 ================= */
+
+// '동작 줄이기'를 켠 기기에서는 애니메이션 없이 바로 최종 값을 보여준다
+const reduceMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+// 숫자가 0부터 올라가는 카운트업 (key가 바뀌면 다시 시작)
+function useCountUp(key, ms = 1100) {
+  const [p, setP] = useState(() => (reduceMotion() ? 1 : 0))
+  useEffect(() => {
+    if (reduceMotion()) return setP(1)
+    let raf
+    let start = null
+    setP(0)
+    const tick = (t) => {
+      if (start == null) start = t
+      const k = Math.min(1, (t - start) / ms)
+      setP(1 - Math.pow(1 - k, 3))
+      if (k < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [key, ms])
+  return p
+}
+
+// 애니메이션 시작 시점을 엇갈리게 (목록이 길면 앞쪽 몇 개만)
+const delay = (i, base = 0, step = 0.05, max = 10) => ({ animationDelay: `${base + Math.min(i, max) * step}s` })
+
+function Eyebrow({ children, tone }) {
+  return <span className={`eyebrow${tone ? ' eyebrow--' + tone : ''}`}>{children}</span>
+}
+
+function Delta({ value }) {
+  return (
+    <span className="delta num">
+      <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true">
+        <path d="M5 1l4 7H1z" fill="currentColor" />
+      </svg>
+      {value}
+    </span>
+  )
+}
+
 /* ================= 아이콘 ================= */
 
 const Icon = {
@@ -199,7 +242,7 @@ function BottomNav({ current }) {
         const on = it.id === current
         return (
           <a key={it.id} href={'#' + it.path} className={`tabbar__item${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined}>
-            {it.icon(on)}
+            <span className={`tabbar__icon${on ? ' hop' : ''}`}>{it.icon(on)}</span>
             <span>{it.label}</span>
           </a>
         )
@@ -208,10 +251,10 @@ function BottomNav({ current }) {
   )
 }
 
-function BookRow({ rank, book, value, valueTone }) {
+function BookRow({ rank, book, value, valueTone, order = 0 }) {
   return (
-    <a className="row" href={`#/book/${encodeURIComponent(book.isbn13)}`}>
-      {rank != null && <span className="row__rank">{rank}</span>}
+    <a className="row rise" style={delay(order, 0.05, 0.04)} href={`#/book/${encodeURIComponent(book.isbn13)}`}>
+      {rank != null && <span className={`row__rank num${rank === 1 ? ' is-first' : ''}`}>{rank}</span>}
       <Cover src={book.cover_url} alt="" className="row__cover" title={book.title} />
       <span className="row__info">
         <span className="row__title">{shortTitle(book.title)}</span>
@@ -219,7 +262,11 @@ function BookRow({ rank, book, value, valueTone }) {
           {book.categoryLabel} · {cleanAuthor(book.author)}
         </span>
       </span>
-      <span className={`row__value${valueTone ? ' row__value--' + valueTone : ''}`}>{value}</span>
+      {valueTone === 'up' ? (
+        <Delta value={String(value).replace('▲', '')} />
+      ) : (
+        <span className={`row__value num${valueTone ? ' row__value--' + valueTone : ''}`}>{value}</span>
+      )}
     </a>
   )
 }
@@ -231,22 +278,48 @@ function Loading() {
 /* ================= 홈 ================= */
 
 function KeywordHero({ keywords }) {
+  const [wiggle, setWiggle] = useState(null)
   if (!keywords || keywords.words.length === 0) return null
   const [top, ...rest] = keywords.words
+  const letters = [...top.word]
+  const after = 0.25 + letters.length * 0.12
+  const shake = (w) => {
+    setWiggle(null)
+    setTimeout(() => setWiggle(w), 10)
+  }
   return (
     <section className="kw">
-      <span className="kw__label">{keywords.monthLabel}의 키워드</span>
-      <h2 className="kw__main">{top.word}</h2>
-      <p className="kw__desc">
-        요즘 뜨는 책들에서
+      <span className="kw__label pop" style={{ animationDelay: '0.05s' }}>
+        <i aria-hidden="true" />
+        {keywords.monthLabel}의 키워드
+      </span>
+      <h2 className="kw__main" aria-label={top.word}>
+        <span className="kw__mark grow" style={{ animationDelay: `${after}s` }} aria-hidden="true" />
+        {letters.map((ch, i) => (
+          <span key={i} className="drop" style={{ animationDelay: `${0.15 + i * 0.12}s` }} aria-hidden="true">
+            {ch}
+          </span>
+        ))}
+      </h2>
+      <p className="kw__desc rise" style={{ animationDelay: `${after + 0.1}s` }}>
+        요즘 뜨는 책{top.books ? <b> {top.books}권</b> : ''}에서
         <br />
         가장 많이 나온 단어예요
       </p>
       <div className="kw__tags">
         {rest.slice(0, 8).map((k, i) => (
-          <span key={k.word} className={`tag${i < 3 ? ' tag--strong' : ''}`}>
-            #{k.word}
-          </span>
+          <button
+            key={k.word}
+            type="button"
+            className={`tag tag--btn pop${i < 3 ? ' tag--strong' : ''}`}
+            style={delay(i, after + 0.15, 0.06)}
+            onClick={() => shake(k.word)}
+          >
+            <span className={wiggle === k.word ? 'jelly' : ''}>
+              <span className="tag__hash">#</span>
+              {k.word}
+            </span>
+          </button>
         ))}
       </div>
     </section>
@@ -277,10 +350,15 @@ function Carousel({ books }) {
   }
 
   return (
-    <section className="card">
+    <section className="card rise" style={{ animationDelay: '0.5s' }}>
       <div className="card__head">
-        <h2 className="h2">오늘의 콕 TOP {n}</h2>
-        <span className="sub">옆으로 넘겨보세요</span>
+        <div className="titlegroup">
+          <Eyebrow>TODAY&apos;S KOK</Eyebrow>
+          <h2 className="h2 display">
+            오늘의 콕 <em>TOP {n}</em>
+          </h2>
+        </div>
+        <span className="sub">밀어서 넘기기 →</span>
       </div>
       <div className="carousel" onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={() => (start.current = null)}>
         {books.map((b, i) => {
@@ -288,7 +366,8 @@ function Carousel({ books }) {
           if (o > n / 2) o -= n
           const a = Math.abs(o)
           const scale = [1, 0.78, 0.6][Math.min(a, 2)]
-          const x = [0, 96, 160][Math.min(a, 2)] * Math.sign(o)
+          const x = [0, 98, 162][Math.min(a, 2)] * Math.sign(o)
+          const rot = [0, 7, 11][Math.min(a, 2)] * Math.sign(o)
           const onClick = () => {
             if (swiped.current) {
               swiped.current = false
@@ -301,20 +380,24 @@ function Carousel({ books }) {
             <button
               key={b.isbn13}
               className={`carousel__card${o === 0 ? ' is-center' : ''}`}
-              style={{ transform: `translateX(${x}px) scale(${scale})`, zIndex: 10 - a, opacity: a >= 2 ? 0.55 : 1 }}
+              style={{ transform: `translateX(${x}px) scale(${scale}) rotate(${rot}deg)`, zIndex: 10 - a, opacity: a >= 2 ? 0.5 : 1 }}
               onClick={onClick}
               aria-label={o === 0 ? `${shortTitle(b.title)} 상세 보기` : `${i + 1}위 ${shortTitle(b.title)}`}
             >
-              <Cover src={b.cover_url} alt="" className="carousel__cover" title={b.title} />
-              <span className="carousel__rank">{i + 1}</span>
+              <span className={`carousel__inner${o === 0 ? ' bob' : ''}`}>
+                <Cover src={b.cover_url} alt="" className="carousel__cover" title={b.title} />
+                <span className="spine" aria-hidden="true" />
+                {o === 0 && <span className="carousel__rank pop num">{i + 1}</span>}
+              </span>
             </button>
           )
         })}
       </div>
-      <div className="carousel__caption">
+      <div className="carousel__caption pop" key={idx}>
         <strong>{shortTitle(cur.title)}</strong>
         <span>
-          {cleanAuthor(cur.author)} · <b>{cur.score ?? '-'}점</b>
+          {cleanAuthor(cur.author)} · <b className="num">{cur.score ?? '-'}</b>
+          <small>점</small>
         </span>
       </div>
       <div className="carousel__nav">
@@ -336,9 +419,12 @@ function Home({ feed, keywords, loading, error }) {
   return (
     <>
       <header className="topbar">
-        <span className="logo">책콕</span>
+        <span className="logo">
+          책콕
+          <i className="logo__dot blink" aria-hidden="true" />
+        </span>
         <span className="topbar__right">
-          <span className="sub">{DATE_LABEL}</span>
+          <span className="sub num">{DATE_LABEL}</span>
           <a className="iconbtn" href="#/search" aria-label="책 검색">
             {Icon.search()}
           </a>
@@ -351,13 +437,16 @@ function Home({ feed, keywords, loading, error }) {
         {!loading && !error && (
           <>
             <Carousel books={top5} />
-            <section className="card card--list">
+            <section className="card card--list rise" style={{ animationDelay: '0.65s' }}>
               <div className="card__head">
-                <h2 className="h2">지금 뜨는 책</h2>
+                <div className="titlegroup">
+                  <Eyebrow tone="up">RISING NOW</Eyebrow>
+                  <h2 className="h2 display">지금 뜨는 책</h2>
+                </div>
                 <span className="sub">대출순위 급상승</span>
               </div>
               {rising3.map((b, i) => (
-                <BookRow key={b.isbn13} rank={i + 1} book={b} value={`▲${b.rank_diff ?? 0}`} valueTone="up" />
+                <BookRow key={b.isbn13} rank={i + 1} order={i + 14} book={b} value={`▲${b.rank_diff ?? 0}`} valueTone="up" />
               ))}
               <a className="btn btn--soft btn--block" href="#/trend">
                 트렌드 순위 전체 보기 {Icon.chev()}
@@ -401,7 +490,8 @@ function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo
   return (
     <>
       <header className="pagehead">
-        <h1 className="h1">트렌드</h1>
+        <Eyebrow>TREND</Eyebrow>
+        <h1 className="h1 display">트렌드</h1>
         <span className="sub">{DATE_LABEL} · 전국 공공도서관 대출 데이터</span>
       </header>
       <div className="tabs" role="tablist">
@@ -435,7 +525,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo
         {!waiting &&
           list.map((b, i) => {
             const [v, tone] = value(b)
-            return <BookRow key={b.isbn13 + i} rank={i + 1} book={b} value={v} valueTone={tone} />
+            return <BookRow key={tab + cat + b.isbn13 + i} rank={i + 1} order={i} book={b} value={v} valueTone={tone} />
           })}
       </div>
     </>
@@ -542,7 +632,8 @@ function useBook(isbn, index) {
   return { book, ...extra }
 }
 
-function LoanChart({ history }) {
+function LoanChart({ history, motionKey }) {
+  const p = useCountUp(motionKey)
   const rows = (history || []).filter((h) => h.loanCnt != null).slice(-12)
   if (rows.length < 2) return null
   const max = Math.max(...rows.map((r) => r.loanCnt), 1)
@@ -550,12 +641,16 @@ function LoanChart({ history }) {
   const prev = rows[rows.length - 2]
   const diff = last.loanCnt - prev.loanCnt
   return (
-    <section className="card">
-      <h2 className="h2">월별 대출 추이</h2>
+    <section className="card rise" style={{ animationDelay: '0.35s' }}>
+      <Eyebrow>LOAN TREND</Eyebrow>
+      <h2 className="h2 display">월별 대출 추이</h2>
       <p className="sub">최근 {rows.length}개월 · 정보나루 참여 공공도서관</p>
       <div className="bigstat">
-        <strong>{last.loanCnt.toLocaleString()}회</strong>
-        <span className={diff >= 0 ? 'up' : 'down'}>
+        <strong className="num">
+          {Math.round(last.loanCnt * p).toLocaleString()}
+          <small>회</small>
+        </strong>
+        <span className={`chip-stat num ${diff >= 0 ? 'up' : 'down'}`}>
           지난달보다 {diff >= 0 ? '+' : ''}
           {diff.toLocaleString()}회
         </span>
@@ -563,8 +658,12 @@ function LoanChart({ history }) {
       <div className="bars" role="img" aria-label={`최근 ${rows.length}개월 대출 건수 막대그래프`}>
         {rows.map((r, i) => (
           <div key={r.month} className="bars__col">
-            <div className={`bars__bar${i === rows.length - 1 ? ' is-last' : ''}`} style={{ height: `${Math.round((r.loanCnt / max) * 120)}px` }} title={`${r.month} ${r.loanCnt}회`} />
-            <span>{Number((r.month.match(/(\d+)월/) || [])[1])}월</span>
+            <div
+              className={`bars__bar barup${i === rows.length - 1 ? ' is-last' : ''}`}
+              style={{ height: `${Math.round((r.loanCnt / max) * 120)}px`, ...delay(i, 0.45, 0.04, 12) }}
+              title={`${r.month} ${r.loanCnt}회`}
+            />
+            <span className={i === rows.length - 1 ? 'is-last' : ''}>{Number((r.month.match(/(\d+)월/) || [])[1])}월</span>
           </div>
         ))}
       </div>
@@ -585,8 +684,9 @@ function Groups({ groups }) {
   if (top.length === 0) return null
   const best = top[0].ranking
   return (
-    <section className="card">
-      <h2 className="h2">누가 특히 많이 빌렸을까요</h2>
+    <section className="card rise" style={{ animationDelay: '0.45s' }}>
+      <Eyebrow>WHO READS</Eyebrow>
+      <h2 className="h2 display">누가 특히 많이 빌렸을까요</h2>
       <p className="sub">그 그룹이 빌린 책 중에서 이 책이 몇 위인지 비교했어요 (대출 {MIN_GROUP_LOANS}회 이상 그룹)</p>
       <p className="groups__lead">
         <b>
@@ -605,11 +705,17 @@ function Groups({ groups }) {
               {g.age} {g.gender}
             </span>
             <span className="hbars__track">
-              <span className={`hbars__fill${i === 0 ? ' is-top' : ''}`} style={{ width: `${Math.max(12, Math.round((best / g.ranking) * 100))}%` }} />
+              <span
+                className={`hbars__fill barx${i === 0 ? ' is-top' : ''}`}
+                style={{ width: `${Math.max(12, Math.round((best / g.ranking) * 100))}%`, ...delay(i, 0.6, 0.08) }}
+              />
             </span>
             <span className="hbars__num">
-              <b>{g.ranking.toLocaleString()}위</b>
-              <small>{g.loanCnt.toLocaleString()}회 대출</small>
+              <b className="num">
+                {g.ranking.toLocaleString()}
+                <i>위</i>
+              </b>
+              <small className="num">{g.loanCnt.toLocaleString()}회 대출</small>
             </span>
           </div>
         ))}
@@ -632,6 +738,8 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
   const { book, usage, coCovers, loading } = useBook(isbn, index)
   const buyRef = useRef(null)
   const [libOpen, setLibOpen] = useState(false)
+  const [heartKey, setHeartKey] = useState(0)
+  const p = useCountUp(isbn)
   const back = () => (window.history.length > 1 ? window.history.back() : go('/'))
   if (!book) {
     return (
@@ -647,55 +755,89 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
   const keywords = (usage?.keywords || []).slice(0, 8)
   const co = (usage?.co_loan || []).slice(0, 10)
   const stats = [
-    { label: '종합 점수', value: book.score != null ? `${book.score}` : '-' },
-    { label: '대출순위 변화', value: book.rank_diff != null ? `▲${book.rank_diff}` : '-', tone: book.rank_diff ? 'up' : '' },
-    { label: '30일 대출', value: book.loan_count != null ? `${book.loan_count.toLocaleString()}회` : '-' },
+    { label: '종합 점수', value: book.score != null ? (Number(book.score) * p).toFixed(1) : '-', unit: book.score != null ? '점' : '' },
+    { label: '대출순위 변화', value: book.rank_diff != null ? `▲${Math.round(book.rank_diff * p)}` : '-', tone: book.rank_diff ? 'up' : '' },
+    {
+      label: '30일 대출',
+      value: book.loan_count != null ? Math.round(book.loan_count * p).toLocaleString() : '-',
+      unit: book.loan_count != null ? '회' : '',
+    },
   ]
+  const eyebrow = book.rank_diff ? `RISING · ▲${book.rank_diff}` : book.trendType === 'recommended' ? 'LIBRARIAN PICK' : book.score != null ? "TODAY'S KOK" : null
+  const onHeart = () => {
+    toggleWish(book)
+    setHeartKey((k) => k + 1)
+  }
 
   return (
     <div className="detail">
       <header className="detail__bar">
         <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
-        <button className={`iconbtn${saved ? ' is-saved' : ''}`} onClick={() => toggleWish(book)} aria-pressed={saved} aria-label={saved ? '찜 해제' : '찜하기'}>
-          {Icon.heart(saved)}
+        <button className={`iconbtn heartbtn${saved ? ' is-saved' : ''}`} onClick={onHeart} aria-pressed={saved} aria-label={saved ? '찜 해제' : '찜하기'}>
+          {saved && heartKey > 0 && (
+            <span className="sparks" key={'s' + heartKey} aria-hidden="true">
+              {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                <i key={i} style={{ '--a': `${i * 45}deg` }} />
+              ))}
+            </span>
+          )}
+          <span key={heartKey} className={heartKey ? 'heartpop' : ''}>
+            {Icon.heart(saved)}
+          </span>
         </button>
       </header>
       <div className="stack">
         <section className="card hero">
           <div className="hero__top">
-            <Cover src={book.cover_url} alt={shortTitle(book.title)} className="hero__cover" title={book.title} />
+            <span className="hero__coverwrap tilt" key={'c' + isbn}>
+              <Cover src={book.cover_url} alt={shortTitle(book.title)} className="hero__cover" title={book.title} />
+              <span className="spine" aria-hidden="true" />
+            </span>
             <div className="hero__text">
-              {book.trendType === 'recommended' && <span className="badge badge--accent">사서 추천</span>}
-              <h1 className="hero__title">{shortTitle(book.title)}</h1>
-              <span className="sub">
-                {cleanAuthor(book.author)}
+              {eyebrow && (
+                <span className="rise" style={{ animationDelay: '0.12s' }}>
+                  <Eyebrow tone={book.rank_diff ? 'up' : undefined}>{eyebrow}</Eyebrow>
+                </span>
+              )}
+              <h1 className="hero__title display rise" style={{ animationDelay: '0.18s' }}>
+                {shortTitle(book.title)}
+              </h1>
+              <span className="sub rise" style={{ animationDelay: '0.24s' }}>
+                <b className="hero__author">{cleanAuthor(book.author)}</b>
                 {book.classNameFull ? ` · ${book.classNameFull.split('>').slice(0, 2).join(' > ')}` : ''}
               </span>
               {keywords.length > 0 && (
                 <div className="hero__tags">
                   {keywords.slice(0, 6).map((k, i) => (
-                    <span key={k.word} className={`tag tag--sm${i < 2 ? ' tag--accent' : ''}`}>#{k.word}</span>
+                    <span key={k.word} className={`tag tag--sm pop${i < 2 ? ' tag--accent' : ''}`} style={delay(i, 0.3, 0.06)}>
+                      <span className="tag__hash">#</span>
+                      {k.word}
+                    </span>
                   ))}
                 </div>
               )}
             </div>
           </div>
-          <div className="statgrid">
+          <div className="statgrid rise" style={{ animationDelay: '0.3s' }}>
             {stats.map((s) => (
               <div key={s.label}>
                 <span>{s.label}</span>
-                <strong className={s.tone || ''}>{s.value}</strong>
+                <strong className={`num ${s.tone || ''}`}>
+                  {s.value}
+                  {s.unit && <small>{s.unit}</small>}
+                </strong>
               </div>
             ))}
           </div>
         </section>
 
-        <LoanChart history={usage?.loan_history} />
+        <LoanChart history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
         <Groups groups={usage?.loan_grps} />
 
         {co.length > 0 && (
-          <section className="card card--bleed">
-            <h2 className="h2">
+          <section className="card card--bleed rise" style={{ animationDelay: '0.55s' }}>
+            <Eyebrow>ALSO BORROWED</Eyebrow>
+            <h2 className="h2 display">
               이 책을 빌린 사람들이
               <br />
               같이 빌린 책
@@ -720,7 +862,8 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
         )}
 
         <section className="card" id="buy" ref={buyRef}>
-          <h2 className="h2">어디서 살까요</h2>
+          <Eyebrow>WHERE TO BUY</Eyebrow>
+          <h2 className="h2 display">어디서 살까요</h2>
           {COUPANG_AFFILIATE && <p className="notice">{AFFILIATE_NOTICE}</p>}
           <div className="shops">
             {shopLinks(book.isbn13).map((s) => (
@@ -989,7 +1132,8 @@ function Wish({ wish, index, toggleWish }) {
   return (
     <>
       <header className="pagehead">
-        <h1 className="h1">찜한 책</h1>
+        <Eyebrow>MY BOOKS</Eyebrow>
+        <h1 className="h1 display">찜한 책</h1>
         <span className="sub">이 기기에 저장돼요</span>
       </header>
       <div className="stack">
@@ -1072,7 +1216,8 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
   return (
     <>
       <header className="pagehead">
-        <h1 className="h1">마이</h1>
+        <Eyebrow>MY PAGE</Eyebrow>
+        <h1 className="h1 display">마이</h1>
       </header>
       <div className="stack">
         <section className="card profile">
