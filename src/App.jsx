@@ -26,8 +26,8 @@ const CATEGORY_MERGE = { 언어: '문학', 종교: '철학' }
 
 const TABS = [
   { id: 'composite', label: '종합', desc: '여러 신호를 합친 종합 점수순이에요' },
-  { id: 'rising', label: '급상승', desc: '최근 2주 사이 대출순위가 많이 오른 책을 모두 모았어요' },
   { id: 'popular', label: '꾸준한 인기', desc: '최근 30일 대출이 많은 순이에요' },
+  { id: 'rising', label: '급상승', desc: '최근 2주 사이 대출순위가 많이 오른 책을 모두 모았어요' },
   { id: 'recommended', label: '신간', desc: '국립중앙도서관 사서가 추천한 새 책이에요' },
 ]
 
@@ -230,7 +230,7 @@ function KeywordHero({ keywords }) {
       <span className="kw__label">{keywords.monthLabel}의 키워드</span>
       <h2 className="kw__main">{top.word}</h2>
       <p className="kw__desc">
-        이번 달 대출이 급상승한 책들에서
+        요즘 뜨는 책들에서
         <br />
         가장 많이 나온 단어예요
       </p>
@@ -957,19 +957,19 @@ function useIndex(feed) {
   }, [feed])
 }
 
+// 홈 키워드: 정보나루 '이달의 키워드'에는 어린이 책이 섞여 있어서,
+// 어린이 책을 뺀 요즘 뜨는 책들의 키워드를 모은 v_home_keywords를 쓴다
 function useKeywords() {
   const [kw, setKw] = useState(null)
   useEffect(() => {
     supabase
-      .from('monthly_keywords')
-      .select('month,word,weight,rank')
-      .order('month', { ascending: false })
-      .order('rank', { ascending: true, nullsFirst: false })
-      .limit(60)
+      .from('v_home_keywords')
+      .select('word,books,rank')
+      .order('rank', { ascending: true })
+      .limit(10)
       .then(({ data }) => {
         if (!data || data.length === 0) return
-        const month = data[0].month
-        setKw({ monthLabel: `${Number(month.split('-')[1])}월`, words: data.filter((d) => d.month === month) })
+        setKw({ monthLabel: `${today.getMonth() + 1}월`, words: data })
       })
   }, [])
   return kw
