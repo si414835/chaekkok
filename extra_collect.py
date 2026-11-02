@@ -19,6 +19,8 @@ import requests
 from supabase import create_client
 
 KEY = os.environ["DATA4LIBRARY_KEY"]
+NL_KEY = os.environ.get("NL_API_KEY")  # 국립중앙도서관 키 (출간예정 조회용, 없으면 그 단계만 건너뜀)
+SEOJI_URL = "https://www.nl.go.kr/seoji/SearchApi.do"
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 BASE = "http://data4library.kr/api/"
 KST = timezone(timedelta(hours=9))
@@ -39,7 +41,9 @@ def now_kst():
 
 def safe_err(e):
     """오류 메시지에 인증키가 찍히지 않게 가린다."""
-    return re.sub(r"authKey=[^&\s'\"]+", "authKey=***", str(e))[:300]
+    msg = re.sub(r"authKey=[^&\s'\"]+", "authKey=***", str(e))
+    msg = re.sub(r"cert_key=[^&\s'\"]+", "cert_key=***", msg)
+    return msg[:300]
 
 
 def call(api, params, retries=(5, 15, 30)):
@@ -95,6 +99,22 @@ def to_int(v):
         return int(str(v).replace(",", ""))
     except (TypeError, ValueError):
         return None
+
+
+def doc_to_book(d):
+    cls = d.get("class_nm")
+    return {
+        "isbn13": d["isbn13"],
+        "title": (d.get("bookname") or "").strip(),
+        "author": d.get("authors"),
+        "publisher": d.get("publisher"),
+        "pub_year": d.get("publication_year"),
+        "class_no": d.get("class_no") or None,
+        "class_name": cls if cls and "null" not in cls else None,
+        "cover_url": d.get("bookImageURL"),
+        "detail_url": d.get("bookDtlUrl"),
+        "addition_symbol": d.get("addition_symbol") or None,
+    }
 
 
 # ---------- 1. 이달의 키워드 ----------
@@ -187,6 +207,134 @@ def collect_demographics():
                 print(f"::warning::연령·성별 {part} 실패: {safe_err(e)}")
             time.sleep(1)
     return total
+
+
+# ---------- 2-1. 지역별 인기대출 (확산 판단용) ----------
+
+# 정보나루 시·도 코드. 강원·전북은 특별자치도 전환 뒤 코드가 바뀌었을 수 있어 51·52도 함께 조회 (0건이면 저장 안 함)
+REGIONS = ["11", "21", "22", "23", "24", "25", "26", "29", "31", "32", "33", "34", "35", "36", "37", "38", "39", "51", "52"]
+
+
+def collect_regions():
+    today = now_kst()
+    snapshot = today.strftime("%Y-%m-%d")
+    period = {
+        "startDt": (today - timedelta(days=30)).strftime("%Y-%m-%d"),
+        "endDt": (today - timedelta(days=1)).strftime("%Y-%m-%d"),
+        "pageNo": 1,
+        "pageSize": 100,
+    }
+    ok_regions, total = 0, 0
+    for code in REGIONS:
+        try:
+            data = call("loanItemSrchByLib", {**period, "region": code})
+            docs = [d for d in find_dicts_with(data, "isbn13") if d.get("bookname")]
+            if not docs:
+                continue
+            books = {d["isbn13"]: doc_to_book(d) for d in docs}
+            rows = {d["isbn13"]: {"snapshot_date": snapshot, "region": code, "isbn13": d["isbn13"],
+                                  "rank": to_int(d.get("ranking"))} for d in docs}
+            supabase.table("books").upsert(list(books.values()), on_conflict="isbn13").execute()
+            supabase.table("region_popular").upsert(list(rows.values()),
+                                                     on_conflict="snapshot_date,region,isbn13").execute()
+            ok_regions += 1
+            total += len(rows)
+        except Exception as e:
+            print(f"  [지역 {code} 실패] {safe_err(e)}")
+        time.sleep(1)
+    status = "ok" if ok_regions >= 12 else ("failed" if ok_regions == 0 else "partial")
+    log_run("regions", status, total, None if status == "ok" else f"{ok_regions}개 지역만 성공")
+    print(f"[지역별 인기대출] {ok_regions}개 지역 · {total}건")
+    return total
+
+
+# ---------- 2-2. 출간 예정 (요즘 뜨는 작가의 곧 나올 책) ----------
+
+def clean_author_name(a):
+    """'지은이: 황보름', '앨런 레비 지음 ;노지양 옮김' -> 첫 저자 이름만."""
+    if not a:
+        return None
+    first = re.split(r"[;,]", a)[0]
+    first = re.sub(r"^(지은이|글|저자|원작|지음|저)\s*:\s*", "", first)
+    first = re.sub(r"\(.*?\)", "", first)
+    first = re.sub(r"\s*(지음|저|글|동화|그림|옮김|엮음|편)$", "", first).strip()
+    if len(first) < 2 or len(first) > 12 or "편집부" in first or "연구소" in first:
+        return None
+    return first
+
+
+def seoji(params, retries=(5, 15)):
+    p = {"cert_key": NL_KEY, "result_style": "json", "page_no": 1, "page_size": 20, **params}
+    last = None
+    for wait in (0,) + tuple(retries):
+        if wait:
+            time.sleep(wait)
+        try:
+            res = requests.get(SEOJI_URL, params=p, timeout=40)
+            res.raise_for_status()
+            return res.json()
+        except Exception as e:
+            last = e
+    raise RuntimeError(safe_err(last))
+
+
+def collect_upcoming():
+    if not NL_KEY:
+        print("::warning::NL_API_KEY가 없어 출간예정 조회를 건너뜀")
+        return 0
+    rows = (supabase.table("v_book_state_latest").select("isbn13,momentum,stage")
+            .order("momentum", desc=True).limit(150).execute().data or [])
+    isbns = [r["isbn13"] for r in rows]
+    authors = {}
+    for i in range(0, len(isbns), 100):
+        for b in (supabase.table("books").select("isbn13,author").in_("isbn13", isbns[i:i + 100]).execute().data or []):
+            name = clean_author_name(b.get("author"))
+            if name:
+                authors.setdefault(name, b["isbn13"])
+    names = list(authors)[:50]
+    today = now_kst()
+    start = (today - timedelta(days=30)).strftime("%Y%m%d")
+    end = (today + timedelta(days=60)).strftime("%Y%m%d")
+    found, books, failed = {}, {}, 0
+    for name in names:
+        try:
+            data = seoji({"author": name, "start_publish_date": start, "end_publish_date": end, "ebook_yn": "N"})
+        except Exception as e:
+            failed += 1
+            print(f"  [출간예정 {name} 실패] {safe_err(e)}")
+            continue
+        for d in find_dicts_with(data, "EA_ISBN"):
+            isbn = str(d.get("EA_ISBN") or "").strip()
+            date = str(d.get("PUBLISH_PREDATE") or "").strip()
+            if len(isbn) != 13 or not re.fullmatch(r"\d{8}", date):
+                continue
+            if name not in str(d.get("AUTHOR") or ""):
+                continue  # 같은 이름이 제목 등에만 걸린 경우 제외
+            if str(d.get("EA_ADD_CODE") or "").startswith("7"):
+                continue  # 어린이 책 제외
+            pub = f"{date[:4]}-{date[4:6]}-{date[6:]}"
+            title = (d.get("TITLE") or "").strip()
+            found[isbn] = {"isbn13": isbn, "title": title, "author": d.get("AUTHOR"), "publisher": d.get("PUBLISHER"),
+                           "publish_date": pub, "cover_url": d.get("TITLE_URL") or None, "matched_author": name}
+            books[isbn] = {"isbn13": isbn, "title": title, "author": d.get("AUTHOR"), "publisher": d.get("PUBLISHER"),
+                           "pub_year": date[:4], "class_no": (str(d.get("KDC")).strip() or None) if d.get("KDC") else None,
+                           "cover_url": d.get("TITLE_URL") or None,
+                           "addition_symbol": str(d.get("EA_ADD_CODE") or "").strip() or None}
+        time.sleep(0.5)
+    if books:
+        # 이미 있는 책(정보나루 정보가 더 자세함)은 덮어쓰지 않고 새 책만 넣는다
+        existing = set()
+        keys = list(books)
+        for i in range(0, len(keys), 100):
+            existing |= {r["isbn13"] for r in (supabase.table("books").select("isbn13").in_("isbn13", keys[i:i + 100]).execute().data or [])}
+        new_books = [b for k, b in books.items() if k not in existing]
+        if new_books:
+            supabase.table("books").upsert(new_books, on_conflict="isbn13").execute()
+        supabase.table("upcoming_books").upsert(list(found.values()), on_conflict="isbn13").execute()
+    status = "ok" if failed == 0 else ("failed" if failed == len(names) else "partial")
+    log_run("upcoming", status, len(found), None if status == "ok" else f"{failed}명 조회 실패")
+    print(f"[출간예정] 작가 {len(names)}명 · 책 {len(found)}권 (실패 {failed})")
+    return len(found)
 
 
 # ---------- 3. 정보나루 참여 도서관 목록 (주 1회) ----------
@@ -306,7 +454,7 @@ def collect_usage():
 
 def main():
     # 정보나루 '이달의 키워드'는 어린이 책이 섞여 화면에서 쓰지 않으므로 수집하지 않는다 (홈 키워드는 v_home_keywords)
-    for step in (collect_demographics, collect_libraries, collect_usage):
+    for step in (collect_demographics, collect_regions, collect_libraries, collect_usage, collect_upcoming):
         try:
             step()
         except Exception as e:

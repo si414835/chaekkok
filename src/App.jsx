@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
 
 /* ================= 설정 ================= */
@@ -151,6 +151,24 @@ function useCountUp(key, ms = 1100) {
 // 애니메이션 시작 시점을 엇갈리게 (목록이 길면 앞쪽 몇 개만)
 const delay = (i, base = 0, step = 0.05, max = 10) => ({ animationDelay: `${base + Math.min(i, max) * step}s` })
 
+// 책별 최신 트렌드 단계·이유 (book_state). 목록·상세 어디서든 꺼내 쓴다.
+const StateCtx = createContext(new Map())
+const useBookState = (isbn) => useContext(StateCtx).get(isbn)
+
+const STAGES = ['포착', '떠오름', '확산', '스테디']
+const STAGE_TONE = { 포착: 'spot', 떠오름: 'rise', 확산: 'spread', 스테디: 'steady' }
+
+function StageBadge({ stage }) {
+  if (!stage) return null
+  return <span className={`stage stage--${STAGE_TONE[stage] || 'steady'}`}>{stage}</span>
+}
+
+function fmtDate(d) {
+  if (!d) return ''
+  const [, m, day] = String(d).split('-')
+  return `${Number(m)}월 ${Number(day)}일`
+}
+
 function Eyebrow({ children, tone }) {
   return <span className={`eyebrow${tone ? ' eyebrow--' + tone : ''}`}>{children}</span>
 }
@@ -252,6 +270,7 @@ function BottomNav({ current }) {
 }
 
 function BookRow({ rank, book, value, valueTone, order = 0 }) {
+  const st = useBookState(book.isbn13)
   return (
     <a className="row rise" style={delay(order, 0.05, 0.04)} href={`#/book/${encodeURIComponent(book.isbn13)}`}>
       {rank != null && <span className={`row__rank num${rank === 1 ? ' is-first' : ''}`}>{rank}</span>}
@@ -261,6 +280,12 @@ function BookRow({ rank, book, value, valueTone, order = 0 }) {
         <span className="row__meta">
           {book.categoryLabel} · {cleanAuthor(book.author)}
         </span>
+        {st?.reason && (
+          <span className="row__reason">
+            <StageBadge stage={st.stage} />
+            <span>{st.reason}</span>
+          </span>
+        )}
       </span>
       {valueTone === 'up' ? (
         <Delta value={String(value).replace('▲', '')} />
@@ -327,6 +352,7 @@ function KeywordHero({ keywords }) {
 }
 
 function Carousel({ books }) {
+  const stateMap = useContext(StateCtx)
   const n = books.length
   const [idx, setIdx] = useState(0)
   const start = useRef(null)
@@ -334,6 +360,7 @@ function Carousel({ books }) {
   const move = (to) => setIdx(((to % n) + n) % n)
   if (n === 0) return null
   const cur = books[Math.min(idx, n - 1)]
+  const curState = stateMap.get(cur?.isbn13)
 
   const onDown = (e) => {
     start.current = e.clientX
@@ -399,6 +426,12 @@ function Carousel({ books }) {
           {cleanAuthor(cur.author)} · <b className="num">{cur.score ?? '-'}</b>
           <small>점</small>
         </span>
+        {curState?.reason && (
+          <span className="carousel__reason">
+            <StageBadge stage={curState.stage} />
+            {curState.reason}
+          </span>
+        )}
       </div>
       <div className="carousel__nav">
         <button className="round" onClick={() => move(idx - 1)} aria-label="이전 책">{Icon.chev('left')}</button>
@@ -413,7 +446,7 @@ function Carousel({ books }) {
   )
 }
 
-function Home({ feed, keywords, loading, error }) {
+function Home({ feed, keywords, loading, error, upcoming, hitStats }) {
   const top5 = feed.composite.filter((b) => !isChildBook(b)).slice(0, 5)
   const rising3 = feed.rising.filter((b) => !isChildBook(b)).slice(0, 3)
   return (
@@ -452,8 +485,158 @@ function Home({ feed, keywords, loading, error }) {
                 트렌드 순위 전체 보기 {Icon.chev()}
               </a>
             </section>
+            <Upcoming list={upcoming} />
+            <HitTeaser stats={hitStats} />
           </>
         )}
+      </div>
+    </>
+  )
+}
+
+function Upcoming({ list }) {
+  if (!list || list.length === 0) return null
+  return (
+    <section className="card card--bleed rise" style={{ animationDelay: '0.8s' }}>
+      <Eyebrow tone="spot">COMING SOON</Eyebrow>
+      <h2 className="h2 display">곧 나올 책</h2>
+      <p className="sub">요즘 뜨는 작가의 신작 · 국립중앙도서관 출간예정 정보</p>
+      <div className="hscroll">
+        {list.slice(0, 10).map((b) => (
+          <a key={b.isbn13} className="mini" href={`#/book/${encodeURIComponent(b.isbn13)}`}>
+            <span className="mini__coverwrap">
+              <Cover src={b.cover_url} alt="" className="mini__cover" title={b.title} />
+              <span className="mini__date num">{fmtDate(b.publish_date)}</span>
+            </span>
+            <span className="mini__title">{shortTitle(b.title)}</span>
+            <span className="mini__author">{b.matched_author || cleanAuthor(b.author)}</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function HitTeaser({ stats }) {
+  if (!stats || !stats.matured_total) return null
+  return (
+    <a className="card hitteaser rise press" style={{ animationDelay: '0.9s' }} href="#/hits">
+      <div className="titlegroup">
+        <Eyebrow>TRACK RECORD</Eyebrow>
+        <strong className="display">책콕 적중 기록</strong>
+        <span className="sub">
+          먼저 포착한 책의 <b className="accent num">{stats.rose_rate}%</b>가 2주 안에 순위가 더 올랐어요
+        </span>
+      </div>
+      <span className="hitteaser__go">{Icon.chev()}</span>
+    </a>
+  )
+}
+
+/* ================= 적중 기록 ================= */
+
+function Hits({ stats, index }) {
+  const [books, setBooks] = useState(null)
+  useEffect(() => {
+    supabase
+      .from('v_hit_books')
+      .select('*')
+      .order('top10_date', { ascending: false })
+      .limit(30)
+      .then(({ data }) => setBooks((data || []).filter((b) => !(b.addition_symbol || '').startsWith('7'))))
+  }, [])
+  const s = stats
+  return (
+    <>
+      <header className="pagehead">
+        <Eyebrow>TRACK RECORD</Eyebrow>
+        <h1 className="h1 display">책콕 적중 기록</h1>
+        <span className="sub">책콕이 먼저 알아본 책은 실제로 떴을까요?</span>
+      </header>
+      <div className="stack">
+        {!s && <section className="card"><Loading /></section>}
+        {s && (
+          <section className="card rise">
+            <div className="hitgrid">
+              <div>
+                <span>포착한 책</span>
+                <strong className="num">
+                  {s.spotted_total.toLocaleString()}
+                  <small>권</small>
+                </strong>
+              </div>
+              <div>
+                <span>2주 안에 더 오름</span>
+                <strong className="num accent">
+                  {s.rose_rate ?? '-'}
+                  <small>%</small>
+                </strong>
+              </div>
+              <div>
+                <span>분야 TOP10 진입</span>
+                <strong className="num up">
+                  {s.top10_hits}
+                  <small>권</small>
+                </strong>
+              </div>
+              <div>
+                <span>평균 먼저 안 날</span>
+                <strong className="num">
+                  {s.avg_lead_days ?? '-'}
+                  <small>일</small>
+                </strong>
+              </div>
+            </div>
+            <p className="sub small">
+              {fmtDate(s.since)}부터 기록 · 포착 후 2주가 지난 {s.matured_total}권 기준으로 계산했어요.
+            </p>
+          </section>
+        )}
+
+        <section className="card card--list rise" style={{ animationDelay: '0.15s' }}>
+          <div className="card__head">
+            <div className="titlegroup">
+              <Eyebrow tone="up">HITS</Eyebrow>
+              <h2 className="h2 display">먼저 알아본 책</h2>
+            </div>
+            <span className="sub">포착 → 분야 TOP10</span>
+          </div>
+          {books === null && <Loading />}
+          {books && books.length === 0 && <p className="state">아직 기록이 없어요. 매일 쌓이고 있어요.</p>}
+          {books &&
+            books.map((b, i) => (
+              <a key={b.isbn13} className="row rise" style={delay(i, 0.2, 0.04)} href={`#/book/${encodeURIComponent(b.isbn13)}`}>
+                <Cover src={b.cover_url || index.get(b.isbn13)?.cover_url} alt="" className="row__cover" title={b.title} />
+                <span className="row__info">
+                  <span className="row__title">{shortTitle(b.title)}</span>
+                  <span className="row__meta">
+                    {fmtDate(b.first_spotted)} {b.first_stage} · {b.rank_at_spot ? `${b.rank_at_spot}위일 때` : '목록 밖일 때'} → {fmtDate(b.top10_date)} TOP10
+                  </span>
+                </span>
+                <span className="lead num">
+                  <b>{b.lead_days}</b>일
+                  <small>먼저</small>
+                </span>
+              </a>
+            ))}
+        </section>
+
+        <section className="card rise" style={{ animationDelay: '0.25s' }}>
+          <h2 className="h3">어떻게 계산하나요</h2>
+          <ul className="howto">
+            <li>
+              <b>포착</b>은 책이 처음으로 포착·떠오름·확산 단계가 된 날이에요.
+            </li>
+            <li>
+              <b>더 오름</b>은 포착 뒤 2주 안에 분야 순위가 포착 때보다 올라간 경우예요.
+            </li>
+            <li>
+              <b>TOP10 진입</b>은 포착 당시 분야 10위 밖이던 책이 그 뒤 10위 안에 든 경우예요.
+            </li>
+            <li>기록을 시작하기 전 기간은 같은 기준을 과거 대출 데이터에 적용해 계산했어요.</li>
+          </ul>
+          <p className="sub small">데이터 출처: 도서관 정보나루 인기대출·대출 급상승</p>
+        </section>
       </div>
     </>
   )
@@ -740,6 +923,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
   const [libOpen, setLibOpen] = useState(false)
   const [heartKey, setHeartKey] = useState(0)
   const p = useCountUp(isbn)
+  const stateMap = useContext(StateCtx)
   const back = () => (window.history.length > 1 ? window.history.back() : go('/'))
   if (!book) {
     return (
@@ -755,7 +939,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
   const keywords = (usage?.keywords || []).slice(0, 8)
   const co = (usage?.co_loan || []).slice(0, 10)
   const stats = [
-    { label: '종합 점수', value: book.score != null ? (Number(book.score) * p).toFixed(1) : '-', unit: book.score != null ? '점' : '' },
+    { label: '모멘텀', value: book.score != null ? (Number(book.score) * p).toFixed(1) : '-', unit: book.score != null ? '점' : '' },
     { label: '대출순위 변화', value: book.rank_diff != null ? `▲${Math.round(book.rank_diff * p)}` : '-', tone: book.rank_diff ? 'up' : '' },
     {
       label: '30일 대출',
@@ -763,7 +947,8 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
       unit: book.loan_count != null ? '회' : '',
     },
   ]
-  const eyebrow = book.rank_diff ? `RISING · ▲${book.rank_diff}` : book.trendType === 'recommended' ? 'LIBRARIAN PICK' : book.score != null ? "TODAY'S KOK" : null
+  const st = stateMap.get(book.isbn13)
+  const eyebrow = st?.stage ? `STAGE · ${st.stage}` : book.rank_diff ? `RISING · ▲${book.rank_diff}` : book.trendType === 'recommended' ? 'LIBRARIAN PICK' : book.score != null ? "TODAY'S KOK" : null
   const onHeart = () => {
     toggleWish(book)
     setHeartKey((k) => k + 1)
@@ -818,6 +1003,30 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
               )}
             </div>
           </div>
+          {st?.stage && (
+            <div className="stagebar rise" style={{ animationDelay: '0.28s' }}>
+              <div className="stagebar__steps" role="img" aria-label={`트렌드 단계: ${st.stage}`}>
+                {STAGES.map((s) => (
+                  <span key={s} className={`stagebar__step${s === st.stage ? ' is-on stage--' + STAGE_TONE[s] : ''}`}>
+                    {s}
+                  </span>
+                ))}
+              </div>
+              {st.reason && <p className="stagebar__reason">{st.reason}</p>}
+              <p className="stagebar__meta">
+                {st.confidence && (
+                  <span>
+                    신뢰도 <b>{st.confidence}</b>
+                  </span>
+                )}
+                {st.first_spotted && st.stage !== '스테디' && (
+                  <span>
+                    책콕이 <b>{fmtDate(st.first_spotted)}</b> 처음 포착
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
           <div className="statgrid rise" style={{ animationDelay: '0.3s' }}>
             {stats.map((s) => (
               <div key={s.label}>
@@ -1035,6 +1244,30 @@ function LibraryStatusSheet({ book, libs, onClose, onPick }) {
             )
           })}
           <p className="sub small">소장·대출 정보는 도서관 정보나루 기준이라 실제와 조금 다를 수 있어요.</p>
+          {!state.loading && !state.error && libs.some((l) => {
+            const r = state.results[l.libCode]
+            return r && !r.error && (!r.hasBook || r.loanAvailable === false)
+          }) && (
+            <div className="alt">
+              <p className="alt__title">바로 못 빌린다면</p>
+              <a className="alt__item press" href="https://books.nl.go.kr" target="_blank" rel="noopener noreferrer">
+                <span>
+                  <b>책바다 (상호대차)</b>
+                  <small>다른 지역 도서관 책을 내 도서관으로 택배 배송 · 택배비 일부 본인 부담</small>
+                </span>
+                {Icon.chev()}
+              </a>
+              {libs[0]?.homepage && (
+                <a className="alt__item press" href={libs[0].homepage} target="_blank" rel="noopener noreferrer">
+                  <span>
+                    <b>희망도서 바로대출</b>
+                    <small>도서관에 없는 신간을 동네 서점에서 바로 빌리기 · 도서관마다 운영 여부가 달라요</small>
+                  </span>
+                  {Icon.chev()}
+                </a>
+              )}
+            </div>
+          )}
         </div>
       )}
       <div className="sheet__actions">
@@ -1279,6 +1512,10 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
         </section>
 
         <section className="card">
+          <a className="line" href="#/hits">
+            <span>책콕 적중 기록</span>
+            <span className="line__chev">{Icon.chev()}</span>
+          </a>
           {infos.map((it) => (
             <div key={it.id}>
               <button className="line" aria-expanded={openInfo === it.id} onClick={() => setOpenInfo(openInfo === it.id ? null : it.id)}>
@@ -1391,6 +1628,32 @@ function useIndex(feed) {
 
 // 홈 키워드: 정보나루 '이달의 키워드'에는 어린이 책이 섞여 있어서,
 // 어린이 책을 뺀 요즘 뜨는 책들의 키워드를 모은 v_home_keywords를 쓴다
+// 최신 트렌드 단계·이유 (작은 표라 한 번에 받음)
+function useBookStates() {
+  const [map, setMap] = useState(new Map())
+  useEffect(() => {
+    supabase
+      .from('v_book_state_latest')
+      .select('isbn13,stage,reason,confidence,momentum,first_spotted')
+      .limit(1000)
+      .then(({ data }) => {
+        if (data) setMap(new Map(data.map((r) => [r.isbn13, r])))
+      })
+  }, [])
+  return map
+}
+
+function useHome() {
+  const [d, setD] = useState({ upcoming: [], hitStats: null })
+  useEffect(() => {
+    Promise.all([
+      supabase.from('v_upcoming').select('*').order('publish_date', { ascending: true }).limit(20),
+      supabase.from('v_hit_stats').select('*').maybeSingle(),
+    ]).then(([u, h]) => setD({ upcoming: u.data || [], hitStats: h.data || null }))
+  }, [])
+  return d
+}
+
 function useKeywords() {
   const [kw, setKw] = useState(null)
   useEffect(() => {
@@ -1437,6 +1700,8 @@ export default function App() {
   const { feed, loading, error } = useFeed()
   const index = useIndex(feed)
   const keywords = useKeywords()
+  const states = useBookStates()
+  const home = useHome()
   const [prefs, setPrefs] = useStored('chaekkok.prefs', { on: false, age: '20', gender: 'all' })
   const [interests, setInterests] = useStored('chaekkok.interests', [])
   const [wish, setWish] = useStored('chaekkok.wish', [])
@@ -1465,9 +1730,13 @@ export default function App() {
   const trendTab = TABS.some((t) => t.id === route.param) ? route.param : 'composite'
   const navTab = route.name === 'book' ? null : route.name
   return (
+    <StateCtx.Provider value={states}>
     <div className={`app${navTab ? '' : ' app--detail'}`}>
       <main>
-        {route.name === 'home' && <Home feed={feed} keywords={keywords} loading={loading} error={error} />}
+        {route.name === 'home' && (
+          <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} />
+        )}
+        {route.name === 'hits' && <Hits stats={home.hitStats} index={index} />}
         {route.name === 'trend' && (
           <Trend tab={trendTab} feed={feed} loading={loading} error={error} prefs={prefs} interests={interests} demo={demo} onOpenFilter={() => setSheet(true)} />
         )}
@@ -1491,5 +1760,6 @@ export default function App() {
         />
       )}
     </div>
+    </StateCtx.Provider>
   )
 }

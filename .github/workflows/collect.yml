@@ -36,10 +36,11 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python nl_recommend_collect.py
 
-      - name: 추가 데이터 수집 (키워드·연령성별·이용분석)
+      - name: 추가 데이터 수집 (연령성별·지역·이용분석·출간예정)
         if: always()
         env:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          NL_API_KEY: ${{ secrets.NL_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python extra_collect.py

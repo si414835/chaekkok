@@ -1719,3 +1719,217 @@ p {
   }
   .tilt { transform: rotate(-3deg); }
 }
+
+/* ================= 트렌드 단계 · 적중 기록 ================= */
+
+.stage {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 5px;
+  letter-spacing: -0.2px;
+}
+.stage--spot { color: #7a3fd1; background: #f3ecfe; }
+.stage--rise { color: var(--up); background: var(--up-soft); }
+.stage--spread { color: var(--accent); background: var(--accent-soft); }
+.stage--steady { color: var(--ink-3); background: var(--line-2); }
+.eyebrow--spot { color: #7a3fd1; }
+
+.row__reason {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.row__reason > span:last-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.carousel__reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 13px !important;
+  color: var(--ink-3) !important;
+}
+
+.stagebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+}
+.stagebar__steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.stagebar__step {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 0;
+  border-radius: 8px;
+  background: var(--line-2);
+  transition: transform 0.35s var(--spring);
+}
+.stagebar__step.is-on {
+  font-weight: 900;
+  transform: scale(1.06);
+}
+.stagebar__reason {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.stagebar__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.stagebar__meta b {
+  color: var(--ink-2);
+}
+
+.mini__coverwrap {
+  position: relative;
+  display: block;
+}
+.mini__date {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(25, 31, 40, 0.78);
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.hitteaser {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.hitteaser strong {
+  font-size: 19px;
+}
+.hitteaser .sub b {
+  font-weight: 900;
+}
+.hitteaser__go {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.hitgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.hitgrid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #f7f8fa;
+}
+.hitgrid span {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.hitgrid strong {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.8px;
+}
+.hitgrid small {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin-left: 1px;
+}
+.lead {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.2;
+}
+.lead b {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--up);
+}
+.lead small {
+  font-size: 11px;
+}
+.howto {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink-3);
+  line-height: 1.55;
+}
+.howto b {
+  color: var(--ink);
+}
+
+.alt {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alt__title {
+  font-size: 14px;
+  font-weight: 800;
+}
+.alt__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f7f8fa;
+  color: var(--muted);
+  transition: transform 0.35s var(--spring);
+}
+.alt__item:active {
+  transform: scale(0.97);
+}
+.alt__item > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.alt__item b {
+  font-size: 14px;
+  color: var(--ink);
+}
+.alt__item small {
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
