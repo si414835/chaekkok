@@ -559,13 +559,19 @@ function LoanChart({ history }) {
   )
 }
 
+// 대출 '횟수'로 줄 세우면 도서관 이용이 가장 많은 40대 여성이 거의 모든 책에서 1위가 된다.
+// 그래서 '각 연령·성별 그룹 안에서 이 책이 몇 위인지'로 이 책을 특히 좋아하는 그룹을 고른다.
 function Groups({ groups }) {
-  const top = [...(groups || [])].filter((g) => g.loanCnt).sort((a, b) => b.loanCnt - a.loanCnt).slice(0, 3)
+  const top = [...(groups || [])]
+    .filter((g) => g.ranking && g.age && g.age.trim())
+    .sort((a, b) => a.ranking - b.ranking)
+    .slice(0, 3)
   if (top.length === 0) return null
-  const max = top[0].loanCnt
+  const best = top[0].ranking
   return (
     <section className="card">
-      <h2 className="h2">누가 많이 빌렸을까요</h2>
+      <h2 className="h2">누가 특히 많이 빌렸을까요</h2>
+      <p className="sub">연령·성별 그룹마다 이 책이 몇 위인지 비교했어요</p>
       <div className="hbars">
         {top.map((g, i) => (
           <div key={g.age + g.gender} className="hbars__row">
@@ -573,9 +579,12 @@ function Groups({ groups }) {
               {g.age} {g.gender}
             </span>
             <span className="hbars__track">
-              <span className={`hbars__fill${i === 0 ? ' is-top' : ''}`} style={{ width: `${Math.round((g.loanCnt / max) * 100)}%` }} />
+              <span className={`hbars__fill${i === 0 ? ' is-top' : ''}`} style={{ width: `${Math.max(12, Math.round((best / g.ranking) * 100))}%` }} />
             </span>
-            <span className="hbars__num">{g.loanCnt.toLocaleString()}회</span>
+            <span className="hbars__num">
+              <b>{g.ranking.toLocaleString()}위</b>
+              {g.loanCnt ? <small>{g.loanCnt.toLocaleString()}회</small> : null}
+            </span>
           </div>
         ))}
       </div>
