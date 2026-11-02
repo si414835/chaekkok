@@ -12,6 +12,7 @@
 
 import os
 import re
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -263,6 +264,14 @@ def clean_author_name(a):
     return first
 
 
+# 신작이 아니라 재출간·수험서 등인 경우를 거른다
+UPCOMING_SKIP = re.compile(r"큰\s?글자|모의고사|문제집|기출|수험|교재|워크북|해설과 함께|세트|합본|오디오북|점자")
+
+
+def title_core(t):
+    return re.sub(r"\s+", "", re.split(r"\s*[:=(]", t or "")[0])
+
+
 def seoji(params, retries=(5, 15)):
     p = {"cert_key": NL_KEY, "result_style": "json", "page_no": 1, "page_size": 20, **params}
     last = None
@@ -285,13 +294,17 @@ def collect_upcoming():
     rows = (supabase.table("v_book_state_latest").select("isbn13,momentum,stage")
             .order("momentum", desc=True).limit(150).execute().data or [])
     isbns = [r["isbn13"] for r in rows]
-    authors = {}
+    authors = {}  # 작가 이름 -> 그 작가의 요즘 뜨는 책 (분야·제목으로 동명이인과 재출간을 거름)
     for i in range(0, len(isbns), 100):
-        for b in (supabase.table("books").select("isbn13,author").in_("isbn13", isbns[i:i + 100]).execute().data or []):
+        for b in (supabase.table("books").select("isbn13,author,title,class_no").in_("isbn13", isbns[i:i + 100]).execute().data or []):
             name = clean_author_name(b.get("author"))
             if name:
-                authors.setdefault(name, b["isbn13"])
+                a = authors.setdefault(name, {"kdc": set(), "titles": set()})
+                if b.get("class_no"):
+                    a["kdc"].add(str(b["class_no"])[:1])
+                a["titles"].add(title_core(b.get("title")))
     names = list(authors)[:50]
+    run_started = datetime.now(timezone.utc).isoformat()
     today = now_kst()
     start = (today - timedelta(days=30)).strftime("%Y%m%d")
     end = (today + timedelta(days=60)).strftime("%Y%m%d")
@@ -303,7 +316,11 @@ def collect_upcoming():
             failed += 1
             print(f"  [출간예정 {name} 실패] {safe_err(e)}")
             continue
-        for d in find_dicts_with(data, "EA_ISBN"):
+        docs = find_dicts_with(data, "EA_ISBN")
+        if len(docs) > 8:
+            continue  # 같은 이름으로 너무 많이 나오면 동명이인이 섞였다고 보고 건너뜀
+        info = authors[name]
+        for d in docs:
             isbn = str(d.get("EA_ISBN") or "").strip()
             date = str(d.get("PUBLISH_PREDATE") or "").strip()
             if len(isbn) != 13 or not re.fullmatch(r"\d{8}", date):
@@ -314,6 +331,11 @@ def collect_upcoming():
                 continue  # 어린이 책 제외
             pub = f"{date[:4]}-{date[4:6]}-{date[6:]}"
             title = (d.get("TITLE") or "").strip()
+            if UPCOMING_SKIP.search(title) or title_core(title) in info["titles"]:
+                continue  # 재출간·수험서, 또는 이미 뜨고 있는 그 책의 다른 판
+            kdc = str(d.get("KDC") or "").strip()[:1]
+            if info["kdc"] and kdc and kdc not in info["kdc"]:
+                continue  # 분야가 전혀 다르면 동명이인일 가능성이 큼
             found[isbn] = {"isbn13": isbn, "title": title, "author": d.get("AUTHOR"), "publisher": d.get("PUBLISHER"),
                            "publish_date": pub, "cover_url": d.get("TITLE_URL") or None, "matched_author": name}
             books[isbn] = {"isbn13": isbn, "title": title, "author": d.get("AUTHOR"), "publisher": d.get("PUBLISHER"),
@@ -330,7 +352,11 @@ def collect_upcoming():
         new_books = [b for k, b in books.items() if k not in existing]
         if new_books:
             supabase.table("books").upsert(new_books, on_conflict="isbn13").execute()
-        supabase.table("upcoming_books").upsert(list(found.values()), on_conflict="isbn13").execute()
+        rows = [{**r, "updated_at": run_started} for r in found.values()]
+        supabase.table("upcoming_books").upsert(rows, on_conflict="isbn13").execute()
+    if names and failed <= len(names) // 5:
+        # 이번 기준에 맞지 않게 된 예전 결과는 지운다
+        supabase.table("upcoming_books").delete().lt("updated_at", run_started).execute()
     status = "ok" if failed == 0 else ("failed" if failed == len(names) else "partial")
     log_run("upcoming", status, len(found), None if status == "ok" else f"{failed}명 조회 실패")
     print(f"[출간예정] 작가 {len(names)}명 · 책 {len(found)}권 (실패 {failed})")
@@ -454,7 +480,11 @@ def collect_usage():
 
 def main():
     # 정보나루 '이달의 키워드'는 어린이 책이 섞여 화면에서 쓰지 않으므로 수집하지 않는다 (홈 키워드는 v_home_keywords)
-    for step in (collect_demographics, collect_regions, collect_libraries, collect_usage, collect_upcoming):
+    steps = [collect_demographics, collect_regions, collect_libraries, collect_usage, collect_upcoming]
+    only = sys.argv[1:]  # 예: python extra_collect.py upcoming  -> 그 단계만 실행
+    if only:
+        steps = [f for f in steps if f.__name__.replace("collect_", "") in only]
+    for step in steps:
         try:
             step()
         except Exception as e:
