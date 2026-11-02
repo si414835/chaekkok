@@ -31,6 +31,7 @@ jobs:
         if: always()
         env:
           NL_API_KEY: ${{ secrets.NL_API_KEY }}
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python nl_recommend_collect.py
