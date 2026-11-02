@@ -106,12 +106,19 @@ def collect_keywords():
     for m in months:
         try:
             data = call("monthlyKeywords", {"month": m})
-            rows = []
-            for d in find_dicts_with(data, "word"):
+            rows, seen = [], set()
+            found = find_dicts_with(data, "word")
+            if found:
+                print(f"  [키워드 응답 예시] {sorted(found[0].keys())}")
+            for d in found:
                 word = str(d.get("word") or "").strip()
-                if word:
-                    rows.append({"month": m, "word": word, "weight": to_int(d.get("weight"))})
-            uniq = {r["word"]: r for r in rows}.values()
+                if not word or word in seen:
+                    continue
+                seen.add(word)
+                weight = next((to_int(d.get(k)) for k in ("weight", "frequency", "score", "count") if to_int(d.get(k)) is not None), None)
+                # 응답 순서가 중요도 순이라고 보고 순번을 저장 (가중치가 없을 때 정렬 기준)
+                rows.append({"month": m, "word": word, "weight": weight, "rank": len(rows) + 1})
+            uniq = rows
             if uniq:
                 supabase.table("monthly_keywords").upsert(list(uniq), on_conflict="month,word").execute()
             total += len(uniq)

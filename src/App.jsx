@@ -9,7 +9,7 @@ const COUPANG_AFFILIATE = null
 const AFFILIATE_NOTICE =
   '이 페이지는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.'
 
-// 정보나루 성별 코드 -> 화면 표시 (수집 데이터로 한 번 더 확인 필요)
+// 정보나루 성별 코드 -> 화면 표시 (수집 결과로 확인: 0=남성, 1=여성)
 const GENDER_LABEL = { all: '전체', 1: '여성', 0: '남성' }
 const AGE_OPTIONS = [
   { id: '10', label: '10대' },
@@ -959,9 +959,9 @@ function useKeywords() {
   useEffect(() => {
     supabase
       .from('monthly_keywords')
-      .select('month,word,weight')
+      .select('month,word,weight,rank')
       .order('month', { ascending: false })
-      .order('weight', { ascending: false })
+      .order('rank', { ascending: true, nullsFirst: false })
       .limit(60)
       .then(({ data }) => {
         if (!data || data.length === 0) return
