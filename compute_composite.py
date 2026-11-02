@@ -11,9 +11,9 @@
   뉴스 15 / 카페 15 / 블로그 7               <- 아직 미연동
   유튜브 13 / 구글트렌드 10
 
-스테디셀러 처리 (최근 21일 인기대출 기록 기준):
-  분야별 TOP10에 머문 날이 수집일의 90% 이상 -> 종합 순위에서 제외
-  분야별 TOP10에 머문 날이 14일 이상         -> 15점 감점
+스테디셀러 처리 (최근 21일 중 10개 분야가 모두 수집된 날 기준):
+  분야별 TOP10에 머문 날이 90% 이상  -> 종합 순위에서 제외
+  분야별 TOP10에 머문 날이 2/3 이상  -> 15점 감점
 어린이 책(ISBN 부가기호 7)은 화면에서도 따로 보여주므로 종합 점수 계산에서 뺀다.
 """
 
@@ -39,9 +39,10 @@ PARTIAL_SIGNALS = {"momentum"}
 
 STEADY_WINDOW_DAYS = 21
 STEADY_TOP_RANK = 10
-STEADY_PENALTY_DAYS = 14
+STEADY_MIN_DAYS = 7          # 완전 수집된 날이 이보다 적으면 스테디 판정을 하지 않음
+STEADY_PENALTY_RATIO = 2 / 3  # 완전 수집일의 2/3 이상 TOP10 -> 감점
 STEADY_PENALTY = 15
-STEADY_EXCLUDE_RATIO = 0.9
+STEADY_EXCLUDE_RATIO = 0.9   # 90% 이상 TOP10 -> 제외
 
 
 def today_str():
@@ -127,15 +128,17 @@ def signal_book(source):
 # ---------- 스테디셀러 · 어린이 책 ----------
 
 def steady_info():
-    """책별로 최근 21일 중 분야별 TOP10에 머문 날 수, 그리고 전체 수집일 수."""
+    """책별로 최근 21일 중 분야별 TOP10에 머문 날 수, 그리고 '10개 분야가 모두 수집된 날' 수.
+    수집이 일부만 된 날을 세면 스테디셀러가 덜 상위권이었던 것처럼 보이므로 완전한 날만 센다."""
+    complete = {r["snapshot_date"] for r in (supabase.table("v_popular_complete_dates").select("snapshot_date")
+                .gte("snapshot_date", days_ago(STEADY_WINDOW_DAYS)).execute().data or [])}
     rows = fetch_all(lambda: supabase.table("trend_scores").select("isbn13, snapshot_date, rank")
                      .eq("trend_type", "popular").gte("snapshot_date", days_ago(STEADY_WINDOW_DAYS)))
-    all_days = {r["snapshot_date"] for r in rows}
     top_days = {}
     for r in rows:
-        if r["rank"] is not None and r["rank"] <= STEADY_TOP_RANK:
+        if r["snapshot_date"] in complete and r["rank"] is not None and r["rank"] <= STEADY_TOP_RANK:
             top_days.setdefault(r["isbn13"], set()).add(r["snapshot_date"])
-    return {k: len(v) for k, v in top_days.items()}, len(all_days)
+    return {k: len(v) for k, v in top_days.items()}, len(complete)
 
 
 def child_isbns(isbns):
@@ -174,7 +177,7 @@ def main():
 
     top_days, total_days = steady_info()
     print(f"신호: {', '.join(f'{k}({len(v)})' for k, v in active.items())}")
-    print(f"어린이 책 제외: {len(kids)}권 / 인기대출 수집일(최근 {STEADY_WINDOW_DAYS}일): {total_days}일")
+    print(f"어린이 책 제외: {len(kids)}권 / 10개 분야 완전 수집일(최근 {STEADY_WINDOW_DAYS}일): {total_days}일")
 
     rows, excluded, penalized = [], 0, 0
     today = today_str()
@@ -185,12 +188,13 @@ def main():
         score = sum(norm[k].get(isbn, 0) * w for k, w in weights.items()) / wsum
 
         days = top_days.get(isbn, 0)
-        if total_days >= STEADY_PENALTY_DAYS and days >= total_days * STEADY_EXCLUDE_RATIO:
-            excluded += 1
-            continue  # 3주 내내 상위권 = 이미 다 아는 스테디셀러
-        if days >= STEADY_PENALTY_DAYS:
-            score -= STEADY_PENALTY
-            penalized += 1
+        if total_days >= STEADY_MIN_DAYS:
+            if days >= total_days * STEADY_EXCLUDE_RATIO:
+                excluded += 1
+                continue  # 3주 내내 상위권 = 이미 다 아는 스테디셀러
+            if days >= total_days * STEADY_PENALTY_RATIO:
+                score -= STEADY_PENALTY
+                penalized += 1
         if score <= 0:
             continue
         rows.append({"isbn13": isbn, "snapshot_date": today, "trend_type": "composite",
