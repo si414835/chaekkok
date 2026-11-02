@@ -36,6 +36,14 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python nl_recommend_collect.py
 
+      - name: 추가 데이터 수집 (키워드·연령성별·이용분석)
+        if: always()
+        env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python extra_collect.py
+
       - name: 유튜브 언급량 수집 실행
         if: always()
         env:
