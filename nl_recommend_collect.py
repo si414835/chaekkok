@@ -18,6 +18,9 @@ import xml.etree.ElementTree as ET
 from supabase import create_client
 
 NL_KEY = os.environ["NL_API_KEY"]
+# 표지 이미지는 정보나루 도서 상세 조회(srchDtlList)에서 가져온다 (없으면 국립중앙도서관 표지 사용)
+DATA4LIBRARY_KEY = os.environ.get("DATA4LIBRARY_KEY")
+DETAIL_URL = "http://data4library.kr/api/srchDtlList"
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
@@ -79,6 +82,39 @@ def fetch_recommendations():
     return get_with_retry(SASEO_URL, params)
 
 
+def _find_key(obj, key):
+    """JSON 안 어디에 있든 첫 번째 key 값을 찾는다 (응답 구조 변화에 대비)."""
+    if isinstance(obj, dict):
+        if obj.get(key):
+            return obj[key]
+        obj = list(obj.values())
+    if isinstance(obj, list):
+        for v in obj:
+            found = _find_key(v, key)
+            if found:
+                return found
+    return None
+
+
+def lookup_cover(isbn13):
+    """정보나루에서 ISBN으로 표지 URL을 찾는다. 실패하면 None."""
+    if not DATA4LIBRARY_KEY:
+        return None
+    first_isbn = isbn13.split()[0]  # 'ISBN1 ISBN2'처럼 여러 개 붙어 오는 경우가 있음
+    try:
+        res = requests.get(
+            DETAIL_URL,
+            params={"authKey": DATA4LIBRARY_KEY, "isbn13": first_isbn, "format": "json"},
+            timeout=15,
+        )
+        res.raise_for_status()
+        url = _find_key(res.json(), "bookImageURL")
+        return url.strip() if isinstance(url, str) and url.strip() else None
+    except Exception as e:
+        print(f"  [표지 조회 실패] {first_isbn}: {e}")
+        return None
+
+
 def upsert_book(item):
     isbn13 = (item.findtext("recomisbn") or "").strip()
     if not isbn13:
@@ -90,7 +126,9 @@ def upsert_book(item):
         "author": (item.findtext("recomauthor") or "").strip(),
         "publisher": (item.findtext("recompublisher") or "").strip(),
         "class_name": (item.findtext("drCodeName") or "").strip() or None,
-        "cover_url": (item.findtext("mokchFilePath") or "").strip() or None,
+        "cover_url": lookup_cover(isbn13)
+        or (item.findtext("mokchFilePath") or "").strip()
+        or None,
     }
     supabase.table("books").upsert(book_row, on_conflict="isbn13").execute()
     return isbn13
