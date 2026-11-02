@@ -195,9 +195,11 @@ def pick_usage_targets():
     """종합 상위 + 급상승 책 중, 최근에 받지 않은 책."""
     targets = []
     for ttype, order, limit in [("composite", "score", 50), ("rising", "rank_diff", 30)]:
-        res = (supabase.table("v_feed").select("isbn13").eq("trend_type", ttype)
-               .order(order, desc=True).limit(limit).execute())
-        targets += [r["isbn13"] for r in (res.data or [])]
+        res = (supabase.table("v_feed").select("isbn13,addition_symbol").eq("trend_type", ttype)
+               .order(order, desc=True).limit(limit * 3).execute())
+        # 어린이 책은 화면 순위에서 빠지므로 이용분석도 받지 않는다
+        adult = [r["isbn13"] for r in (res.data or []) if not (r.get("addition_symbol") or "").startswith("7")]
+        targets += adult[:limit]
     targets = list(dict.fromkeys(targets))
     since = (datetime.now(timezone.utc) - timedelta(days=USAGE_REFRESH_DAYS)).isoformat()
     fresh = (supabase.table("book_usage").select("isbn13").gte("updated_at", since)
