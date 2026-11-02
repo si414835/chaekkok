@@ -31,8 +31,11 @@ async function check(libCode: string, isbn13: string) {
       const data = await res.json();
       const has = pick(data, "hasBook");
       const loan = pick(data, "loanAvailable");
+      // 응답 구조 확인용 기록 (인증키는 담기지 않음)
+      console.log("bookExist", libCode, JSON.stringify(pick(data, "result") ?? data).slice(0, 300));
       if (has === undefined) throw new Error("no result");
-      return { libCode, hasBook: has === "Y", loanAvailable: loan === "Y" };
+      // 대출 가능 여부 항목이 없으면 '모름(null)'으로 돌려줘서 화면이 '대출 중'으로 잘못 표시하지 않게 한다
+      return { libCode, hasBook: has === "Y", loanAvailable: loan === undefined ? null : loan === "Y" };
     } catch (_e) {
       // 정보나루 서버가 가끔 연결을 끊어서 한 번 더 시도
     }

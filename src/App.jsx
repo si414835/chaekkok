@@ -764,6 +764,7 @@ function LibraryStatusSheet({ book, libs, onClose, onPick }) {
   const status = (r) => {
     if (!r || r.error) return ['확인 실패', 'muted']
     if (!r.hasBook) return ['소장 안 함', 'muted']
+    if (r.loanAvailable == null) return ['소장 중', 'up']
     return r.loanAvailable ? ['대출 가능', 'up'] : ['대출 중', 'warn']
   }
 
