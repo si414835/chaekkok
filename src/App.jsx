@@ -60,18 +60,20 @@ function Header() {
 function Filters({ category, setCategory, trendType, setTrendType }) {
   return (
     <div className="filters">
-      <div className="filters__row">
-        {CATEGORIES.map((c) => (
-          <button
-            key={c}
-            className="chip"
-            aria-pressed={category === c}
-            onClick={() => setCategory(c)}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+      {trendType !== 'recommended' && (
+        <div className="filters__row">
+          {CATEGORIES.map((c) => (
+            <button
+              key={c}
+              className="chip"
+              aria-pressed={category === c}
+              onClick={() => setCategory(c)}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="trend-tabs">
         {TREND_TYPES.map((t) => (
           <button
@@ -88,14 +90,33 @@ function Filters({ category, setCategory, trendType, setTrendType }) {
   )
 }
 
-function BookCover({ src, alt, size = 'row' }) {
-  const [failed, setFailed] = useState(false)
-  const className = size === 'detail' ? 'cover-swatch detail__cover' : 'cover-swatch'
-  if (!src || failed) {
+// http 표지(국립중앙도서관 등)는 https 사이트에서 차단되므로 https로 바꾸고, 실패하면 이미지 프록시로 재시도
+function coverCandidates(src) {
+  if (!src) return []
+  if (src.startsWith('http://')) {
+    const rest = src.slice('http://'.length)
+    return ['https://' + rest, 'https://wsrv.nl/?url=' + encodeURIComponent(rest)]
+  }
+  return [src]
+}
+
+function BookCover({ src, alt, size = 'row', className: extraClass }) {
+  const candidates = coverCandidates(src)
+  const [idx, setIdx] = useState(0)
+  const className =
+    extraClass ?? (size === 'detail' ? 'cover-swatch detail__cover' : 'cover-swatch')
+  if (idx >= candidates.length) {
     return <span className={className + ' cover-swatch--empty'} aria-hidden="true" />
   }
   return (
-    <img src={src} alt={alt} className={className} loading="lazy" onError={() => setFailed(true)} />
+    <img
+      key={candidates[idx]}
+      src={candidates[idx]}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => setIdx((i) => i + 1)}
+    />
   )
 }
 
@@ -154,25 +175,16 @@ function EmptyState({ trendType }) {
 }
 
 function HeroRow({ books, onSelect }) {
-  const top3 = books.slice(0, 3)
-  if (top3.length === 0) return null
+  const top5 = books.slice(0, 5)
+  if (top5.length === 0) return null
 
   return (
     <div className="hero-section">
       <p className="hero-section__title">오늘의 콕</p>
       <div className="hero-row">
-        {top3.map((book, i) => (
+        {top5.map((book, i) => (
           <button key={book.isbn13} className="hero-card" onClick={() => onSelect(book)}>
-            <img
-              src={book.cover_url}
-              alt={book.title}
-              className="hero-card__cover"
-              loading="lazy"
-              onError={(e) => {
-                e.target.style.background = 'var(--rule)'
-                e.target.src = ''
-              }}
-            />
+            <BookCover src={book.cover_url} alt={book.title} className="hero-card__cover" />
             <p className="hero-card__rank">{i + 1}</p>
             <p className="hero-card__title">{book.title}</p>
             <p className="hero-card__metric">{formatMetric(book)}</p>
@@ -192,7 +204,8 @@ function Home({ books, loading, error, onSelect }) {
   const filtered = useMemo(() => {
     const list = books
       .filter((b) => b.trendType === trendType)
-      .filter((b) => matchesCategory(b, category))
+      // 신간 화제작은 책 수가 적어 분야 구분 없이 전체를 보여줌
+      .filter((b) => trendType === 'recommended' || matchesCategory(b, category))
 
     let sorted
     if (trendType === 'recommended') {
@@ -211,7 +224,7 @@ function Home({ books, loading, error, onSelect }) {
     return books
       .filter((b) => b.trendType === 'composite')
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-      .slice(0, 3)
+      .slice(0, 5)
   }, [books])
 
   return (
@@ -226,12 +239,24 @@ function Home({ books, loading, error, onSelect }) {
       />
       <div className="card-list">
         {loading && (
-          <p style={{ color: 'var(--ink-soft)', fontSize: 13, padding: '20px 0' }}>
+          <p
+            style={{
+              color: 'var(--ink-soft)',
+              fontSize: 13,
+              padding: '20px 0',
+            }}
+          >
             불러오는 중...
           </p>
         )}
         {!loading && error && (
-          <p style={{ color: 'var(--stamp-red)', fontSize: 13, padding: '20px 0' }}>
+          <p
+            style={{
+              color: 'var(--stamp-red)',
+              fontSize: 13,
+              padding: '20px 0',
+            }}
+          >
             데이터를 불러오지 못했어요: {error}
           </p>
         )}
@@ -332,8 +357,8 @@ export default function App() {
             .select('*')
             .eq('trend_type', t)
             .order('snapshot_date', { ascending: false })
-            .limit(1000)
-        )
+            .limit(1000),
+        ),
       )
 
       if (cancelled) return
