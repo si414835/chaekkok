@@ -26,7 +26,7 @@ const CATEGORY_MERGE = { 언어: '문학', 종교: '철학' }
 
 const TABS = [
   { id: 'composite', label: '종합', desc: '여러 신호를 합친 종합 점수순이에요' },
-  { id: 'rising', label: '급상승', desc: '지난주보다 대출순위가 많이 오른 순이에요' },
+  { id: 'rising', label: '급상승', desc: '최근 2주 사이 대출순위가 많이 오른 책을 모두 모았어요' },
   { id: 'popular', label: '꾸준한 인기', desc: '최근 30일 대출이 많은 순이에요' },
   { id: 'recommended', label: '신간', desc: '국립중앙도서관 사서가 추천한 새 책이에요' },
 ]
@@ -370,7 +370,9 @@ function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo
 
   const list = useMemo(() => {
     let src = demoActive ? demo.list : feed[tab]
-    if (tab !== 'recommended') src = src.filter((b) => matchesCategory(b, cat))
+    // 급상승은 책 수가 적어 분야 구분 없이 모아서 보여준다 (어린이 책만 제외)
+    if (tab === 'rising') src = src.filter((b) => !isChildBook(b))
+    else if (tab !== 'recommended') src = src.filter((b) => matchesCategory(b, cat))
     return src.slice(0, LIST_SIZE)
   }, [feed, tab, cat, demoActive, demo.list])
 
@@ -396,7 +398,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo
           </a>
         ))}
       </div>
-      {tab !== 'recommended' && (
+      {tab !== 'recommended' && tab !== 'rising' && (
         <div className="chips">
           {tab === 'popular' && (
             <button className={`chip chip--filter${prefs.on ? ' is-on' : ''}`} onClick={onOpenFilter}>
