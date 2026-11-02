@@ -268,6 +268,24 @@ def clean_author_name(a):
 UPCOMING_SKIP = re.compile(r"큰\s?글자|모의고사|문제집|기출|수험|교재|워크북|해설과 함께|세트|합본|오디오북|점자")
 
 
+def content_class(add_code, class_no=None):
+    """부가기호 '03810' -> 내용분류 첫 자리 '8' (없으면 KDC 첫 자리)."""
+    a = str(add_code or "").strip()
+    if re.fullmatch(r"\d{5}", a):
+        return a[2]
+    c = str(class_no or "").strip()
+    return c[0] if c[:1].isdigit() else None
+
+
+def author_role(author_field, name):
+    """서지 AUTHOR '저자 : 메리 셸리;기획자 : 김경일;' 에서 그 이름의 역할과 전체 저자 수."""
+    parts = [x.strip() for x in re.split(r"[;,]", author_field or "") if x.strip()]
+    for x in parts:
+        if name in x:
+            return (x.split(":")[0].strip() if ":" in x else ""), len(parts)
+    return None, len(parts)
+
+
 def title_core(t):
     return re.sub(r"\s+", "", re.split(r"\s*[:=(]", t or "")[0])
 
@@ -292,16 +310,19 @@ def collect_upcoming():
         print("::warning::NL_API_KEY가 없어 출간예정 조회를 건너뜀")
         return 0
     rows = (supabase.table("v_book_state_latest").select("isbn13,momentum,stage")
-            .order("momentum", desc=True).limit(150).execute().data or [])
-    isbns = [r["isbn13"] for r in rows]
+            .order("momentum", desc=True).limit(200).execute().data or [])
+    # 출간예정으로 들어온 책은 작가 출처에서 뺀다 (잘못 걸린 책이 다시 작가를 끌어오는 걸 막음)
+    prior = {r["isbn13"] for r in (supabase.table("upcoming_books").select("isbn13").execute().data or [])}
+    isbns = [r["isbn13"] for r in rows if r["isbn13"] not in prior][:150]
     authors = {}  # 작가 이름 -> 그 작가의 요즘 뜨는 책 (분야·제목으로 동명이인과 재출간을 거름)
     for i in range(0, len(isbns), 100):
-        for b in (supabase.table("books").select("isbn13,author,title,class_no").in_("isbn13", isbns[i:i + 100]).execute().data or []):
+        for b in (supabase.table("books").select("isbn13,author,title,class_no,addition_symbol")
+                  .in_("isbn13", isbns[i:i + 100]).execute().data or []):
             name = clean_author_name(b.get("author"))
-            if name:
+            cls = content_class(b.get("addition_symbol"), b.get("class_no"))
+            if name and cls:
                 a = authors.setdefault(name, {"kdc": set(), "titles": set()})
-                if b.get("class_no"):
-                    a["kdc"].add(str(b["class_no"])[:1])
+                a["kdc"].add(cls)
                 a["titles"].add(title_core(b.get("title")))
     names = list(authors)[:50]
     run_started = datetime.now(timezone.utc).isoformat()
@@ -325,17 +346,18 @@ def collect_upcoming():
             date = str(d.get("PUBLISH_PREDATE") or "").strip()
             if len(isbn) != 13 or not re.fullmatch(r"\d{8}", date):
                 continue
-            if name not in str(d.get("AUTHOR") or ""):
-                continue  # 같은 이름이 제목 등에만 걸린 경우 제외
-            if str(d.get("EA_ADD_CODE") or "").startswith("7"):
-                continue  # 어린이 책 제외
+            role, n_authors = author_role(d.get("AUTHOR"), name)
+            if role is None or re.search(r"기획|옮|역|번역|그림|감수|편", role) or n_authors > 5:
+                continue  # 이름이 저자로 직접 올라 있지 않거나, 여러 명이 함께 쓴 보고서·교재
+            add = str(d.get("EA_ADD_CODE") or "").strip()
+            if not re.fullmatch(r"[012]\d{4}", add):
+                continue  # 부가기호가 교양·실용·여성 독자용이 아니면 제외 (어린이·학습·전문서 등)
             pub = f"{date[:4]}-{date[4:6]}-{date[6:]}"
             title = (d.get("TITLE") or "").strip()
             if UPCOMING_SKIP.search(title) or title_core(title) in info["titles"]:
                 continue  # 재출간·수험서, 또는 이미 뜨고 있는 그 책의 다른 판
-            kdc = str(d.get("KDC") or "").strip()[:1]
-            if info["kdc"] and kdc and kdc not in info["kdc"]:
-                continue  # 분야가 전혀 다르면 동명이인일 가능성이 큼
+            if add[2] not in info["kdc"]:
+                continue  # 요즘 뜨는 그 작가의 책과 분야가 다르면 동명이인일 가능성이 큼
             found[isbn] = {"isbn13": isbn, "title": title, "author": d.get("AUTHOR"), "publisher": d.get("PUBLISHER"),
                            "publish_date": pub, "cover_url": d.get("TITLE_URL") or None, "matched_author": name}
             books[isbn] = {"isbn13": isbn, "title": title, "author": d.get("AUTHOR"), "publisher": d.get("PUBLISHER"),
