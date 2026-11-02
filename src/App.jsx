@@ -559,11 +559,14 @@ function LoanChart({ history }) {
   )
 }
 
+const MIN_GROUP_LOANS = 50
+
 // 대출 '횟수'로 줄 세우면 도서관 이용이 가장 많은 40대 여성이 거의 모든 책에서 1위가 된다.
 // 그래서 '각 연령·성별 그룹 안에서 이 책이 몇 위인지'로 이 책을 특히 좋아하는 그룹을 고른다.
 function Groups({ groups }) {
   const top = [...(groups || [])]
-    .filter((g) => g.ranking && g.age && g.age.trim())
+    // 이용자가 적은 그룹은 몇 번만 빌려도 순위가 튀어서, 대출 50회 이상인 그룹만 본다
+    .filter((g) => g.ranking && g.age && g.age.trim() && (g.loanCnt ?? 0) >= MIN_GROUP_LOANS)
     .sort((a, b) => a.ranking - b.ranking)
     .slice(0, 3)
   if (top.length === 0) return null
@@ -571,10 +574,20 @@ function Groups({ groups }) {
   return (
     <section className="card">
       <h2 className="h2">누가 특히 많이 빌렸을까요</h2>
-      <p className="sub">연령·성별 그룹마다 이 책이 몇 위인지 비교했어요</p>
+      <p className="sub">그 그룹이 빌린 책 중에서 이 책이 몇 위인지 비교했어요 (대출 {MIN_GROUP_LOANS}회 이상 그룹)</p>
+      <p className="groups__lead">
+        <b>
+          {top[0].age} {top[0].gender}
+        </b>
+        이 빌린 책 중 <b>{top[0].ranking.toLocaleString()}위</b>예요
+      </p>
       <div className="hbars">
         {top.map((g, i) => (
-          <div key={g.age + g.gender} className="hbars__row">
+          <div
+            key={g.age + g.gender}
+            className="hbars__row"
+            aria-label={`${g.age} ${g.gender}이 빌린 책 중 ${g.ranking}위, ${g.loanCnt}회 대출`}
+          >
             <span className="hbars__label">
               {g.age} {g.gender}
             </span>
@@ -583,7 +596,7 @@ function Groups({ groups }) {
             </span>
             <span className="hbars__num">
               <b>{g.ranking.toLocaleString()}위</b>
-              {g.loanCnt ? <small>{g.loanCnt.toLocaleString()}회</small> : null}
+              <small>{g.loanCnt.toLocaleString()}회 대출</small>
             </span>
           </div>
         ))}
