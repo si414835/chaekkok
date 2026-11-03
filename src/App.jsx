@@ -517,8 +517,20 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread }) {
   )
 }
 
-function Upcoming({ list }) {
-  if (!list || list.length === 0) return null
+// 오늘(한국 시간) 기준 남은 날짜. 이미 나온 책은 null
+function daysUntil(ymd) {
+  if (!ymd) return null
+  const now = new Date(Date.now() + 9 * 3600 * 1000)
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const [y, m, d] = ymd.split('-').map(Number)
+  const diff = Math.round((Date.UTC(y, m - 1, d) - todayUtc) / 86400000)
+  return diff > 0 ? diff : null
+}
+
+function Upcoming({ list: all }) {
+  // 출간일이 지난 책은 '곧 나올 책'에서 뺀다 (서버에서도 거르지만 날짜가 바뀐 직후를 대비)
+  const list = (all || []).filter((b) => daysUntil(b.publish_date) != null)
+  if (list.length === 0) return null
   return (
     <section className="card card--bleed rise" style={{ animationDelay: '0.8s' }}>
       <Eyebrow tone="spot">COMING SOON</Eyebrow>
@@ -529,10 +541,12 @@ function Upcoming({ list }) {
           <a key={b.isbn13} className="mini" href={`#/book/${encodeURIComponent(b.isbn13)}`}>
             <span className="mini__coverwrap">
               <Cover src={b.cover_url} alt="" className="mini__cover" title={b.title} />
-              <span className="mini__date num">{fmtDate(b.publish_date)}</span>
+              <span className="mini__date num">D-{daysUntil(b.publish_date)}</span>
             </span>
             <span className="mini__title">{shortTitle(b.title)}</span>
-            <span className="mini__author">{b.matched_author || cleanAuthor(b.author)}</span>
+            <span className="mini__author">
+              {b.matched_author || cleanAuthor(b.author)} · {fmtDate(b.publish_date)} 출간
+            </span>
           </a>
         ))}
       </div>

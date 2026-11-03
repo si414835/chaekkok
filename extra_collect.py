@@ -376,7 +376,13 @@ def collect_upcoming():
         new_books = [b for k, b in books.items() if k not in existing]
         if new_books:
             supabase.table("books").upsert(new_books, on_conflict="isbn13").execute()
-        rows = [{**r, "updated_at": run_started} for r in found.values()]
+        # 예전에 찾아 둔 표지는 지우지 않는다
+        had = {}
+        for i in range(0, len(keys), 100):
+            for r in supabase.table("upcoming_books").select("isbn13,cover_url").in_("isbn13", keys[i:i + 100]).execute().data or []:
+                if r.get("cover_url"):
+                    had[r["isbn13"]] = r["cover_url"]
+        rows = [{**r, "cover_url": r["cover_url"] or had.get(r["isbn13"]), "updated_at": run_started} for r in found.values()]
         supabase.table("upcoming_books").upsert(rows, on_conflict="isbn13").execute()
     if names and failed <= len(names) // 5:
         # 이번 기준에 맞지 않게 된 예전 결과는 지운다
@@ -384,7 +390,50 @@ def collect_upcoming():
     status = "ok" if failed == 0 else ("failed" if failed == len(names) else "partial")
     log_run("upcoming", status, len(found), None if status == "ok" else f"{failed}명 조회 실패")
     print(f"[출간예정] 작가 {len(names)}명 · 책 {len(found)}권 (실패 {failed})")
+    fill_upcoming_covers()
     return len(found)
+
+
+def https(u):
+    u = (u or "").strip()
+    return "https://" + u[7:] if u.startswith("http://") else (u or None)
+
+
+def find_cover(isbn):
+    """표지 찾기: 정보나루 도서 상세 -> 구글 도서 (둘 다 공개 API). 못 찾으면 None."""
+    try:
+        data = call("srchDtlList", {"isbn13": isbn, "loaninfoYN": "N"}, retries=(5,))
+        for d in find_dicts_with(data, "bookImageURL"):
+            if (d.get("bookImageURL") or "").strip():
+                return https(d["bookImageURL"]), "정보나루"
+    except Exception as e:
+        print(f"  [표지 정보나루 {isbn}] {safe_err(e)}")
+    try:
+        res = requests.get("https://www.googleapis.com/books/v1/volumes", params={"q": f"isbn:{isbn}"}, timeout=20)
+        if res.ok:
+            for item in res.json().get("items") or []:
+                links = (item.get("volumeInfo") or {}).get("imageLinks") or {}
+                url = links.get("thumbnail") or links.get("smallThumbnail")
+                if url:
+                    return https(url).replace("&edge=curl", ""), "구글 도서"
+    except Exception as e:
+        print(f"  [표지 구글 {isbn}] {type(e).__name__}")
+    return None, None
+
+
+def fill_upcoming_covers():
+    """표지가 아직 없는 출간예정 책은 매일 다시 찾아본다 (출간이 가까워지면 표지가 올라오는 경우가 많음)."""
+    rows = (supabase.table("upcoming_books").select("isbn13,title").is_("cover_url", "null").limit(40).execute().data or [])
+    got = 0
+    for r in rows:
+        url, src = find_cover(r["isbn13"])
+        if url:
+            supabase.table("upcoming_books").update({"cover_url": url}).eq("isbn13", r["isbn13"]).execute()
+            supabase.table("books").update({"cover_url": url}).eq("isbn13", r["isbn13"]).is_("cover_url", "null").execute()
+            got += 1
+            print(f"  [표지] {r['title'][:20]} ← {src}")
+        time.sleep(0.5)
+    print(f"[출간예정 표지] 없던 {len(rows)}권 중 {got}권 찾음")
 
 
 # ---------- 3. 정보나루 참여 도서관 목록 (주 1회) ----------
