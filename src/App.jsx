@@ -98,7 +98,7 @@ function useStored(key, fallback) {
   return [v, setV]
 }
 
-// 해시 주소로 화면 전환: #/  #/trend/탭  #/book/ISBN  #/wish  #/my
+// 해시 주소로 화면 전환: #/  #/trend/탭  #/book/ISBN  #/keyword/단어  #/wish  #/my  #/alerts  #/hits
 function parseHash() {
   const parts = (window.location.hash.replace(/^#\/?/, '') || '').split('/')
   return { name: parts[0] || 'home', param: parts[1] ? decodeURIComponent(parts[1]) : null }
@@ -110,7 +110,7 @@ function useRoute() {
       const next = parseHash()
       setRoute((prev) => {
         // 같은 화면 안 탭 전환이 아니면 맨 위로
-        if (prev.name !== next.name || next.name === 'book') window.scrollTo(0, 0)
+        if (prev.name !== next.name || next.name === 'book' || next.name === 'keyword') window.scrollTo(0, 0)
         return next
       })
     }
@@ -201,6 +201,13 @@ const Icon = {
       {on && <path className="ginkgo__veins" d="M12 14.4V7.4M12 14.2 6.6 7.6M12 14.2 17.4 7.6" stroke="#F0B400" strokeWidth=".9" />}
       <path d={GINKGO_LEAF} />
       <path d="M12 15.8C12.1 17.8 11.8 19.7 11.1 21.5" />
+    </svg>
+  ),
+  bell: (dot) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 10a6 6 0 0112 0c0 5 2 6.5 2 6.5H4S6 15 6 10z" />
+      <path d="M10 20a2.2 2.2 0 004 0" />
+      {dot && <circle cx="18.5" cy="5.5" r="3.2" fill="#ff4d5e" stroke="#fff" strokeWidth="1.6" />}
     </svg>
   ),
   user: (on) => (
@@ -309,15 +316,19 @@ function Loading() {
 
 /* ================= 홈 ================= */
 
+const keywordHref = (w) => `#/keyword/${encodeURIComponent(w)}`
+
 function KeywordHero({ keywords }) {
   const [wiggle, setWiggle] = useState(null)
   if (!keywords || keywords.words.length === 0) return null
   const [top, ...rest] = keywords.words
   const letters = [...top.word]
   const after = 0.25 + letters.length * 0.12
-  const shake = (w) => {
-    setWiggle(null)
-    setTimeout(() => setWiggle(w), 10)
+  // 살짝 흔들고 나서 키워드 페이지로
+  const open = (e, w) => {
+    e.preventDefault()
+    setWiggle(w)
+    setTimeout(() => go(`/keyword/${encodeURIComponent(w)}`), 220)
   }
   return (
     <section className="kw">
@@ -325,33 +336,35 @@ function KeywordHero({ keywords }) {
         <i aria-hidden="true" />
         {keywords.monthLabel}의 키워드
       </span>
-      <h2 className="kw__main" aria-label={top.word}>
+      <h2 className="kw__heading">
+      <a className={`kw__main${wiggle === top.word ? ' jelly' : ''}`} href={keywordHref(top.word)} onClick={(e) => open(e, top.word)} aria-label={`${top.word} 관련 책 보기`}>
         <span className="kw__mark grow" style={{ animationDelay: `${after}s` }} aria-hidden="true" />
         {letters.map((ch, i) => (
           <span key={i} className="drop" style={{ animationDelay: `${0.15 + i * 0.12}s` }} aria-hidden="true">
             {ch}
           </span>
         ))}
+      </a>
       </h2>
       <p className="kw__desc rise" style={{ animationDelay: `${after + 0.1}s` }}>
         요즘 뜨는 책{top.books ? <b> {top.books}권</b> : ''}에서
         <br />
-        가장 많이 나온 단어예요
+        가장 많이 나온 단어예요 · 누르면 관련 책을 보여줘요
       </p>
       <div className="kw__tags">
         {rest.slice(0, 8).map((k, i) => (
-          <button
+          <a
             key={k.word}
-            type="button"
+            href={keywordHref(k.word)}
             className={`tag tag--btn pop${i < 3 ? ' tag--strong' : ''}`}
             style={delay(i, after + 0.15, 0.06)}
-            onClick={() => shake(k.word)}
+            onClick={(e) => open(e, k.word)}
           >
             <span className={wiggle === k.word ? 'jelly' : ''}>
               <span className="tag__hash">#</span>
               {k.word}
             </span>
-          </button>
+          </a>
         ))}
       </div>
     </section>
@@ -453,7 +466,7 @@ function Carousel({ books }) {
   )
 }
 
-function Home({ feed, keywords, loading, error, upcoming, hitStats }) {
+function Home({ feed, keywords, loading, error, upcoming, hitStats, unread }) {
   const top5 = feed.composite.filter((b) => !isChildBook(b)).slice(0, 5)
   const rising3 = feed.rising.filter((b) => !isChildBook(b)).slice(0, 3)
   return (
@@ -465,6 +478,9 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats }) {
         </span>
         <span className="topbar__right">
           <span className="sub num">{DATE_LABEL}</span>
+          <a className={`iconbtn bellbtn${unread ? ' has-new' : ''}`} href="#/alerts" aria-label={unread ? `새 알림 ${unread}개` : '알림'}>
+            {Icon.bell(unread > 0)}
+          </a>
           <a className="iconbtn" href="#/search" aria-label="책 검색">
             {Icon.search()}
           </a>
@@ -1001,10 +1017,10 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
               {keywords.length > 0 && (
                 <div className="hero__tags">
                   {keywords.slice(0, 6).map((k, i) => (
-                    <span key={k.word} className={`tag tag--sm pop${i < 2 ? ' tag--accent' : ''}`} style={delay(i, 0.3, 0.06)}>
+                    <a key={k.word} href={keywordHref(k.word)} className={`tag tag--sm tag--btn pop${i < 2 ? ' tag--accent' : ''}`} style={delay(i, 0.3, 0.06)}>
                       <span className="tag__hash">#</span>
                       {k.word}
-                    </span>
+                    </a>
                   ))}
                 </div>
               )}
@@ -1167,6 +1183,445 @@ function Search() {
         {!res.loading && res.list.map((b) => <BookRow key={b.isbn13} rank={null} book={b} value="" />)}
       </div>
     </>
+  )
+}
+
+/* ================= 키워드 ================= */
+
+function KeywordPage({ word, index }) {
+  const [res, setRes] = useState({ loading: true, list: [], related: [], error: null })
+  const ready = index.size > 0
+  useEffect(() => {
+    let off = false
+    setRes({ loading: true, list: [], related: [], error: null })
+    async function run() {
+      const { data, error } = await supabase
+        .from('v_keyword_books')
+        .select('isbn13,weight,title,author,class_name,cover_url,addition_symbol,momentum')
+        .eq('word', word)
+        .limit(80)
+      if (off) return
+      if (error) return setRes({ loading: false, list: [], related: [], error: error.message })
+      const seen = new Set()
+      const list = []
+      for (const r of data || []) {
+        if (seen.has(r.isbn13)) continue
+        seen.add(r.isbn13)
+        const live = index.get(r.isbn13)
+        list.push({
+          ...(live || {}),
+          isbn13: r.isbn13,
+          title: r.title,
+          author: r.author,
+          classNameFull: r.class_name,
+          additionSymbol: r.addition_symbol,
+          categoryLabel: categoryLabel(r.class_name),
+          cover_url: r.cover_url,
+          momentum: r.momentum != null ? Number(r.momentum) : null,
+          weight: Number(r.weight) || 0,
+        })
+      }
+      // 키워드 데이터가 아직 없는 요즘 책 중 제목에 이 단어가 들어간 책도 함께
+      for (const b of index.values()) {
+        if (list.length >= 40) break
+        if (seen.has(b.isbn13) || isChildBook(b) || !(b.title || '').includes(word)) continue
+        seen.add(b.isbn13)
+        list.push({ ...b, momentum: b.score != null ? Number(b.score) : null, weight: 0, byTitle: true })
+      }
+      list.sort((a, b) => (b.momentum ?? -1) - (a.momentum ?? -1) || b.weight - a.weight)
+
+      // 이 책들에 함께 나온 다른 키워드
+      let related = []
+      const ids = (data || []).map((r) => r.isbn13).slice(0, 40)
+      if (ids.length > 1) {
+        const rel = await supabase.from('v_keyword_books').select('word,isbn13').in('isbn13', ids).neq('word', word).limit(1000)
+        if (off) return
+        const cnt = new Map()
+        const pairs = new Set()
+        for (const r of rel.data || []) {
+          const k = r.word + '|' + r.isbn13
+          if (pairs.has(k)) continue
+          pairs.add(k)
+          cnt.set(r.word, (cnt.get(r.word) || 0) + 1)
+        }
+        related = [...cnt.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([w]) => w)
+      }
+      setRes({ loading: false, list, related, error: null })
+    }
+    run()
+    return () => {
+      off = true
+    }
+    // 피드가 늦게 오면 한 번 더 (제목 일치 책과 순위 정보를 붙이려고)
+  }, [word, ready]) // eslint-disable-line react-hooks/exhaustive-deps
+  const back = () => (window.history.length > 1 ? window.history.back() : go('/'))
+  const tagged = res.list.filter((b) => !b.byTitle).length
+  return (
+    <>
+      <header className="detail__bar">
+        <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
+      </header>
+      <header className="pagehead pagehead--tight">
+        <Eyebrow>KEYWORD</Eyebrow>
+        <h1 className="h1 display kwpage__title">
+          <span className="tag__hash">#</span>
+          {word}
+        </h1>
+        <span className="sub">
+          {res.loading ? '관련 책을 모으는 중이에요' : res.list.length ? `관련 책 ${res.list.length}권 · 요즘 뜨는 순서` : '아직 관련 책이 없어요'}
+        </span>
+      </header>
+      <div className="stack">
+        {res.related.length > 0 && (
+          <section className="card">
+            <p className="label">함께 나온 키워드</p>
+            <div className="chips chips--wrap">
+              {res.related.map((w, i) => (
+                <a key={w} className="tag tag--sm tag--btn pop" style={delay(i, 0.05, 0.04)} href={keywordHref(w)}>
+                  <span className="tag__hash">#</span>
+                  {w}
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+        <section className="card card--list">
+          {res.loading && <Loading />}
+          {res.error && <p className="state state--error">책을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</p>}
+          {!res.loading && !res.error && res.list.length === 0 && (
+            <div className="empty">
+              <p>이 키워드로 모인 책이 아직 없어요.</p>
+              <p className="sub">키워드는 매일 아침 새 데이터로 다시 모여요.</p>
+              <a className="btn btn--soft" href="#/trend">트렌드 보러 가기</a>
+            </div>
+          )}
+          {!res.loading &&
+            res.list.map((b, i) => (
+              <BookRow key={b.isbn13} rank={i + 1} order={i} book={b} value={b.momentum != null ? `${Math.round(b.momentum)}점` : ''} />
+            ))}
+        </section>
+        {!res.loading && res.list.length > 0 && (
+          <p className="foot">
+            도서관 정보나루가 책마다 뽑은 핵심 키워드 기준이에요{tagged < res.list.length ? '. 제목에 이 단어가 들어간 요즘 책도 함께 보여줘요' : ''}. 점수는 모멘텀이에요.
+          </p>
+        )}
+      </div>
+    </>
+  )
+}
+
+/* ================= 알림 ================= */
+
+// 휴대폰 알림(Web Push) 공개키. 비밀키는 Supabase Vault에만 있다.
+const PUSH_PUBLIC_KEY = 'BEGvGNmo3Wtc3LsB6VeR1lR9KV-xpAztk1HQVxVRblmJaOupnaCZKDpj1nF-XxK2vLQ8oaau2Sixkj5hPtQZ4sk'
+const ALERT_TYPES = [
+  { id: 'wish', label: '콕한 책 트렌드 알림', desc: '콕한 책이 떠오름·확산·스테디 단계로 올라가면' },
+  { id: 'keyword', label: '이달의 키워드 알림', desc: '홈의 1위 키워드가 바뀌면' },
+  { id: 'interest', label: '관심 분야 새 책 알림', desc: '관심 분야에서 새로 포착된 책이 생기면' },
+]
+const STAGE_RANK = { 포착: 1, 떠오름: 2, 확산: 3, 스테디: 4 }
+// 받침에 맞는 조사: josa('사랑', '이', '가') -> '이'
+function josa(word, withFinal, without) {
+  const ch = String(word || '').trim().slice(-1)
+  const code = ch.charCodeAt(0) - 0xac00
+  if (code < 0 || code > 11171) return without
+  const fin = code % 28
+  if (withFinal === '으로' && fin === 8) return without // ㄹ 받침은 '로'
+  return fin ? withFinal : without
+}
+const MAX_ALERTS = 50
+
+function pushSupport() {
+  try {
+    const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true
+    if (ios && !standalone) return 'ios-home'
+    return ok ? 'ok' : 'no'
+  } catch (_e) {
+    return 'no'
+  }
+}
+function b64ToBytes(b64) {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4)
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0))
+}
+async function currentSubscription() {
+  if (!('serviceWorker' in navigator)) return null
+  const reg = await navigator.serviceWorker.getRegistration('/')
+  return reg ? reg.pushManager.getSubscription() : null
+}
+async function savePush(sub, extra) {
+  const { error } = await supabase.functions.invoke('push-subscribe', { body: { subscription: sub.toJSON(), ...extra } })
+  if (error) throw error
+}
+
+// 앱을 열 때마다, 지난번에 본 상태와 비교해 새 소식을 만든다 (이 기기에만 저장)
+function useAlerts({ states, statesDate, keywords, wish, interests, index, feedReady }) {
+  const [prefs, setPrefs] = useStored('chaekkok.alertPrefs', { wish: true, keyword: true, interest: true })
+  const [alerts, setAlerts] = useStored('chaekkok.alerts', [])
+  const [base, setBase] = useStored('chaekkok.alertBase', null)
+  const topKw = keywords?.words?.[0]?.word || null
+
+  useEffect(() => {
+    if (!statesDate || !feedReady) return
+    const stageOf = (i) => states.get(i)?.stage || ''
+    if (!base) {
+      setBase({ date: statesDate, keyword: topKw, stages: Object.fromEntries(wish.map((w) => [w.isbn13, stageOf(w.isbn13)])) })
+      return
+    }
+    if (base.date === statesDate) {
+      // 오늘 새로 콕한 책은 기준만 기록해 둔다 (소식 없음)
+      const missing = wish.filter((w) => !(w.isbn13 in (base.stages || {})))
+      if (missing.length || (!base.keyword && topKw)) {
+        setBase({
+          ...base,
+          keyword: base.keyword || topKw,
+          stages: { ...(base.stages || {}), ...Object.fromEntries(missing.map((w) => [w.isbn13, stageOf(w.isbn13)])) },
+        })
+      }
+      return
+    }
+    if (base.date > statesDate) return
+    const fresh = []
+    const at = statesDate
+    if (prefs.wish) {
+      for (const w of wish) {
+        if (!(w.isbn13 in (base.stages || {}))) continue
+        const cur = stageOf(w.isbn13)
+        const prev = base.stages[w.isbn13]
+        if (['떠오름', '확산', '스테디'].includes(cur) && STAGE_RANK[cur] > (STAGE_RANK[prev] || 0)) {
+          const st = states.get(w.isbn13)
+          fresh.push({
+            id: `${at}:wish:${w.isbn13}:${cur}`,
+            type: 'wish',
+            date: at,
+            stage: cur,
+            text: `『${shortTitle(w.title)}』${josa(shortTitle(w.title), '이', '가')} ${cur} 단계가 됐어요`,
+            sub: st?.reason || '',
+            url: `/book/${w.isbn13}`,
+          })
+        }
+      }
+    }
+    if (prefs.keyword && topKw && base.keyword && topKw !== base.keyword) {
+      fresh.push({
+        id: `${at}:keyword:${topKw}`,
+        type: 'keyword',
+        date: at,
+        text: `이달의 키워드가 #${topKw}${josa(topKw, '으로', '로')} 바뀌었어요`,
+        sub: `지난번엔 #${base.keyword}${josa(base.keyword, '이었어요', '였어요')}`,
+        url: `/keyword/${encodeURIComponent(topKw)}`,
+      })
+    }
+    if (prefs.interest && interests.length) {
+      const picks = []
+      for (const [isbn, st] of states) {
+        if (!st.stage || !st.first_spotted || st.first_spotted <= base.date || st.first_spotted > at) continue
+        const b = index.get(isbn)
+        if (!b) continue
+        const cat = isChildBook(b) ? '어린이' : b.categoryLabel
+        if (interests.includes(cat)) picks.push({ isbn13: isbn, title: b.title, cover_url: b.cover_url, cat })
+      }
+      if (picks.length) {
+        const cats = [...new Set(picks.map((p) => p.cat))]
+        fresh.push({
+          id: `${at}:interest:${cats.join(',')}`,
+          type: 'interest',
+          date: at,
+          text: `관심 분야에서 새로 포착된 책 ${picks.length}권`,
+          sub: cats.join(' · '),
+          books: picks.slice(0, 5),
+          url: `/book/${picks[0].isbn13}`,
+        })
+      }
+    }
+    if (fresh.length) {
+      setAlerts((list) => {
+        const ids = new Set(list.map((a) => a.id))
+        return [...fresh.filter((a) => !ids.has(a.id)).map((a) => ({ ...a, read: false })), ...list].slice(0, MAX_ALERTS)
+      })
+    }
+    setBase({ date: statesDate, keyword: topKw || base.keyword, stages: Object.fromEntries(wish.map((w) => [w.isbn13, stageOf(w.isbn13)])) })
+  }, [statesDate, feedReady, topKw, wish, interests, prefs, base]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const unread = alerts.filter((a) => !a.read).length
+  const markRead = () => setAlerts((list) => (list.some((a) => !a.read) ? list.map((a) => ({ ...a, read: true })) : list))
+  const clear = () => setAlerts([])
+  return { prefs, setPrefs, alerts, unread, markRead, clear }
+}
+
+// 휴대폰 알림 켜기·끄기, 콕한 책·관심 분야가 바뀌면 서버의 구독 정보도 맞춰 둔다
+function usePush({ prefs, wish, interests }) {
+  const [on, setOn] = useStored('chaekkok.push', false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const support = useMemo(pushSupport, [])
+  const payload = { prefs, wish: wish.map((w) => w.isbn13), interests }
+  const key = JSON.stringify(payload)
+
+  useEffect(() => {
+    if (!on || support !== 'ok') return
+    const t = setTimeout(async () => {
+      try {
+        const sub = await currentSubscription()
+        if (!sub) return setOn(false) // 브라우저에서 알림 권한을 끈 경우
+        await savePush(sub, payload)
+      } catch (_e) {
+        // 다음에 다시 맞춘다
+      }
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [on, key]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const enable = async () => {
+    setBusy(true)
+    setMsg('')
+    try {
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') {
+        setMsg('알림 권한이 꺼져 있어요. 브라우저 설정에서 책콕 알림을 허용해 주세요.')
+        return
+      }
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      await navigator.serviceWorker.ready
+      const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(PUSH_PUBLIC_KEY) }))
+      await savePush(sub, payload)
+      setOn(true)
+      setMsg('휴대폰 알림을 켰어요. 매일 아침 새 소식이 있을 때만 보내요.')
+    } catch (_e) {
+      setMsg('알림을 켜지 못했어요. 잠시 뒤 다시 시도해 주세요.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const disable = async () => {
+    setBusy(true)
+    setMsg('')
+    try {
+      const sub = await currentSubscription()
+      if (sub) {
+        await supabase.functions.invoke('push-subscribe', { body: { action: 'unsubscribe', subscription: { endpoint: sub.endpoint } } })
+        await sub.unsubscribe()
+      }
+    } catch (_e) {
+      // 이미 해제된 경우
+    } finally {
+      setOn(false)
+      setBusy(false)
+      setMsg('휴대폰 알림을 껐어요.')
+    }
+  }
+  return { on, busy, msg, support, enable, disable }
+}
+
+function Alerts({ alerts, markRead, clear }) {
+  // 들어와서 보면 읽음 처리 (화면에는 이번에 새로 온 표시를 남겨 둠)
+  const [fresh] = useState(() => new Set(alerts.filter((a) => !a.read).map((a) => a.id)))
+  useEffect(() => {
+    markRead()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const back = () => (window.history.length > 1 ? window.history.back() : go('/'))
+  const TONE = { wish: 'ginkgo', keyword: 'kw', interest: 'spot' }
+  return (
+    <>
+      <header className="detail__bar">
+        <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
+        <a className="pill pill--btn alerts__set" href="#/my">알림 설정</a>
+      </header>
+      <header className="pagehead pagehead--tight">
+        <Eyebrow>NOTIFICATIONS</Eyebrow>
+        <h1 className="h1 display">알림</h1>
+        <span className="sub">앱을 열 때마다 지난번과 비교해서 새 소식을 모아요</span>
+      </header>
+      <div className="stack">
+        <section className="card card--list">
+          {alerts.length === 0 && (
+            <div className="empty">
+              <p>아직 새 소식이 없어요.</p>
+              <p className="sub">책을 콕하거나 관심 분야를 고르면, 단계가 오르거나 새 책이 포착될 때 여기로 알려드려요.</p>
+              <a className="btn btn--soft" href="#/my">알림 설정 보기</a>
+            </div>
+          )}
+          {alerts.map((a, i) => (
+            <a key={a.id} className={`alert rise${fresh.has(a.id) ? ' is-new' : ''}`} style={delay(i, 0.05, 0.04)} href={'#' + a.url}>
+              <span className={`alert__icon alert__icon--${TONE[a.type] || 'kw'}`} aria-hidden="true">
+                {a.type === 'wish' ? Icon.ginkgo(true, 20) : a.type === 'keyword' ? '#' : Icon.trend(true)}
+              </span>
+              <span className="alert__body">
+                <span className="alert__text">{a.text}</span>
+                {a.sub && <span className="alert__sub">{a.stage && <StageBadge stage={a.stage} />}{a.sub}</span>}
+                {a.books?.length > 0 && (
+                  <span className="alert__books">
+                    {a.books.slice(0, 3).map((b) => shortTitle(b.title)).join(' · ')}
+                    {a.books.length > 3 ? ` 외 ${a.books.length - 3}권` : ''}
+                  </span>
+                )}
+                <span className="alert__date">{fmtDate(a.date)} 데이터 기준</span>
+              </span>
+              {fresh.has(a.id) && <i className="alert__dot" aria-label="새 소식" />}
+            </a>
+          ))}
+        </section>
+        {alerts.length > 0 && (
+          <button className="btn btn--soft btn--full alerts__clear" onClick={clear}>
+            알림 모두 지우기
+          </button>
+        )}
+      </div>
+    </>
+  )
+}
+
+function AlertSettings({ alertState, push }) {
+  const { prefs, setPrefs } = alertState
+  return (
+    <section className="card">
+      <h2 className="h3">알림</h2>
+      {ALERT_TYPES.map((t) => (
+        <div key={t.id} className="line line--static">
+          <span className="lib__info">
+            <strong className="line__label">{t.label}</strong>
+            <span className="sub">{t.desc}</span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={prefs[t.id]}
+            aria-label={t.label}
+            className={`switch${prefs[t.id] ? ' is-on' : ''}`}
+            onClick={() => setPrefs({ ...prefs, [t.id]: !prefs[t.id] })}
+          >
+            <i />
+          </button>
+        </div>
+      ))}
+      <div className="pushbox">
+        <span className="lib__info">
+          <strong className="line__label">휴대폰 알림</strong>
+          <span className="sub">
+            {push.support === 'ios-home'
+              ? '아이폰은 Safari 공유 버튼 → 홈 화면에 추가한 뒤, 홈 화면의 책콕에서 켤 수 있어요.'
+              : push.support === 'no'
+                ? '이 브라우저는 휴대폰 알림을 지원하지 않아요. 알림은 앱 안 종 모양에서 볼 수 있어요.'
+                : push.on
+                  ? '켜짐 · 매일 아침 새 소식이 있을 때만 한 번 보내요'
+                  : '앱을 닫아 둬도 새 소식을 알려드려요'}
+          </span>
+        </span>
+        {push.support === 'ok' && (
+          <button className={`btn ${push.on ? 'btn--soft' : 'btn--primary'} btn--sm`} disabled={push.busy} onClick={push.on ? push.disable : push.enable}>
+            {push.busy ? '잠시만요' : push.on ? '끄기' : '켜기'}
+          </button>
+        )}
+      </div>
+      {push.msg && <p className="sub small pushbox__msg">{push.msg}</p>}
+      <a className="line" href="#/alerts">
+        <span>받은 알림 보기</span>
+        <span className="line__chev">{Icon.chev()}</span>
+      </a>
+    </section>
   )
 }
 
@@ -1428,8 +1883,9 @@ function Wish({ wish, index, toggleWish }) {
           ))}
         </section>
         <section className="card">
-          <h2 className="h2">알림은 준비 중이에요</h2>
-          <p className="sub">콕한 책이 급상승하거나 단계가 바뀌면 알려드리는 기능을 만들고 있어요.</p>
+          <h2 className="h2">콕한 책 소식 받기</h2>
+          <p className="sub">콕한 책이 떠오름·확산·스테디 단계로 올라가면 알림으로 알려드려요.</p>
+          <a className="btn btn--soft btn--block" href="#/my">알림 설정 {Icon.chev()}</a>
         </section>
       </div>
     </>
@@ -1461,7 +1917,7 @@ const STAGE_GUIDE = [
   },
 ]
 
-function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary }) {
+function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary, alertState, push }) {
   const [openInfo, setOpenInfo] = useState(null)
   const toggle = (c) => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])
   const infos = [
@@ -1531,15 +1987,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
           <p className="sub small">관심 분야는 트렌드 화면의 분야 버튼 앞쪽에 먼저 보여요.</p>
         </section>
 
-        <section className="card">
-          <h2 className="h3">알림</h2>
-          {['콕한 책 트렌드 알림', '이달의 키워드 알림', '관심 분야 신간 알림'].map((t) => (
-            <div key={t} className="line line--static">
-              <span>{t}</span>
-              <span className="badge">준비 중</span>
-            </div>
-          ))}
-        </section>
+        <AlertSettings alertState={alertState} push={push} />
 
         <section className="card">
           <h2 className="h3">트렌드 단계, 이렇게 읽어요</h2>
@@ -1683,7 +2131,7 @@ function useBookStates() {
   useEffect(() => {
     supabase
       .from('v_book_state_latest')
-      .select('isbn13,stage,reason,confidence,momentum,first_spotted')
+      .select('isbn13,snapshot_date,stage,reason,confidence,momentum,first_spotted')
       .limit(1000)
       .then(({ data }) => {
         if (data) setMap(new Map(data.map((r) => [r.isbn13, r])))
@@ -1758,6 +2206,13 @@ export default function App() {
   const [libs, setLibs] = useStored('chaekkok.libs', [])
   const [libPicker, setLibPicker] = useState(false)
   const demo = useDemo(prefs)
+  const statesDate = useMemo(() => {
+    let d = null
+    for (const r of states.values()) if (!d || r.snapshot_date > d) d = r.snapshot_date
+    return d
+  }, [states])
+  const alertState = useAlerts({ states, statesDate, keywords, wish, interests, index, feedReady: !loading && !error })
+  const push = usePush({ prefs: alertState.prefs, wish, interests })
 
   const toggleWish = (b) => {
     setWish((list) =>
@@ -1783,7 +2238,7 @@ export default function App() {
     <div className={`app${navTab ? '' : ' app--detail'}`}>
       <main>
         {route.name === 'home' && (
-          <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} />
+          <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} unread={alertState.unread} />
         )}
         {route.name === 'hits' && <Hits stats={home.hitStats} index={index} />}
         {route.name === 'trend' && (
@@ -1792,7 +2247,9 @@ export default function App() {
         {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} onPickLibrary={() => setLibPicker(true)} />}
         {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} />}
         {route.name === 'search' && <Search />}
-        {route.name === 'my' && <My prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={() => setSheet(true)} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} />}
+        {route.name === 'keyword' && route.param && <KeywordPage word={route.param} index={index} />}
+        {route.name === 'alerts' && <Alerts alerts={alertState.alerts} markRead={alertState.markRead} clear={alertState.clear} />}
+        {route.name === 'my' && <My prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={() => setSheet(true)} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} alertState={alertState} push={push} />}
       </main>
       {navTab && <BottomNav current={navTab} />}
       {libPicker && <LibraryPicker libs={libs} setLibs={setLibs} onClose={() => setLibPicker(false)} />}

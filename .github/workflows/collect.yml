@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: 필요한 패키지 설치
-        run: pip install requests supabase pytrends
+        run: pip install requests supabase pytrends pywebpush
 
       - name: 정보나루 데이터 수집 실행
         env:
@@ -66,3 +66,10 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python compute_composite.py
+
+      - name: 휴대폰 알림 보내기
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python send_alerts.py
