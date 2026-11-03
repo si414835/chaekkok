@@ -2684,3 +2684,65 @@ a.lib__info {
 .setitem.is-open .setitem__head {
   border-bottom: 0;
 }
+
+/* 도서관 페이지: 칸 사이 경계 없이 이어지게 */
+.libpage__stack {
+  gap: 0;
+}
+.kidsswitch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+  align-self: center;
+}
+.kidsswitch .switch {
+  width: 44px;
+  height: 26px;
+}
+.kidsswitch .switch i {
+  width: 20px;
+  height: 20px;
+}
+.kidsswitch .switch.is-on i {
+  transform: translateX(18px);
+}
+.accordion {
+  overflow: hidden;
+  transition: max-height 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.35) 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.35) 45%, transparent 100%);
+  opacity: 0.6;
+}
+.accordion.is-open {
+  -webkit-mask-image: none;
+  mask-image: none;
+  opacity: 1;
+}
+.morebtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: calc(100% - 40px);
+  margin: 6px 20px 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--line-2);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.morebtn__chev {
+  display: inline-block;
+  line-height: 1;
+  transform: translateY(-3px);
+  transition: transform 0.3s;
+}
+.morebtn__chev.is-open {
+  transform: translateY(3px) rotate(180deg);
+}

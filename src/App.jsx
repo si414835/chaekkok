@@ -2312,12 +2312,35 @@ function BarRow({ items, labelOf, unit = '%' }) {
   )
 }
 
+// 접혀 있을 때는 첫 줄만 흐리게 살짝 보이고, 누르면 아래로 펼쳐진다
+function Accordion({ open, children }) {
+  const ref = useRef(null)
+  const [h, setH] = useState(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => setH(el.scrollHeight)
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(el)
+    return () => ro?.disconnect()
+  }, [])
+  return (
+    <div className={`accordion${open ? ' is-open' : ''}`} style={{ maxHeight: open ? h || 'none' : 56 }}>
+      <div ref={ref} aria-hidden={!open} onClickCapture={(e) => !open && e.preventDefault()}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function LibraryPage({ libCode, libs, setLibs }) {
   const { loading, data, error } = useLibraryInfo(libCode)
-  const [kids, setKids] = useState(false)
-  const pop = (data?.popular || []).filter((b) => kids || !b.kids)
-  const news = (data?.newBooks || []).filter((b) => kids || !b.kids)
-  const known = useKnownIsbns([...pop.slice(0, 15), ...news.slice(0, 10)].map((b) => b.isbn13).filter(Boolean))
+  const [noKids, setNoKids] = useState(true)
+  const [more, setMore] = useState(false)
+  const pop = (data?.popular || []).filter((b) => !noKids || !b.kids)
+  const news = (data?.newBooks || []).filter((b) => !noKids || !b.kids)
+  const known = useKnownIsbns([...pop.slice(0, 30), ...news.slice(0, 10)].map((b) => b.isbn13).filter(Boolean))
   const saved = libs.some((x) => x.libCode === libCode)
   const info = data?.info
   useEffect(() => {
@@ -2381,7 +2404,7 @@ function LibraryPage({ libCode, libs, setLibs }) {
               {data.fresh && <span className="pill pill--up">최근 데이터 있음</span>}
             </span>
           </header>
-          <div className="stack">
+          <div className="stack libpage__stack">
             <section className="card rise">
               <div className="libpage__acts">
                 <a className="btn btn--soft" href={mapLink(info)} target="_blank" rel="noopener noreferrer">지도 보기</a>
@@ -2452,15 +2475,38 @@ function LibraryPage({ libCode, libs, setLibs }) {
                     <Eyebrow tone="up">POPULAR HERE</Eyebrow>
                     <h2 className="h2 display">이 도서관 인기 책</h2>
                   </div>
-                  <button className={`pill pill--btn${kids ? ' is-on' : ''}`} onClick={() => setKids(!kids)} aria-pressed={kids}>
-                    어린이 책 {kids ? '포함' : '제외'}
-                  </button>
+                  <label className="kidsswitch">
+                    <span>어린이 책 제외</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={noKids}
+                      aria-label="어린이 책 제외"
+                      className={`switch${noKids ? ' is-on' : ''}`}
+                      onClick={() => setNoKids(!noKids)}
+                    >
+                      <i />
+                    </button>
+                  </label>
                 </div>
-                <p className="sub libpage__lead">{period} 대출 순위예요</p>
-                {pop.slice(0, 10).map((b, i) => (
+                <p className="sub libpage__lead">{period} 대출 순위예요 · 어린이 책 {noKids ? '빼고' : '포함해서'} 보는 중</p>
+                {pop.slice(0, 5).map((b, i) => (
                   <BookLine key={b.isbn13 + i} b={b} i={i} />
                 ))}
-                {pop.length === 0 && <p className="state">어린이 책을 빼면 남는 책이 없어요. '어린이 책 포함'을 눌러 보세요.</p>}
+                {pop.length > 5 && (
+                  <Accordion open={more}>
+                    {pop.slice(5).map((b, i) => (
+                      <BookLine key={b.isbn13 + i} b={b} i={i + 5} />
+                    ))}
+                  </Accordion>
+                )}
+                {pop.length > 5 && (
+                  <button type="button" className="morebtn" onClick={() => setMore(!more)} aria-expanded={more}>
+                    {more ? '접기' : `${pop.length - 5}권 더 보기`}
+                    <span className={`morebtn__chev${more ? ' is-open' : ''}`} aria-hidden="true">⌄</span>
+                  </button>
+                )}
+                {pop.length === 0 && <p className="state">어린이 책을 빼면 남는 책이 없어요. 스위치를 꺼서 어린이 책도 보세요.</p>}
               </section>
             )}
 
