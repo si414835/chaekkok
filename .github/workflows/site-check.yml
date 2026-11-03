@@ -1,0 +1,12 @@
+name: 사이트 파일 점검 (한 번만)
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for p in robots.txt sitemap.xml google215162353bf4ef4e.html og.png; do
+            echo "== /$p"; curl -sS -o /tmp/body -D - "https://chaekkok.vercel.app/$p" | grep -iE "^HTTP|^content-type|^x-vercel-cache|^age"; head -c 200 /tmp/body | tr -d '\000' | head -5; echo
+          done
+          echo "== Yeti UA"; curl -sS -A "Mozilla/5.0 (compatible; Yeti/1.1; +https://naver.me/spd)" -o /tmp/b -D - https://chaekkok.vercel.app/robots.txt | grep -iE "^HTTP|^content-type"; head -c 200 /tmp/b
