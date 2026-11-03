@@ -32,8 +32,14 @@ AGE_GROUPS = [("all", None, None), ("10", 10, 19), ("20", 20, 29), ("30", 30, 39
 # 성별: 정보나루 gender 코드 그대로 저장 ('all'은 전체). 화면에서 남/여로 바꿔 보여준다.
 GENDERS = ["all", "0", "1"]
 DEMO_PAGE_SIZE = 50
-USAGE_LIMIT = 60           # 하루에 이용분석을 새로 받을 책 수
-USAGE_REFRESH_DAYS = 7     # 이 기간 안에 받은 책은 건너뜀
+USAGE_LIMIT = 200          # 하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수
+USAGE_REFRESH_DAYS = 14    # 이 기간 안에 받은 책은 건너뜀 (월별 데이터라 2주면 충분)
+COLOAN_LIMIT = 40          # 같이 빌린 책 중 책콕에 없는 책을 하루에 몇 권 정식으로 등록할지
+# 정보나루 호출 예산: 이 스크립트가 하루에 쓰는 최대 호출 수.
+# collect.py(약 25회) + 이 스크립트 + 화면에서 쓰는 도서관 조회까지 합쳐 하루 500회 안쪽을 지킨다.
+# (2017 공지: IP 미등록 시 1일 500건 이상 제한 / 2023 공지: 1일 30,000건 제한. 보수적으로 500 기준)
+CALL_BUDGET = int(os.environ.get("CALL_BUDGET", "330"))
+_calls = 0
 
 
 def now_kst():
@@ -47,10 +53,18 @@ def safe_err(e):
     return msg[:300]
 
 
+class BudgetExceeded(Exception):
+    pass
+
+
 def call(api, params, retries=(5, 15, 30)):
+    global _calls
     p = {"authKey": KEY, "format": "json", **params}
     last = None
     for attempt, wait in enumerate((0,) + tuple(retries)):
+        if _calls >= CALL_BUDGET:  # 재시도도 한 번의 호출로 센다
+            raise BudgetExceeded(f"오늘 호출 예산 {CALL_BUDGET}회를 다 씀")
+        _calls += 1
         if wait:
             time.sleep(wait)
         try:
@@ -501,19 +515,26 @@ def collect_libraries():
 # ---------- 4. 도서별 이용분석 ----------
 
 def pick_usage_targets():
-    """종합 상위 + 급상승 책 중, 최근에 받지 않은 책."""
+    """상세 데이터를 받을 책: ① 오늘 단계가 붙은 책(모멘텀 순) ② 종합 상위 ③ 급상승 ④ 분야별 인기 상위.
+    최근 USAGE_REFRESH_DAYS 안에 받은 책은 건너뛴다."""
     targets = []
-    for ttype, order, limit in [("composite", "score", 50), ("rising", "rank_diff", 30)]:
-        res = (supabase.table("v_feed").select("isbn13,addition_symbol").eq("trend_type", ttype)
-               .order(order, desc=True).limit(limit * 3).execute())
-        # 어린이 책은 화면 순위에서 빠지므로 이용분석도 받지 않는다
-        adult = [r["isbn13"] for r in (res.data or []) if not (r.get("addition_symbol") or "").startswith("7")]
-        targets += adult[:limit]
-    targets = list(dict.fromkeys(targets))
+    latest = supabase.table("book_state").select("snapshot_date").order("snapshot_date", desc=True).limit(1).execute().data
+    if latest:
+        d = latest[0]["snapshot_date"]
+        staged = (supabase.table("book_state").select("isbn13").eq("snapshot_date", d).not_.is_("stage", "null")
+                  .order("momentum", desc=True).limit(600).execute().data or [])
+        targets += [r["isbn13"] for r in staged]
+    for ttype, order, limit, desc in [("composite", "score", 150, True), ("rising", "rank_diff", 60, True), ("popular", "rank", 400, False)]:
+        res = (supabase.table("v_feed").select("isbn13").eq("trend_type", ttype)
+               .order(order, desc=desc).limit(limit).execute())
+        targets += [r["isbn13"] for r in (res.data or [])]
+    targets = list(dict.fromkeys(t for t in targets if t))
     since = (datetime.now(timezone.utc) - timedelta(days=USAGE_REFRESH_DAYS)).isoformat()
-    fresh = (supabase.table("book_usage").select("isbn13").gte("updated_at", since)
-             .in_("isbn13", targets).execute().data or [])
-    fresh = {r["isbn13"] for r in fresh}
+    fresh = set()
+    for i in range(0, len(targets), 200):
+        rows = (supabase.table("book_usage").select("isbn13").gte("updated_at", since)
+                .in_("isbn13", targets[i:i + 200]).execute().data or [])
+        fresh |= {r["isbn13"] for r in rows}
     return [t for t in targets if t not in fresh][:USAGE_LIMIT]
 
 
@@ -546,7 +567,7 @@ def collect_usage():
     ok = 0
     for isbn in targets:
         try:
-            data = call("usageAnalysisList", {"isbn13": isbn})
+            data = call("usageAnalysisList", {"isbn13": isbn}, retries=(5,))
             keywords, co_loan, history, groups = parse_usage(data)
             supabase.table("book_usage").upsert({
                 "isbn13": isbn, "keywords": keywords, "co_loan": co_loan,
@@ -554,27 +575,67 @@ def collect_usage():
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }, on_conflict="isbn13").execute()
             ok += 1
+        except BudgetExceeded as e:
+            print(f"  [이용분석] {e} - 남은 {len(targets) - ok}권은 내일 받음")
+            break
         except Exception as e:
             print(f"  [이용분석 실패] {isbn}: {safe_err(e)}")
-        time.sleep(1)
+        time.sleep(0.5)
     status = "ok" if ok == len(targets) else ("failed" if ok == 0 and targets else "partial")
     log_run("usage", status, ok, None if status == "ok" else f"{len(targets) - ok}권 실패")
     print(f"[이용분석] {ok}/{len(targets)}권")
     return ok
 
 
+def collect_coloan():
+    """같이 빌린 책 중 책콕에 아직 없는 책을 정식으로 등록한다 (도서 상세 srchDtlList).
+    등록되면 그 책도 표지·분야가 생기고, 다음 날부터 이용분석 대상이 될 수 있다."""
+    rows = supabase.table("book_usage").select("co_loan").execute().data or []
+    want = list(dict.fromkeys(b.get("isbn13") for r in rows for b in (r.get("co_loan") or []) if b.get("isbn13")))
+    have = set()
+    for i in range(0, len(want), 200):
+        have |= {r["isbn13"] for r in supabase.table("books").select("isbn13").in_("isbn13", want[i:i + 200]).execute().data or []}
+    todo = [i for i in want if i not in have and len(i) == 13][:COLOAN_LIMIT]
+    added = []
+    for isbn in todo:
+        try:
+            data = call("srchDtlList", {"isbn13": isbn, "loaninfoYN": "N"}, retries=(5,))
+            found = [d for d in find_dicts_with(data, "bookname") if d.get("isbn13") or d.get("bookname")]
+            if not found:
+                continue
+            d = dict(found[0])
+            d["isbn13"] = isbn
+            row = doc_to_book(d)
+            row["cover_url"] = https(row.get("cover_url")) if row.get("cover_url") else None
+            added.append(row)
+        except BudgetExceeded as e:
+            print(f"  [같이 빌린 책] {e}")
+            break
+        except Exception as e:
+            print(f"  [같이 빌린 책 {isbn}] {safe_err(e)}")
+        time.sleep(0.5)
+    if added:
+        supabase.table("books").upsert(added, on_conflict="isbn13", ignore_duplicates=True).execute()
+    log_run("coloan", "ok", len(added))
+    print(f"[같이 빌린 책] 없는 책 {len([i for i in want if i not in have])}권 중 {len(added)}권 등록")
+    return len(added)
+
+
 def main():
     # 정보나루 '이달의 키워드'는 어린이 책이 섞여 화면에서 쓰지 않으므로 수집하지 않는다 (홈 키워드는 v_home_keywords)
-    steps = [collect_demographics, collect_regions, collect_libraries, collect_usage, collect_upcoming]
+    steps = [collect_demographics, collect_regions, collect_libraries, collect_usage, collect_coloan, collect_upcoming]
     only = sys.argv[1:]  # 예: python extra_collect.py upcoming  -> 그 단계만 실행
     if only:
         steps = [f for f in steps if f.__name__.replace("collect_", "") in only]
     for step in steps:
         try:
             step()
+        except BudgetExceeded as e:
+            print(f"::warning::{step.__name__}: {e}")
         except Exception as e:
             print(f"::warning::{step.__name__} 중단: {safe_err(e)}")
 
 
 if __name__ == "__main__":
     main()
+    print(f"[정보나루 호출] 이 스크립트에서 {_calls}회 (예산 {CALL_BUDGET})")

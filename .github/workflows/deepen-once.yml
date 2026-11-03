@@ -1,0 +1,25 @@
+name: 깊게 다시 수집 (오늘 한 번만)
+on: workflow_dispatch
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install requests supabase
+      - name: 분야별 200위까지 다시 받기
+        env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python collect.py
+      - name: 상세 데이터·같이 빌린 책 (오늘은 호출 150회까지만)
+        if: always()
+        env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          CALL_BUDGET: '150'
+        run: python extra_collect.py usage coloan

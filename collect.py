@@ -147,13 +147,13 @@ def collect_hot_trend():
 
 # KDC(도서 분류) 10개 대분류 전부 수집 - 탭마다 빈 곳이 없도록.
 # 0=총류 1=철학 2=종교 3=사회과학 4=자연과학 5=기술과학 6=예술 7=언어 8=문학 9=역사
-# 기본은 30권씩. 다만 총류(0)/종교(2)/자연과학(4)/언어(7)는 상위권이 거의
-# 아동서로 채워져서 성인책이 안 보이는 게 확인됐음 -> 더 깊이(100권)까지 파봐서
-# 순위가 낮더라도 성인 대상 도서가 있는지 확인해본다.
+# 분야마다 200위까지 받는다 (100권씩 2쪽). 30위까지만 보면 순위가 막 오르기 시작한 책을
+# 놓치고, 단계·신뢰도를 매길 근거도 부족했다. (2026-11 점검: pageSize 200까지는 응답,
+# 300은 연결이 끊김 -> 100권씩 나눠 받는다)
+# 호출 수: 분야 10개 x 2쪽 + 어린이 1 = 하루 21회
 KDC_CODES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-DEEP_SEARCH_KDC = {0, 2, 4, 7}
-DEFAULT_PAGE_SIZE = 30
-DEEP_PAGE_SIZE = 100
+PAGE_SIZE = 100
+PAGES_PER_KDC = 2
 
 
 def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None, from_age=20, to_age=99):
@@ -196,11 +196,22 @@ def _save_loan_docs(docs, snapshot_date):
 def _collect_one_part(part, snapshot_date):
     """part = KDC 숫자(0~9) 또는 'child'. 저장 건수를 돌려준다."""
     if part == "child":
-        data = fetch_loan_items(page_no=1, page_size=40, kdc=None, from_age=0, to_age=13)
+        data = fetch_loan_items(page_no=1, page_size=PAGE_SIZE, kdc=None, from_age=0, to_age=13)
+        docs = data.get("response", {}).get("docs", [])
     else:
-        page_size = DEEP_PAGE_SIZE if part in DEEP_SEARCH_KDC else DEFAULT_PAGE_SIZE
-        data = fetch_loan_items(page_no=1, page_size=page_size, kdc=part, from_age=14, to_age=99)
-    docs = data.get("response", {}).get("docs", [])
+        docs = []
+        for page in range(1, PAGES_PER_KDC + 1):
+            data = fetch_loan_items(page_no=page, page_size=PAGE_SIZE, kdc=part, from_age=14, to_age=99)
+            got = data.get("response", {}).get("docs", [])
+            if not got:
+                if page == 1:
+                    break
+                # 2쪽째가 비면 1쪽만으로는 저장하지 않는다 (분야 목록 길이가 날마다 달라지면 순위 비교가 틀어짐)
+                raise RuntimeError(f"{page}쪽 응답이 0건")
+            docs += got
+            if len(got) < PAGE_SIZE:
+                break
+            time.sleep(1)
     if not docs:
         raise RuntimeError("응답에 도서가 0건")
     return _save_loan_docs(docs, snapshot_date)
