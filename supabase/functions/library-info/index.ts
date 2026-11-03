@@ -1,6 +1,7 @@
 // 책콕: 도서관 기능 (정보나루 키는 이 함수 비밀값 DATA4LIBRARY_KEY에만 둔다)
 //   action 'nearby'  : 이 책을 가진 도서관을 지역에서 찾고, 가까운 몇 곳은 지금 대출 가능한지 확인
 //   action 'library' : 도서관 한 곳의 운영 정보, 시간대·요일별 대출 비율, 최근 인기대출, 신착도서
+//   action 'books'   : 책콕에 없는 책의 기본 정보·표지 (정보나루 도서 상세)
 // 정보나루가 끊기거나 비어 있으면 '모름'으로 돌려줘서 화면이 잘못된 값을 보여주지 않게 한다.
 // 배포: Supabase Edge Function 'library-info' (verify_jwt 끔, 입력값 검증으로 대신함)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -200,6 +201,44 @@ async function library(body: Record<string, unknown>) {
   return json(out);
 }
 
+// 책콕에 아직 없는 책(같이 빌린 책 등)의 기본 정보와 표지: 정보나루 도서 상세
+async function books(body: Record<string, unknown>) {
+  const isbns = Array.isArray(body.isbns) ? (body.isbns as unknown[]).map(String).filter((x) => /^\d{13}$/.test(x)).slice(0, 12) : [];
+  if (!isbns.length) return json({ error: "bad isbns" }, 400);
+  const out = await Promise.all(isbns.map((isbn) => cached(`bk:${isbn}`, 24 * 60 * 60 * 1000, async () => {
+    const d = await api("srchDtlList", { isbn13: isbn, loaninfoYN: "N" });
+    if (!d) return null; // 정보나루가 끊긴 경우는 기억하지 않고 다음에 다시 묻는다
+    // 응답 모양이 바뀌어도 찾을 수 있게, 'bookname'을 가진 첫 객체를 찾는다
+    // deno-lint-ignore no-explicit-any
+    const find = (o: any): any => {
+      if (!o || typeof o !== "object") return null;
+      if (!Array.isArray(o) && "bookname" in o) return o;
+      for (const v of Object.values(o)) {
+        const r = find(v);
+        if (r) return r;
+      }
+      return null;
+    };
+    const b = d?.response?.detail?.[0]?.book ?? find(d?.response);
+    if (!b) return { isbn13: isbn, found: false };
+    const https = (u: string) => (u && u.startsWith("http://") ? "https://" + u.slice(7) : u || null);
+    return {
+      isbn13: isbn,
+      found: true,
+      title: b.bookname ?? "",
+      author: b.authors ?? "",
+      publisher: b.publisher ?? "",
+      pubYear: b.publication_year ?? "",
+      className: b.class_nm ?? "",
+      classNo: b.class_no ?? "",
+      additionSymbol: b.addition_symbol ?? "",
+      cover: https(b.bookImageURL ?? ""),
+      description: b.description ?? "",
+    };
+  })));
+  return json({ books: out.map((b, i) => b ?? { isbn13: isbns[i], found: false }) });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -212,5 +251,6 @@ Deno.serve(async (req) => {
   }
   if (body.action === "nearby") return nearby(body);
   if (body.action === "library") return library(body);
+  if (body.action === "books") return books(body);
   return json({ error: "unknown action" }, 400);
 });

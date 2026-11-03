@@ -245,6 +245,12 @@ function Delta({ value }) {
 
 const GINKGO_LEAF = 'M12 15.8C11 13 5.9 9.8 2.8 8C2.2 7.2 2.4 6.1 3.3 5.4C5.4 3.8 8.4 2.9 10.7 3L12 5.3L13.3 3C15.6 2.9 18.6 3.8 20.7 5.4C21.6 6.1 21.8 7.2 21.2 8C18.1 9.8 13 13 12 15.8Z'
 const Icon = {
+  gear: () => (
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" />
+    </svg>
+  ),
   menu: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg>
   ),
@@ -547,7 +553,10 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread }) {
         </span>
       </header>
       <div className="stack">
-        <KeywordHero keywords={keywords} />
+        <div className="kwgroup">
+          <KeywordHero keywords={keywords} />
+          <HitTeaser stats={hitStats} />
+        </div>
         {loading && <section className="card"><Loading /></section>}
         {error && <section className="card"><p className="state state--error">데이터를 불러오지 못했어요: {error}</p></section>}
         {!loading && !error && (
@@ -569,7 +578,6 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread }) {
               </a>
             </section>
             <Upcoming list={upcoming} />
-            <HitTeaser stats={hitStats} />
           </>
         )}
       </div>
@@ -617,7 +625,7 @@ function Upcoming({ list: all }) {
 function HitTeaser({ stats }) {
   if (!stats || !stats.matured_total) return null
   return (
-    <a className="card hitteaser rise press" style={{ animationDelay: '0.9s' }} href="/hits">
+    <a className="card hitteaser rise press" style={{ animationDelay: '0.5s' }} href="/hits">
       <div className="titlegroup">
         <Eyebrow>TRACK RECORD</Eyebrow>
         <strong className="display">책콕 적중 기록</strong>
@@ -859,6 +867,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
 
 function FilterSheet({ prefs, onApply, onClose }) {
   const [draft, setDraft] = useState(prefs)
+  useLockBody()
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -928,12 +937,35 @@ function useBook(isbn, index) {
       ])
       const usage = usageRes.data
       let coCovers = {}
-      const coIsbns = (usage?.co_loan || []).map((c) => c.isbn13).filter(Boolean)
+      const coIsbns = (usage?.co_loan || []).map((c) => c.isbn13).filter(Boolean).slice(0, 10)
       if (coIsbns.length) {
         const { data } = await supabase.from('books').select('isbn13,cover_url').in('isbn13', coIsbns)
-        coCovers = Object.fromEntries((data || []).map((r) => [r.isbn13, r.cover_url]))
+        coCovers = Object.fromEntries((data || []).filter((r) => r.cover_url).map((r) => [r.isbn13, r.cover_url]))
       }
-      if (!off) setExtra({ base: bookRes.data, usage, coCovers, loading: false })
+      // 책콕에 없는 책(같이 빌린 책 등)이나 표지가 없는 책은 정보나루 도서 상세에서 보강
+      let base = bookRes.data
+      const need = [...(base || index.get(isbn) ? [] : [isbn]), ...coIsbns.filter((i) => !coCovers[i] && !index.get(i)?.cover_url)]
+      if (need.length) {
+        const { data } = await supabase.functions.invoke('library-info', { body: { action: 'books', isbns: need.slice(0, 12) } })
+        for (const b of data?.books || []) {
+          if (!b.found) continue
+          if (b.cover) coCovers[b.isbn13] = b.cover
+          if (b.isbn13 === isbn && !base) {
+            base = {
+              isbn13: b.isbn13,
+              title: b.title,
+              author: b.author,
+              publisher: b.publisher,
+              class_name: b.className,
+              cover_url: b.cover,
+              addition_symbol: b.additionSymbol,
+              description: b.description,
+              external: true,
+            }
+          }
+        }
+      }
+      if (!off) setExtra({ base, usage, coCovers, loading: false })
     }
     run()
     return () => {
@@ -951,6 +983,9 @@ function useBook(isbn, index) {
       categoryLabel: categoryLabel(base.class_name),
       cover_url: base.cover_url,
       detail_url: base.detail_url,
+      additionSymbol: base.addition_symbol,
+      description: base.description,
+      external: !!base.external,
     })
   return { book, ...extra }
 }
@@ -1064,21 +1099,27 @@ function useRankHistory(isbn) {
 }
 
 // 분야 순위 그래프: 위로 갈수록 높은 순위. TOP10 구간을 띠로 표시하고, 단계가 바뀐 날을 점으로 찍는다
-function RankChart({ isbn, firstSpotted, hit }) {
+function RankChart({ isbn, firstSpotted, hit, embedded }) {
   const rows = useRankHistory(isbn)
   if (!rows) return null
   const ranked = rows.filter((r) => r.rank_now != null)
   if (ranked.length < 2) return null
+  const minR = Math.min(...ranked.map((r) => r.rank_now))
+  const maxR = Math.max(...ranked.map((r) => r.rank_now))
+  const flat = maxR - minR <= 3 // 거의 그대로면 그래프를 작게
   const W = 320
-  const H = 150
+  const H = flat ? 86 : 150
   const L = 30
   const R = 14
   const T = 12
   const B = 24
-  const maxRank = Math.max(10, ...ranked.map((r) => r.rank_now))
-  const top = Math.ceil((maxRank + 2) / 5) * 5
+  // 축: 실제 순위 범위에 맞추되, 상위권(15위 안)에 닿으면 1위부터 보여 TOP10 띠가 의미 있게
+  const lo = minR <= 15 ? 1 : Math.max(1, minR - Math.max(3, Math.round((maxR - minR) * 0.3)))
+  const hiRaw = maxR + Math.max(2, Math.round((maxR - minR) * 0.2))
+  const top = Math.max(lo + 4, Math.ceil(hiRaw / 5) * 5)
+  const showBand = lo <= 10
   const x = (i) => L + (rows.length === 1 ? 0 : (i * (W - L - R)) / (rows.length - 1))
-  const y = (rank) => T + ((rank - 1) * (H - T - B)) / Math.max(top - 1, 1)
+  const y = (rank) => T + ((rank - lo) * (H - T - B)) / Math.max(top - lo, 1)
   // 순위 밖인 날은 선을 끊는다
   const segs = []
   let cur = []
@@ -1104,14 +1145,14 @@ function RankChart({ isbn, firstSpotted, hit }) {
   const savedIdx = hit?.savedOn ? rows.findIndex((r) => r.snapshot_date >= hit.savedOn) : -1
   const cat = last.cat || first.cat || '분야'
   const diff = first.rank_now - last.rank_now
+  const Wrap = embedded ? 'div' : 'section'
   return (
-    <section className="card rise rankcard" style={{ animationDelay: '0.4s' }}>
-      <Eyebrow>RANK FLOW</Eyebrow>
-      <h2 className="h2 display">순위가 어떻게 움직였을까요</h2>
+    <Wrap className={`${embedded ? 'rankcard rankcard--embedded' : 'card rankcard'} rise`} style={{ animationDelay: '0.34s' }}>
+      <h2 className="h3 rankcard__title">순위 흐름</h2>
       <p className="sub">
-        {cat} 인기대출 순위 · {fmtDate(first.snapshot_date)} <b className="num">{first.rank_now}위</b> → {fmtDate(last.snapshot_date)}{' '}
+        {cat} 인기대출 · {fmtDate(first.snapshot_date)} <b className="num">{first.rank_now}위</b> → {fmtDate(last.snapshot_date)}{' '}
         <b className={`num${diff > 0 ? ' up' : ''}`}>{last.rank_now}위</b>
-        {diff > 0 ? ` (▲${diff})` : ''}
+        {diff > 0 ? ` (▲${diff})` : diff < 0 ? ` (▼${-diff})` : ' · 순위 그대로'}
       </p>
       {hit?.hit && (
         <p className="hitline">
@@ -1122,9 +1163,13 @@ function RankChart({ isbn, firstSpotted, hit }) {
         </p>
       )}
       <svg className="rankchart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${cat} 순위 ${first.rank_now}위에서 ${last.rank_now}위로`}>
-        <rect x={L} y={y(1) - 4} width={W - L - R} height={y(10) - y(1) + 8} rx="6" className="rankchart__band" />
-        <text x={W - R - 4} y={y(10) - 6} textAnchor="end" className="rankchart__bandlabel">TOP10</text>
-        {[1, 10, top].map((v) => (
+        {showBand && (
+          <>
+            <rect x={L} y={y(1) - 4} width={W - L - R} height={y(10) - y(1) + 8} rx="6" className="rankchart__band" />
+            <text x={W - R - 4} y={y(10) - 6} textAnchor="end" className="rankchart__bandlabel">TOP10</text>
+          </>
+        )}
+        {[...new Set(showBand ? [1, 10, top] : [lo, top])].map((v) => (
           <text key={v} x={L - 8} y={y(v) + 4} textAnchor="end" className="rankchart__tick num">
             {v}
           </text>
@@ -1159,8 +1204,8 @@ function RankChart({ isbn, firstSpotted, hit }) {
             </span>
           ))}
       </div>
-      <p className="sub small">점은 트렌드 단계가 바뀐 날이에요. 선이 끊긴 곳은 그날 분야 순위 목록에 없던 날이에요.</p>
-    </section>
+      {!flat && <p className="sub small">점은 트렌드 단계가 바뀐 날이에요. 선이 끊긴 곳은 그날 분야 순위 목록에 없던 날이에요.</p>}
+    </Wrap>
   )
 }
 
@@ -1325,16 +1370,18 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   const saved = wish.some((w) => w.isbn13 === book.isbn13)
   const keywords = (usage?.keywords || []).slice(0, 8)
   const co = (usage?.co_loan || []).slice(0, 10)
+  const st = stateMap.get(book.isbn13)
   const stats = [
     { label: '모멘텀', value: book.score != null ? (Number(book.score) * p).toFixed(1) : '-', unit: book.score != null ? '점' : '' },
-    { label: '대출순위 변화', value: book.rank_diff != null ? `▲${Math.round(book.rank_diff * p)}` : '-', tone: book.rank_diff ? 'up' : '' },
+    st?.rank_now != null
+      ? { label: `${st.cat || '분야'} 순위`, value: st.rank_now, unit: '위', tone: st.rank_now <= 10 ? 'accent' : '' }
+      : { label: '분야 순위', value: '순위 밖', unit: '', small: true },
     {
       label: '30일 대출',
       value: book.loan_count != null ? Math.round(book.loan_count * p).toLocaleString() : '-',
       unit: book.loan_count != null ? '회' : '',
     },
   ]
-  const st = stateMap.get(book.isbn13)
   const eyebrow = st?.stage ? `STAGE · ${st.stage}` : book.rank_diff ? `RISING · ▲${book.rank_diff}` : book.trendType === 'recommended' ? 'LIBRARIAN PICK' : book.score != null ? "TODAY'S KOK" : null
   const onHeart = () => {
     toggleWish(book)
@@ -1390,6 +1437,9 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               )}
             </div>
           </div>
+          {book.external && (
+            <p className="notice notice--box hero__ext">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>
+          )}
           {st?.stage && (
             <div className="stagebar rise" style={{ animationDelay: '0.28s' }}>
               <div className="stagebar__steps" role="img" aria-label={`트렌드 단계: ${st.stage}`}>
@@ -1418,28 +1468,24 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             {stats.map((s) => (
               <div key={s.label}>
                 <span>{s.label}</span>
-                <strong className={`num ${s.tone || ''}`}>
+                <strong className={`num ${s.tone || ''}${s.small ? ' is-small' : ''}`}>
                   {s.value}
                   {s.unit && <small>{s.unit}</small>}
                 </strong>
               </div>
             ))}
           </div>
+          <RankChart isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} embedded />
         </section>
 
-        <RankChart isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
         <LoanChart history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
         <Groups groups={usage?.loan_grps} />
 
         {co.length > 0 && (
           <section className="card card--bleed rise" style={{ animationDelay: '0.55s' }}>
             <Eyebrow>ALSO BORROWED</Eyebrow>
-            <h2 className="h2 display">
-              이 책을 빌린 사람들이
-              <br />
-              같이 빌린 책
-            </h2>
-            <p className="sub">도서관 대출 기록 기준</p>
+            <h2 className="h2 display">함께 빌린 책</h2>
+            <p className="sub">이 책을 빌린 사람들이 같이 빌린 책 · 도서관 대출 기록 기준</p>
             <div className="hscroll">
               {co.map((c) => (
                 <a key={c.isbn13 || c.title} className="mini" href={`/book/${encodeURIComponent(c.isbn13)}`}>
@@ -1965,63 +2011,64 @@ function Alerts({ alerts, markRead, clear }) {
   )
 }
 
-function AlertSettings({ alertState, push }) {
+// 알림 설정: 마이 탭 오른쪽 위 톱니바퀴 → 항목 목록 → 항목을 누르면 설명과 켜기/끄기
+function AlertSettingsSheet({ alertState, push, onClose }) {
   const { prefs, setPrefs } = alertState
+  const [open, setOpen] = useState(null)
+  const pushDesc =
+    push.support === 'ios-home'
+      ? '아이폰은 Safari 공유 버튼 → 홈 화면에 추가한 뒤, 홈 화면의 책콕에서 켤 수 있어요.'
+      : push.support === 'no'
+        ? '이 브라우저는 휴대폰 알림을 지원하지 않아요. 알림은 앱 안 종 모양에서 볼 수 있어요.'
+        : '매일 아침 새 소식이 있을 때만 한 번 보내요. 앱을 닫아 둬도 받을 수 있어요.'
+  const items = [
+    ...ALERT_TYPES.map((t) => ({ id: t.id, label: t.label, desc: t.desc + ' 알려드려요.', on: !!prefs[t.id], toggle: () => setPrefs({ ...prefs, [t.id]: !prefs[t.id] }), disabled: false, busy: false })),
+    { id: 'push', label: '휴대폰 알림', desc: pushDesc, on: push.on, toggle: push.on ? push.disable : push.enable, disabled: push.support !== 'ok' || push.busy, busy: push.busy },
+  ]
   return (
-    <section className="card">
-      <h2 className="h3">알림</h2>
-      {ALERT_TYPES.map((t) => (
-        <div key={t.id} className="line line--static">
-          <span className="lib__info">
-            <strong className="line__label">{t.label}</strong>
-            <span className="sub">{t.desc}</span>
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={prefs[t.id]}
-            aria-label={t.label}
-            className={`switch${prefs[t.id] ? ' is-on' : ''}`}
-            onClick={() => setPrefs({ ...prefs, [t.id]: !prefs[t.id] })}
-          >
-            <i />
-          </button>
+    <Sheet label="알림 설정" onClose={onClose}>
+      <div className="sheet__head">
+        <div>
+          <h2 className="h2">알림 설정</h2>
+          <p className="sub">항목을 누르면 켜고 끌 수 있어요</p>
         </div>
-      ))}
-      <div className="pushbox">
-        <span className="lib__info">
-          <strong className="line__label">휴대폰 알림</strong>
-          <span className="sub">
-            {push.support === 'ios-home'
-              ? '아이폰은 Safari 공유 버튼 → 홈 화면에 추가한 뒤, 홈 화면의 책콕에서 켤 수 있어요.'
-              : push.support === 'no'
-                ? '이 브라우저는 휴대폰 알림을 지원하지 않아요. 알림은 앱 안 종 모양에서 볼 수 있어요.'
-                : push.busy
-                  ? '설정하는 중이에요…'
-                  : push.on
-                    ? '켜짐 · 매일 아침 새 소식이 있을 때만 한 번 보내요'
-                    : '꺼짐 · 켜면 앱을 닫아 둬도 새 소식을 알려드려요'}
-          </span>
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={push.on}
-          aria-label="휴대폰 알림"
-          aria-busy={push.busy}
-          disabled={push.support !== 'ok' || push.busy}
-          className={`switch${push.on ? ' is-on' : ''}${push.busy ? ' is-busy' : ''}`}
-          onClick={push.on ? push.disable : push.enable}
-        >
-          <i />
-        </button>
+      </div>
+      <div className="setlist">
+        {items.map((it) => (
+          <div key={it.id} className={`setitem${open === it.id ? ' is-open' : ''}`}>
+            <button className="line setitem__head" aria-expanded={open === it.id} onClick={() => setOpen(open === it.id ? null : it.id)}>
+              <span className="line__label">{it.label}</span>
+              <span className="line__value">
+                <span className={`setitem__state${it.on ? ' is-on' : ''}`}>{it.busy ? '설정 중…' : it.on ? '켜짐' : '꺼짐'}</span>
+                <span className={`line__chev${open === it.id ? ' is-open' : ''}`}>{Icon.chev()}</span>
+              </span>
+            </button>
+            {open === it.id && (
+              <div className="setitem__body">
+                <p className="sub">{it.desc}</p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={it.on}
+                  aria-label={it.label}
+                  aria-busy={it.busy}
+                  disabled={it.disabled}
+                  className={`switch${it.on ? ' is-on' : ''}${it.busy ? ' is-busy' : ''}`}
+                  onClick={it.toggle}
+                >
+                  <i />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
       {push.msg && <p className="sub small pushbox__msg">{push.msg}</p>}
-      <a className="line" href="/alerts">
+      <a className="line" href="/alerts" onClick={onClose}>
         <span>받은 알림 보기</span>
         <span className="line__chev">{Icon.chev()}</span>
       </a>
-    </section>
+    </Sheet>
   )
 }
 
@@ -2029,7 +2076,19 @@ function AlertSettings({ alertState, push }) {
 
 const MAX_LIBS = 3
 
+// 시트가 열려 있는 동안 뒤 화면이 같이 움직이지 않게 막는다
+function useLockBody() {
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+}
+
 function Sheet({ label, onClose, children }) {
+  useLockBody()
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -2754,6 +2813,7 @@ function MyHits({ wish, hits }) {
 
 function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary, alertState, push, wish, hits }) {
   const [openInfo, setOpenInfo] = useState(null)
+  const [settings, setSettings] = useState(false)
   const infos = [
     {
       id: 'stages',
@@ -2791,10 +2851,14 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
   ]
   return (
     <>
-      <header className="pagehead">
+      <header className="pagehead pagehead--withmenu">
         <Eyebrow>MY PAGE</Eyebrow>
         <h1 className="h1 display">마이</h1>
+        <button className="iconbtn menubtn" onClick={() => setSettings(true)} aria-label="알림 설정">
+          {Icon.gear()}
+        </button>
       </header>
+      {settings && <AlertSettingsSheet alertState={alertState} push={push} onClose={() => setSettings(false)} />}
       <div className="stack">
         <section className="card profile">
           <span className="profile__avatar">{Icon.user(false)}</span>
@@ -2826,8 +2890,6 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
             </button>
           )}
         </section>
-
-        <AlertSettings alertState={alertState} push={push} />
 
         <section className="card">
           <a className="line" href="/hits">
@@ -2952,7 +3014,7 @@ function useBookStates() {
   useEffect(() => {
     supabase
       .from('v_book_state_latest')
-      .select('isbn13,snapshot_date,stage,reason,confidence,momentum,first_spotted')
+      .select('isbn13,snapshot_date,stage,reason,confidence,momentum,first_spotted,rank_now,cat')
       .limit(1000)
       .then(({ data }) => {
         if (data) setMap(new Map(data.map((r) => [r.isbn13, r])))

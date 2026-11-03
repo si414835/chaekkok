@@ -691,6 +691,11 @@ p {
   position: relative;
   width: 100%;
   max-width: 480px;
+  max-height: 88vh;
+  max-height: 88dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: var(--card);
   border-radius: 24px 24px 0 0;
   padding: 12px 20px calc(24px + env(safe-area-inset-bottom));
@@ -2624,4 +2629,58 @@ a.lib__info {
 .bars__label {
   font-size: 10.5px;
   color: var(--ink-soft);
+}
+
+/* 홈: 키워드 + 적중 기록 한 덩어리 */
+.kwgroup {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+}
+.kwgroup .kw {
+  padding-bottom: 8px;
+}
+.kwgroup .hitteaser {
+  padding-top: 6px;
+}
+/* 상세: 순위 흐름 (위 카드에 붙여서) */
+.rankcard--embedded {
+  margin-top: 18px;
+}
+.rankcard__title {
+  margin: 0 0 2px;
+}
+.statgrid strong.is-small {
+  font-size: 18px;
+}
+.hero__ext {
+  margin-top: 14px;
+}
+
+/* 알림 설정 목록 */
+.setitem__head .line__label {
+  font-weight: 700;
+}
+.setitem__state {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.setitem__state.is-on {
+  color: var(--accent);
+}
+.setitem__body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 14px;
+  border-bottom: 1px solid var(--line-2);
+}
+.setitem__body .sub {
+  flex: 1;
+  word-break: keep-all;
+  line-height: 1.55;
+}
+.setitem.is-open .setitem__head {
+  border-bottom: 0;
 }
