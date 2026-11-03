@@ -113,7 +113,7 @@ function useStored(key, fallback) {
 
 // 화면 주소: /  /trend/탭  /book/ISBN  /keyword/단어  /wish  /my  /alerts  /hits  /search
 // (책·키워드 주소는 검색 로봇이 각각 다른 페이지로 읽을 수 있게 #이 없는 진짜 주소로 쓴다)
-const ROUTES = ['trend', 'book', 'keyword', 'wish', 'my', 'alerts', 'hits', 'search']
+const ROUTES = ['trend', 'book', 'keyword', 'wish', 'my', 'alerts', 'hits', 'search', 'library']
 function parsePath() {
   // 예전 주소(#/book/…)로 들어오면 새 주소로 바꿔 준다 (공유된 링크·알림 호환)
   if (window.location.hash.startsWith('#/')) {
@@ -1301,7 +1301,7 @@ function CopyIsbn({ isbn }) {
   )
 }
 
-function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary, hits }) {
+function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, hits }) {
   const { book, usage, coCovers, loading } = useBook(isbn, index)
   useEffect(() => {
     if (book) setPageMeta(`${shortTitle(book.title)}${cleanAuthor(book.author) ? ' — ' + cleanAuthor(book.author) : ''} | 책콕`, `/book/${book.isbn13}`)
@@ -1503,6 +1503,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary, hits }) {
         <LibraryStatusSheet
           book={book}
           libs={libs}
+          setLibs={setLibs}
           onClose={() => setLibOpen(false)}
           onPick={() => {
             setLibOpen(false)
@@ -2045,8 +2046,388 @@ function Sheet({ label, onClose, children }) {
   )
 }
 
+/* ================= 도서관 (근처 도서관 · 도서관 페이지) ================= */
+
+const REGION_LIST = [
+  ['11', '서울'], ['31', '경기'], ['23', '인천'], ['21', '부산'], ['22', '대구'], ['24', '광주'], ['25', '대전'], ['26', '울산'], ['29', '세종'],
+  ['32', '강원'], ['33', '충북'], ['34', '충남'], ['35', '전북'], ['36', '전남'], ['37', '경북'], ['38', '경남'], ['39', '제주'],
+]
+const REGION_RE = [
+  [/^서울/, '11'], [/^부산/, '21'], [/^대구/, '22'], [/^인천/, '23'], [/^광주/, '24'], [/^대전/, '25'], [/^울산/, '26'], [/^세종/, '29'],
+  [/^경기/, '31'], [/^강원/, '32'], [/^(충북|충청북)/, '33'], [/^(충남|충청남)/, '34'], [/^(전북|전라북)/, '35'], [/^(전남|전라남)/, '36'],
+  [/^(경북|경상북)/, '37'], [/^(경남|경상남)/, '38'], [/^제주/, '39'],
+]
+const regionOfAddr = (a) => REGION_RE.find(([re]) => re.test((a || '').trim()))?.[1] || null
+const cityOfAddr = (a) => (a || '').trim().split(/\s+/)[1] || ''
+const mapLink = (l) => (l.lat && l.lng ? `https://map.kakao.com/link/map/${encodeURIComponent(l.name)},${l.lat},${l.lng}` : `https://map.kakao.com/link/search/${encodeURIComponent(l.name)}`)
+const DAY_KO = { Sunday: '일', Monday: '월', Tuesday: '화', Wednesday: '수', Thursday: '목', Friday: '금', Saturday: '토' }
+const hourLabel = (h) => (h === 0 ? '자정' : h < 12 ? `오전 ${h}시` : h === 12 ? '낮 12시' : `오후 ${h - 12}시`)
+
+function libStatus(l) {
+  if (l.hasBook === false) return ['소장 확인 안 됨', 'muted']
+  if (l.loanAvailable === true) return ['대출 가능', 'up']
+  if (l.loanAvailable === false) return ['대출 중', 'warn']
+  return ['소장 · 대출 여부 모름', 'muted']
+}
+
+function NearbyLibraries({ book, libs, setLibs }) {
+  const [region, setRegion] = useStored('chaekkok.region', regionOfAddr(libs[0]?.address))
+  const [pos, setPos] = useState(null)
+  const [locMsg, setLocMsg] = useState('')
+  const [res, setRes] = useState({ loading: false, data: null, error: null })
+  const [more, setMore] = useState(false)
+  const isbn = firstIsbn(book.isbn13)
+
+  useEffect(() => {
+    if (!pos && !region) return
+    let off = false
+    setRes({ loading: true, data: null, error: null })
+    supabase.functions
+      .invoke('library-info', {
+        body: pos
+          ? { action: 'nearby', isbn, lat: pos.lat, lng: pos.lng }
+          : { action: 'nearby', isbn, region, prefer: libs.map((l) => l.libCode), preferCities: [...new Set(libs.map((l) => cityOfAddr(l.address)).filter(Boolean))] },
+      })
+      .then(({ data, error }) => {
+        if (off) return
+        if (error || !data || data.error) return setRes({ loading: false, data: null, error: '지금은 도서관 정보를 불러올 수 없어요. 잠시 뒤 다시 시도해 주세요.' })
+        if (pos && data.region && data.region !== region) setRegion(data.region)
+        setRes({ loading: false, data, error: null })
+      })
+    return () => {
+      off = true
+    }
+  }, [isbn, region, pos]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const locate = () => {
+    if (!navigator.geolocation) return setLocMsg('이 기기에서는 위치를 쓸 수 없어요. 지역을 골라 주세요.')
+    setLocMsg('위치를 확인하는 중이에요…')
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setLocMsg('')
+        setPos({ lat: Math.round(p.coords.latitude * 1e4) / 1e4, lng: Math.round(p.coords.longitude * 1e4) / 1e4 })
+      },
+      () => setLocMsg('위치 권한이 꺼져 있어요. 지역을 골라 주시면 그 지역에서 찾아볼게요.'),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 },
+    )
+  }
+  const toggleSave = (l) =>
+    setLibs((cur) =>
+      cur.some((x) => x.libCode === l.libCode)
+        ? cur.filter((x) => x.libCode !== l.libCode)
+        : cur.length >= MAX_LIBS
+          ? cur
+          : [...cur, { libCode: l.libCode, name: l.name, address: l.address, homepage: l.homepage }],
+    )
+  const d = res.data
+  const list = d?.libs || []
+  const shown = more ? list : list.slice(0, 8)
+  const regionName = REGION_LIST.find(([c]) => c === (d?.region || region))?.[1]
+  return (
+    <div className="nearby">
+      <div className="nearby__head">
+        <p className="alt__title">근처에서 이 책 가진 도서관</p>
+        <div className="nearby__controls">
+          <button className={`pill pill--btn${pos ? ' is-on' : ''}`} onClick={locate}>
+            내 위치로 찾기
+          </button>
+          <label className="nearby__region">
+            <span className="sr-only">지역</span>
+            <select
+              value={pos ? '' : region || ''}
+              onChange={(e) => {
+                setPos(null)
+                setRegion(e.target.value || null)
+              }}
+            >
+              <option value="">{pos ? '내 위치 기준' : '지역 선택'}</option>
+              {REGION_LIST.map(([c, n]) => (
+                <option key={c} value={c}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+      {locMsg && <p className="sub small">{locMsg}</p>}
+      {!pos && !region && <p className="sub">내 위치를 켜거나 지역을 고르면, 이 책을 가진 도서관을 찾아 대출 가능 여부까지 확인해 드려요.</p>}
+      {res.loading && <p className="state">이 책을 가진 도서관을 찾는 중이에요…</p>}
+      {res.error && <p className="state state--error">{res.error}</p>}
+      {d && !res.loading && d.total === 0 && <p className="sub">{regionName} 지역에는 이 책을 가진 공공도서관이 정보나루에 없어요. 다른 지역을 골라 보거나 아래 책바다를 이용해 보세요.</p>}
+      {d && !res.loading && d.total > 0 && (
+        <>
+          <p className="sub small">
+            {regionName} {d.total.toLocaleString()}곳이 이 책을 가지고 있어요 · {d.sortedBy === 'distance' ? '가까운 순' : d.sortedBy === 'city' ? '내 도서관과 같은 시·군 먼저' : '이름순'} · 위 {d.checked}곳은 대출 가능 여부까지 확인했어요
+          </p>
+          <div className="libs">
+            {shown.map((l) => {
+              const [label, tone] = libStatus(l)
+              const saved = libs.some((x) => x.libCode === l.libCode)
+              return (
+                <div key={l.libCode} className="lib lib--near">
+                  <a className="lib__info" href={`/library/${l.libCode}`}>
+                    <strong>{l.name}</strong>
+                    <span className="sub">
+                      {l.distanceKm != null ? `${l.distanceKm}km · ` : ''}
+                      {l.address}
+                    </span>
+                    <span className="lib__badges">
+                      <span className={`pill pill--${tone}`}>{label}</span>
+                      {l.closedToday && <span className="pill pill--warn">오늘 휴관</span>}
+                    </span>
+                  </a>
+                  <span className="lib__acts">
+                    <a className="pill pill--btn" href={mapLink(l)} target="_blank" rel="noopener noreferrer">지도</a>
+                    <button className={`pill pill--btn${saved ? ' is-on' : ''}`} onClick={() => toggleSave(l)} disabled={!saved && libs.length >= MAX_LIBS} aria-pressed={saved}>
+                      {saved ? '찜함' : '찜'}
+                    </button>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          {list.length > 8 && !more && (
+            <button className="btn btn--soft btn--full" onClick={() => setMore(true)}>
+              {list.length - 8}곳 더 보기
+            </button>
+          )}
+          <p className="sub small">도서관 정보나루 기준 · {fmtDate(d.checkedAt)} 확인. 대출 상태는 도서관에서 하루 한 번 보내는 정보라 실제와 다를 수 있어요. 가기 전에 도서관에 전화로 확인해 보세요.</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+function useLibraryInfo(libCode) {
+  const [res, setRes] = useState({ loading: true, data: null, error: null })
+  useEffect(() => {
+    let off = false
+    setRes({ loading: true, data: null, error: null })
+    supabase.functions.invoke('library-info', { body: { action: 'library', libCode } }).then(({ data, error }) => {
+      if (off) return
+      if (error || !data || data.error) return setRes({ loading: false, data: null, error: '도서관 정보를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.' })
+      setRes({ loading: false, data, error: null })
+    })
+    return () => {
+      off = true
+    }
+  }, [libCode])
+  return res
+}
+
+// 우리 DB에 있는 책은 책콕 상세로, 없는 책은 정보나루 상세로
+function useKnownIsbns(isbns) {
+  const [known, setKnown] = useState(new Set())
+  const key = isbns.join(',')
+  useEffect(() => {
+    if (!isbns.length) return
+    let off = false
+    supabase
+      .from('books')
+      .select('isbn13')
+      .in('isbn13', isbns.slice(0, 100))
+      .then(({ data }) => {
+        if (!off) setKnown(new Set((data || []).map((r) => r.isbn13)))
+      })
+    return () => {
+      off = true
+    }
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return known
+}
+
+function BarRow({ items, labelOf, unit = '%' }) {
+  const max = Math.max(...items.map((x) => x.loan), 1)
+  const top = items.reduce((a, b) => (b.loan > a.loan ? b : a), items[0])
+  return (
+    <div className="bars" role="img" aria-label={`가장 많이 빌리는 때: ${labelOf(top)}`}>
+      {items.map((x, i) => (
+        <span key={i} className={`bars__col${x === top ? ' is-top' : ''}`}>
+          <span className="bars__val num">{x.loan ? `${x.loan}${unit}` : ''}</span>
+          <span className="bars__bar barup" style={{ height: `${Math.max(4, (x.loan / max) * 72)}px`, animationDelay: `${0.2 + i * 0.03}s` }} />
+          <span className="bars__label">{labelOf(x, true)}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function LibraryPage({ libCode, libs, setLibs }) {
+  const { loading, data, error } = useLibraryInfo(libCode)
+  const [kids, setKids] = useState(false)
+  const pop = (data?.popular || []).filter((b) => kids || !b.kids)
+  const news = (data?.newBooks || []).filter((b) => kids || !b.kids)
+  const known = useKnownIsbns([...pop.slice(0, 15), ...news.slice(0, 10)].map((b) => b.isbn13).filter(Boolean))
+  const saved = libs.some((x) => x.libCode === libCode)
+  const info = data?.info
+  useEffect(() => {
+    if (info?.name) setPageMeta(`${info.name} | 책콕`, `/library/${libCode}`)
+  }, [info?.name, libCode])
+  const back = () => (window.history.length > 1 ? window.history.back() : go('/my'))
+  const toggleSave = () =>
+    setLibs((cur) =>
+      cur.some((x) => x.libCode === libCode)
+        ? cur.filter((x) => x.libCode !== libCode)
+        : cur.length >= MAX_LIBS
+          ? cur
+          : [...cur, { libCode, name: info.name, address: info.address, homepage: info.homepage }],
+    )
+  const hours = (data?.hours || []).filter((h) => h.hour >= 6 && h.hour <= 23)
+  const days = data?.days || []
+  const topHour = hours.length ? hours.reduce((a, b) => (b.loan > a.loan ? b : a)) : null
+  const topDay = days.length ? days.reduce((a, b) => (b.loan > a.loan ? b : a)) : null
+  const period = data?.periodDays === 30 ? '최근 30일' : data?.periodDays === 90 ? '최근 3개월' : data?.periodDays === 365 ? '최근 1년' : ''
+  const bookLink = (b) => (known.has(b.isbn13) ? { href: `/book/${b.isbn13}` } : b.url ? { href: b.url, target: '_blank', rel: 'noopener noreferrer' } : null)
+  const BookLine = ({ b, i, meta }) => {
+    const link = bookLink(b)
+    const inner = (
+      <>
+        {i != null && <span className={`row__rank num${i === 0 ? ' is-first' : ''}`}>{i + 1}</span>}
+        <Cover src={b.cover} alt="" className="row__cover" title={b.title} />
+        <span className="row__info">
+          <span className="row__title">{shortTitle(b.title)}</span>
+          <span className="row__meta">{[cleanAuthor(b.author), meta].filter(Boolean).join(' · ')}</span>
+        </span>
+      </>
+    )
+    return link ? (
+      <a className="row" {...link}>
+        {inner}
+      </a>
+    ) : (
+      <div className="row">{inner}</div>
+    )
+  }
+  return (
+    <>
+      <header className="detail__bar">
+        <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
+        {info && (
+          <button className={`pill pill--btn libpage__save${saved ? ' is-on' : ''}`} onClick={toggleSave} disabled={!saved && libs.length >= MAX_LIBS} aria-pressed={saved}>
+            {saved ? '내 도서관 ✓' : '도서관 찜하기'}
+          </button>
+        )}
+      </header>
+      {loading && <section className="card"><Loading /></section>}
+      {error && <section className="card"><p className="state state--error">{error}</p></section>}
+      {info && (
+        <>
+          <header className="pagehead pagehead--tight">
+            <Eyebrow>LIBRARY</Eyebrow>
+            <h1 className="h1 display libpage__title">{info.name}</h1>
+            <span className="sub">{info.address}</span>
+            <span className="lib__badges">
+              {info.closedToday && <span className="pill pill--warn">오늘 휴관</span>}
+              {data.fresh && <span className="pill pill--up">최근 데이터 있음</span>}
+            </span>
+          </header>
+          <div className="stack">
+            <section className="card rise">
+              <div className="libpage__acts">
+                <a className="btn btn--soft" href={mapLink(info)} target="_blank" rel="noopener noreferrer">지도 보기</a>
+                {info.tel && <a className="btn btn--soft" href={`tel:${info.tel.replace(/[^\d-]/g, '')}`}>전화하기</a>}
+                {info.homepage && <a className="btn btn--soft" href={info.homepage} target="_blank" rel="noopener noreferrer">홈페이지</a>}
+              </div>
+              {info.operatingTime && (
+                <div className="libpage__row">
+                  <span className="label">운영시간</span>
+                  <p>{info.operatingTime}</p>
+                </div>
+              )}
+              {info.closed && (
+                <div className="libpage__row">
+                  <span className="label">휴관일</span>
+                  <p>{info.closed}</p>
+                </div>
+              )}
+              {data.bookCount != null && (
+                <div className="libpage__row">
+                  <span className="label">장서</span>
+                  <p className="num">{data.bookCount.toLocaleString()}권</p>
+                </div>
+              )}
+              <p className="sub small">운영 정보는 정보나루에 등록된 내용이에요. 공휴일·임시 휴관은 도서관 홈페이지에서 확인해 주세요.</p>
+            </section>
+
+            {!data.fresh && (
+              <section className="card">
+                <p className="notice notice--box">이 도서관은 최근 대출 기록이 정보나루에 충분히 올라오지 않았어요. 아래 인기 책은 기간을 넓혀({period}) 보여드려요.</p>
+              </section>
+            )}
+
+            {(hours.length > 0 || days.length > 0) && (
+              <section className="card rise" style={{ animationDelay: '0.1s' }}>
+                <Eyebrow>BUSY TIME</Eyebrow>
+                <h2 className="h2 display">언제 많이 빌릴까요</h2>
+                {topHour && (
+                  <p className="sub">
+                    {topDay && (
+                      <>
+                        요일은 <b>{DAY_KO[topDay.day] || topDay.day}요일</b>,{' '}
+                      </>
+                    )}
+                    시간은 <b>{hourLabel(topHour.hour)}</b> 무렵에 대출이 가장 많아요. 한산할 때 가고 싶다면 이때를 피해 보세요.
+                  </p>
+                )}
+                {hours.length > 0 && (
+                  <>
+                    <p className="label">시간대별</p>
+                    <BarRow items={hours} labelOf={(x, short) => (short ? `${x.hour}` : hourLabel(x.hour))} />
+                  </>
+                )}
+                {days.length > 0 && (
+                  <>
+                    <p className="label">요일별</p>
+                    <BarRow items={days} labelOf={(x) => DAY_KO[x.day] || x.day} />
+                  </>
+                )}
+                <p className="sub small">정보나루가 집계한 이 도서관의 전체 대출 중 시간대·요일별 비율(%)이에요.</p>
+              </section>
+            )}
+
+            {data.popular?.length > 0 && (
+              <section className="card card--list rise" style={{ animationDelay: '0.15s' }}>
+                <div className="card__head">
+                  <div className="titlegroup">
+                    <Eyebrow tone="up">POPULAR HERE</Eyebrow>
+                    <h2 className="h2 display">이 도서관 인기 책</h2>
+                  </div>
+                  <button className={`pill pill--btn${kids ? ' is-on' : ''}`} onClick={() => setKids(!kids)} aria-pressed={kids}>
+                    어린이 책 {kids ? '포함' : '제외'}
+                  </button>
+                </div>
+                <p className="sub libpage__lead">{period} 대출 순위예요</p>
+                {pop.slice(0, 10).map((b, i) => (
+                  <BookLine key={b.isbn13 + i} b={b} i={i} />
+                ))}
+                {pop.length === 0 && <p className="state">어린이 책을 빼면 남는 책이 없어요. '어린이 책 포함'을 눌러 보세요.</p>}
+              </section>
+            )}
+
+            {news.length > 0 && (
+              <section className="card card--list rise" style={{ animationDelay: '0.2s' }}>
+                <div className="card__head">
+                  <div className="titlegroup">
+                    <Eyebrow tone="spot">NEW ARRIVALS</Eyebrow>
+                    <h2 className="h2 display">새로 들어온 책</h2>
+                  </div>
+                </div>
+                {news.slice(0, 10).map((b, i) => (
+                  <BookLine key={b.isbn13 + i} b={b} meta={b.regDate ? `${fmtDate(b.regDate)} 등록` : ''} />
+                ))}
+              </section>
+            )}
+            <p className="foot">데이터 출처: 도서관 정보나루 · {fmtDate(data.checkedAt)} 확인</p>
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 // 이 책이 내 도서관에 있는지, 지금 빌릴 수 있는지 (Edge Function book-exist -> 정보나루 bookExist)
-function LibraryStatusSheet({ book, libs, onClose, onPick }) {
+function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick }) {
   const [state, setState] = useState({ loading: libs.length > 0, results: {}, error: null })
   useEffect(() => {
     if (libs.length === 0) return
@@ -2074,16 +2455,12 @@ function LibraryStatusSheet({ book, libs, onClose, onPick }) {
     <Sheet label="내 도서관 소장 현황" onClose={onClose}>
       <div className="sheet__head">
         <div>
-          <h2 className="h2">내 도서관에 있을까요</h2>
+          <h2 className="h2">어디서 빌릴까요</h2>
           <p className="sub">{shortTitle(book.title)}</p>
         </div>
       </div>
       {libs.length === 0 ? (
-        <div className="empty">
-          <p>아직 찜한 도서관이 없어요.</p>
-          <p className="sub">자주 가는 도서관을 최대 {MAX_LIBS}곳까지 찜할 수 있어요.</p>
-          <button className="btn btn--primary" onClick={onPick}>도서관 찾기</button>
-        </div>
+        <p className="sub">찜한 도서관이 없어서 근처 도서관에서 찾아볼게요. 자주 가는 곳은 '찜'을 눌러 두면 다음부터 맨 위에 보여요.</p>
       ) : (
         <div className="libs">
           {state.error && <p className="state state--error">{state.error}</p>}
@@ -2091,20 +2468,19 @@ function LibraryStatusSheet({ book, libs, onClose, onPick }) {
             const [label, tone] = status(state.results[l.libCode])
             return (
               <div key={l.libCode} className="lib">
-                <div className="lib__info">
+                <a className="lib__info" href={`/library/${l.libCode}`}>
                   <strong>{l.name}</strong>
                   <span className="sub">{l.address}</span>
-                </div>
+                </a>
                 {state.loading ? <span className="pill">확인 중…</span> : <span className={`pill pill--${tone}`}>{label}</span>}
-                {l.homepage && (
-                  <a className="lib__go" href={l.homepage} target="_blank" rel="noopener noreferrer" aria-label={`${l.name} 홈페이지`}>
-                    {Icon.chev()}
-                  </a>
-                )}
+                <a className="lib__go" href={`/library/${l.libCode}`} aria-label={`${l.name} 도서관 정보`}>
+                  {Icon.chev()}
+                </a>
               </div>
             )
           })}
           <p className="sub small">소장·대출 정보는 도서관 정보나루 기준이라 실제와 조금 다를 수 있어요.</p>
+
           {!state.loading && !state.error && libs.some((l) => {
             const r = state.results[l.libCode]
             return r && !r.error && (!r.hasBook || r.loanAvailable === false)
@@ -2131,13 +2507,9 @@ function LibraryStatusSheet({ book, libs, onClose, onPick }) {
           )}
         </div>
       )}
+      <NearbyLibraries book={book} libs={libs} setLibs={setLibs} />
       <div className="sheet__actions">
-        {libs.length > 0 && <button className="btn btn--soft" onClick={onPick}>도서관 관리</button>}
-        {book.detail_url && (
-          <a className="btn btn--soft" href={book.detail_url} target="_blank" rel="noopener noreferrer">
-            다른 도서관 보기
-          </a>
-        )}
+        <button className="btn btn--soft" onClick={onPick}>{libs.length > 0 ? '내 도서관 관리' : '도서관 이름으로 찾기'}</button>
       </div>
     </Sheet>
   )
@@ -2439,10 +2811,10 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
           {libs.length === 0 && <p className="sub">자주 가는 도서관을 찜하면 책 상세에서 바로 소장·대출 여부를 볼 수 있어요.</p>}
           {libs.map((l) => (
             <div key={l.libCode} className="line line--static">
-              <span className="lib__info">
+              <a className="lib__info" href={`/library/${l.libCode}`}>
                 <strong>{l.name}</strong>
-                <span className="sub">{l.address}</span>
-              </span>
+                <span className="sub">{l.address} · 운영시간·인기 책 보기</span>
+              </a>
               <button className="pill pill--btn" onClick={() => setLibs(libs.filter((x) => x.libCode !== l.libCode))}>
                 삭제
               </button>
@@ -2719,7 +3091,8 @@ export default function App() {
         {route.name === 'trend' && (
           <Trend tab={trendTab} feed={feed} loading={loading} error={error} prefs={prefs} interests={interests} setInterests={setInterests} demo={demo} onOpenFilter={() => setSheet(true)} />
         )}
-        {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} onPickLibrary={() => setLibPicker(true)} hits={hits} />}
+        {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} hits={hits} />}
+        {route.name === 'library' && route.param && <LibraryPage libCode={route.param} libs={libs} setLibs={setLibs} />}
         {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} hits={hits} />}
         {route.name === 'search' && <Search />}
         {route.name === 'keyword' && route.param && <KeywordPage word={route.param} index={index} />}

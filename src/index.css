@@ -2467,3 +2467,161 @@ a.kw__main {
 .switch.is-busy i {
   animation: blink 1s ease-in-out infinite;
 }
+
+/* ---------- 근처 도서관 ---------- */
+.nearby {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-2);
+}
+.nearby__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nearby__head .alt__title {
+  margin: 0;
+}
+.nearby__controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.nearby__region select {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.nearby .sub.small {
+  margin-top: 8px;
+}
+.lib--near {
+  align-items: flex-start;
+}
+.lib--near .lib__info {
+  gap: 4px;
+}
+.lib__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.lib__badges .pill {
+  font-size: 11.5px;
+  padding: 3px 8px;
+}
+.lib__acts {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-self: center;
+}
+.lib__acts .pill {
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+}
+.lib--near {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.lib--near:last-child {
+  border-bottom: 0;
+}
+a.lib__info {
+  color: inherit;
+}
+
+/* ---------- 도서관 페이지 ---------- */
+.libpage__title {
+  word-break: keep-all;
+}
+.libpage__save {
+  align-self: center;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+}
+.libpage__acts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.libpage__acts .btn {
+  height: 44px;
+  font-size: 14px;
+}
+.libpage__row {
+  margin-top: 14px;
+}
+.libpage__row p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  word-break: keep-all;
+}
+.libpage__lead {
+  padding: 0 20px;
+  margin-top: -4px;
+}
+.notice--box {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff4e5;
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 110px;
+  margin: 8px 0 6px;
+}
+.bars__col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+}
+.bars__bar {
+  width: 100%;
+  max-width: 22px;
+  border-radius: 6px 6px 3px 3px;
+  background: var(--line);
+  transform-origin: bottom;
+}
+.bars__col.is-top .bars__bar {
+  background: var(--accent);
+}
+.bars__val {
+  font-size: 9.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.bars__col.is-top .bars__val {
+  color: var(--accent);
+  font-weight: 800;
+}
+.bars__label {
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
