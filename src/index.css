@@ -3021,3 +3021,11 @@ a.lib__info {
   min-width: 0;
   font-size: 13.5px;
 }
+
+/* 형광펜 숫자는 칸 안의 큰 숫자 크기를 그대로 쓴다 (.hitgrid span 작은 글씨 규칙에 걸리지 않게) */
+.hitgrid strong .hl,
+.statgrid strong .hl {
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
+}

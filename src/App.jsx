@@ -2860,9 +2860,8 @@ function MyHits({ wish, hits }) {
   return (
     <section className="card myhits">
       <h2 className="h3">내 콕 적중 기록</h2>
-      {wish.length === 0 ? (
-        <p className="sub">요즘 뜰 것 같은 책을 콕해 두세요. 나중에 분야 TOP10에 들면 '적중'으로 기록돼요.</p>
-      ) : (
+      {wish.length === 0 && <p className="sub">요즘 뜰 것 같은 책을 콕해 두세요. 나중에 분야 TOP10에 들면 '적중'으로 기록돼요.</p>}
+      {(
         <>
           <div className="hitgrid hitgrid--3">
             <div>
@@ -2887,7 +2886,7 @@ function MyHits({ wish, hits }) {
               </strong>
             </div>
           </div>
-          {fastest ? (
+          {wish.length === 0 ? null : fastest ? (
             <p className="hitline">
               {Icon.ginkgo(true, 18)}
               <span>
