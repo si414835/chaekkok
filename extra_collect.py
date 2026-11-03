@@ -23,6 +23,9 @@ KEY = os.environ["DATA4LIBRARY_KEY"]
 NL_KEY = os.environ.get("NL_API_KEY")  # 국립중앙도서관 키 (출간예정 조회용, 없으면 그 단계만 건너뜀)
 SEOJI_URL = "https://www.nl.go.kr/seoji/SearchApi.do"
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+import api_budget  # noqa: E402
+from api_budget import BudgetExceeded  # noqa: E402
+api_budget.init(supabase)
 BASE = "http://data4library.kr/api/"
 KST = timezone(timedelta(hours=9))
 
@@ -32,13 +35,12 @@ AGE_GROUPS = [("all", None, None), ("10", 10, 19), ("20", 20, 29), ("30", 30, 39
 # 성별: 정보나루 gender 코드 그대로 저장 ('all'은 전체). 화면에서 남/여로 바꿔 보여준다.
 GENDERS = ["all", "0", "1"]
 DEMO_PAGE_SIZE = 50
-USAGE_LIMIT = 200          # 하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수
+USAGE_LIMIT = 170          # 하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수
 USAGE_REFRESH_DAYS = 14    # 이 기간 안에 받은 책은 건너뜀 (월별 데이터라 2주면 충분)
-COLOAN_LIMIT = 40          # 같이 빌린 책 중 책콕에 없는 책을 하루에 몇 권 정식으로 등록할지
+COLOAN_LIMIT = 30          # 같이 빌린 책 중 책콕에 없는 책을 하루에 몇 권 정식으로 등록할지
 # 정보나루 호출 예산: 이 스크립트가 하루에 쓰는 최대 호출 수.
-# collect.py(약 25회) + 이 스크립트 + 화면에서 쓰는 도서관 조회까지 합쳐 하루 500회 안쪽을 지킨다.
-# (2017 공지: IP 미등록 시 1일 500건 이상 제한 / 2023 공지: 1일 30,000건 제한. 보수적으로 500 기준)
-CALL_BUDGET = int(os.environ.get("CALL_BUDGET", "330"))
+# 하루 합계는 api_budget.py가 DB에서 같이 센다 (IP 미등록 키는 하루 500건 넘으면 막힘, 2026-11-03 실제 확인).
+CALL_BUDGET = int(os.environ.get("CALL_BUDGET", "280"))
 _calls = 0
 
 
@@ -53,17 +55,14 @@ def safe_err(e):
     return msg[:300]
 
 
-class BudgetExceeded(Exception):
-    pass
-
-
 def call(api, params, retries=(5, 15, 30)):
     global _calls
     p = {"authKey": KEY, "format": "json", **params}
     last = None
     for attempt, wait in enumerate((0,) + tuple(retries)):
         if _calls >= CALL_BUDGET:  # 재시도도 한 번의 호출로 센다
-            raise BudgetExceeded(f"오늘 호출 예산 {CALL_BUDGET}회를 다 씀")
+            raise BudgetExceeded(f"이 스크립트 예산 {CALL_BUDGET}회를 다 씀")
+        api_budget.spend()
         _calls += 1
         if wait:
             time.sleep(wait)
@@ -73,8 +72,12 @@ def call(api, params, retries=(5, 15, 30)):
             data = res.json()
             err = (data.get("response") or {}).get("error")
             if err:
+                if api_budget.is_limit_error(err):
+                    raise BudgetExceeded(f"정보나루 하루 한도: {err}")
                 raise RuntimeError(f"API 오류: {err}")
             return data
+        except BudgetExceeded:
+            raise
         except Exception as e:  # 연결 끊김, JSON 아님, API 오류 모두 재시도
             last = e
             print(f"  [재시도 {attempt + 1}] {api}: {safe_err(e)}")

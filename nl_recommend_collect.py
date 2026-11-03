@@ -25,6 +25,8 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+import api_budget  # noqa: E402
+api_budget.init(supabase)
 
 SASEO_URL = "https://nl.go.kr/NL/search/openApi/saseoApi.do"
 
@@ -102,6 +104,7 @@ def lookup_cover(isbn13):
         return None
     first_isbn = isbn13.split()[0]  # 'ISBN1 ISBN2'처럼 여러 개 붙어 오는 경우가 있음
     try:
+        api_budget.spend()  # 정보나루 하루 호출 수에 같이 센다
         res = requests.get(
             DETAIL_URL,
             params={"authKey": DATA4LIBRARY_KEY, "isbn13": first_isbn, "format": "json"},

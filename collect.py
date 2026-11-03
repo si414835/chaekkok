@@ -10,12 +10,15 @@ import time
 from datetime import datetime, timedelta, timezone
 import requests
 from supabase import create_client
+import api_budget
+from api_budget import BudgetExceeded
 
 DATA4LIBRARY_KEY = os.environ["DATA4LIBRARY_KEY"]
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+api_budget.init(supabase)
 
 HOT_TREND_URL = "http://data4library.kr/api/hotTrend"
 LOAN_ITEM_URL = "http://data4library.kr/api/loanItemSrch"
@@ -41,12 +44,16 @@ def get_with_retry(url, params, max_retries=4, timeout=60):
     기존에는 연결 실패만 재시도해서, 응답이 느리면 그 자리에서 수집이 멈췄다."""
     last_error = None
     for attempt in range(1, max_retries + 1):
+        if "data4library" in url:
+            api_budget.spend()  # 한도를 넘으면 여기서 BudgetExceeded
         try:
             res = requests.get(url, params=params, timeout=timeout)
             res.raise_for_status()
             data = res.json()
             api_error = (data.get("response") or {}).get("error")
             if api_error:
+                if api_budget.is_limit_error(api_error):
+                    raise BudgetExceeded(f"정보나루 하루 한도: {api_error}")
                 raise RuntimeError(f"API 오류 응답: {api_error}")
             return data
         except (requests.exceptions.RequestException, ValueError, RuntimeError) as e:
@@ -241,6 +248,8 @@ def collect_loan_items(snapshot_date=None, with_child=True):
                 total += count
                 log_run("popular", str(part), "ok", count)
                 print(f"[loanItemSrch] {part}: {count}건 저장")
+            except BudgetExceeded:
+                raise
             except Exception as e:
                 failed.append(part)
                 print(f"[loanItemSrch] {part}: 실패 - {e}")
@@ -282,7 +291,11 @@ def main():
     # 예: python collect.py --backfill 2026-10-27 2026-10-28  -> 그 날짜들만 200위까지 다시 받기
     if "--backfill" in sys.argv:
         for d in sys.argv[sys.argv.index("--backfill") + 1:]:
-            collect_loan_items(snapshot_date=d, with_child=False)
+            try:
+                collect_loan_items(snapshot_date=d, with_child=False)
+            except BudgetExceeded as e:
+                print(f"::warning::되채우기 중단 - {e}")
+                break
         return
     try:
         count = collect_hot_trend()
@@ -291,11 +304,15 @@ def main():
         log_run("rising", None, "failed", 0, e)
         print(f"::warning::hotTrend 수집 실패: {e}")
 
-    collect_loan_items()
+    try:
+        collect_loan_items()
+    except BudgetExceeded as e:
+        print(f"::warning::인기대출 수집 중단 - {e}")
+        return
     try:
         backfill_shallow_days()
     except Exception as e:
-        print(f"::warning::지난 날짜 되채우기 실패: {e}")
+        print(f"::warning::지난 날짜 되채우기 멈춤: {e}")
     print("\n전체 수집 완료")
 
 

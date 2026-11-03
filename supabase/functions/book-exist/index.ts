@@ -12,6 +12,30 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
+// 정보나루 하루 호출 수를 수집 스크립트와 같이 센다 (IP 미등록 키는 하루 500건 넘으면 막힘)
+const DAILY_LIMIT = 495;
+async function spend(): Promise<boolean> {
+  try {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/add_api_calls`, {
+      method: "POST",
+      headers: {
+        apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ n: 1 }),
+      signal: AbortSignal.timeout(4000),
+    });
+    const total = await res.json();
+    return typeof total !== "number" || total <= DAILY_LIMIT;
+  } catch (_e) {
+    return true; // 세는 데 실패해도 화면 기능은 막지 않는다
+  }
+}
+
+// 같은 도서관·같은 책은 30분 동안 기억해 호출을 아낀다
+const cache = new Map<string, { at: number; v: unknown }>();
+
 function pick(obj: unknown, key: string): unknown {
   if (!obj || typeof obj !== "object") return undefined;
   const o = obj as Record<string, unknown>;
@@ -24,8 +48,12 @@ function pick(obj: unknown, key: string): unknown {
 }
 
 async function check(libCode: string, isbn13: string) {
+  const ck = `${libCode}:${isbn13}`;
+  const hit = cache.get(ck);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000) return hit.v;
   const url = `http://data4library.kr/api/bookExist?authKey=${encodeURIComponent(KEY)}&libCode=${libCode}&isbn13=${isbn13}&format=json`;
   for (let attempt = 0; attempt < 2; attempt++) {
+    if (!(await spend())) return { libCode, error: true, limit: true };
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
       const data = await res.json();
@@ -33,7 +61,10 @@ async function check(libCode: string, isbn13: string) {
       const loan = pick(data, "loanAvailable");
       if (has === undefined) throw new Error("no result");
       // 대출 가능 여부 항목이 없으면 '모름(null)'으로 돌려줘서 화면이 '대출 중'으로 잘못 표시하지 않게 한다
-      return { libCode, hasBook: has === "Y", loanAvailable: loan === undefined ? null : loan === "Y" };
+      const v = { libCode, hasBook: has === "Y", loanAvailable: loan === undefined ? null : loan === "Y" };
+      cache.set(ck, { at: Date.now(), v });
+      if (cache.size > 500) cache.delete(cache.keys().next().value!);
+      return v;
     } catch (_e) {
       // 정보나루 서버가 가끔 연결을 끊어서 한 번 더 시도
     }

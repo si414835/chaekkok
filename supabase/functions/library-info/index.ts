@@ -28,10 +28,32 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
   return v;
 }
 
+// 정보나루 하루 호출 수를 수집 스크립트와 같이 센다 (IP 미등록 키는 하루 500건 넘으면 막힘)
+const DAILY_LIMIT = 495;
+async function spend(): Promise<boolean> {
+  try {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/add_api_calls`, {
+      method: "POST",
+      headers: {
+        apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ n: 1 }),
+      signal: AbortSignal.timeout(4000),
+    });
+    const total = await res.json();
+    return typeof total !== "number" || total <= DAILY_LIMIT;
+  } catch (_e) {
+    return true; // 세는 데 실패해도 화면 기능은 막지 않는다
+  }
+}
+
 // deno-lint-ignore no-explicit-any
 async function api(path: string, params: Record<string, string | number>): Promise<any | null> {
   const q = new URLSearchParams({ authKey: KEY, format: "json", ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])) });
   for (let attempt = 0; attempt < 2; attempt++) {
+    if (!(await spend())) return null; // 오늘 한도에 닿으면 '모름'으로
     try {
       const res = await fetch(`${BASE}${path}?${q}`, { signal: AbortSignal.timeout(12000) });
       const data = await res.json();
