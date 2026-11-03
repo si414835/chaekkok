@@ -1,0 +1,49 @@
+name: 정보나루 도서관 API 점검 (임시)
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pip install requests
+      - env:
+          K: ${{ secrets.DATA4LIBRARY_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, requests
+          K = os.environ["K"]
+          B = "http://data4library.kr/api/"
+          ISBN = "9791140712250"
+          LIB = "141025"  # 수원시 선경도서관 예시
+          def keys(o, depth=0, out=None):
+              out = out if out is not None else set()
+              if isinstance(o, dict):
+                  for k, v in o.items():
+                      out.add(k); keys(v, depth+1, out)
+              elif isinstance(o, list):
+                  for v in o[:2]: keys(v, depth+1, out)
+              return out
+          tests = {
+            "libSrchByBook (이 책 가진 도서관)": ("libSrchByBook", {"isbn": ISBN, "region": "31"}),
+            "loanItemSrchByLib (도서관별 인기대출)": ("loanItemSrchByLib", {"libCode": LIB, "pageSize": 3}),
+            "usageTrend (도서관 대출반납 추이)": ("usageTrend", {"libCode": LIB, "type": "D"}),
+            "extends/libSrch (도서관 통합정보)": ("extends/libSrch", {"libCode": LIB}),
+            "libSrch (도서관 정보)": ("libSrch", {"libCode": LIB}),
+            "recommandList mania": ("recommandList", {"isbn13": ISBN, "type": "mania"}),
+            "recommandList reader": ("recommandList", {"isbn13": ISBN, "type": "reader"}),
+            "itemSrch (도서관 장서)": ("itemSrch", {"libCode": LIB, "pageSize": 2}),
+            "bookExist": ("bookExist", {"libCode": LIB, "isbn13": ISBN}),
+          }
+          for name, (api, p) in tests.items():
+              try:
+                  r = requests.get(B + api, params={"authKey": K, "format": "json", **p}, timeout=40)
+                  d = r.json()
+                  err = (d.get("response") or {}).get("error")
+                  ks = sorted(keys(d))
+                  print(f"== {name}: HTTP {r.status_code} {'ERROR '+str(err) if err else 'OK'}")
+                  print("   fields:", ", ".join(ks)[:900])
+                  s = json.dumps(d, ensure_ascii=False)
+                  print("   sample:", s[:600].replace(K, "***"))
+              except Exception as e:
+                  print(f"== {name}: 실패 {type(e).__name__}")
+          PY
