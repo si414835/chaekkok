@@ -6,19 +6,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
-          for I in 9791140712250 9788936434120; do
-          echo "########## $I"
+          UA="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+          UA2="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+          I=9791140712250
           for U in \
-            "https://www.aladin.co.kr/shop/wproduct.aspx?ISBN=$I" \
-            "http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=$I" \
-            "https://product.kyobobook.co.kr/detail/$I" \
-            "https://search.kyobobook.co.kr/search?keyword=$I" \
-            "https://www.yes24.com/Product/Search?domain=BOOK&query=$I" \
-            "https://search.shopping.naver.com/book/search?query=$I" ; do
-            echo "== $U"
-            curl -sSL -A "$UA" -m 25 -o /tmp/p -w "final=%{url_effective} code=%{http_code} size=%{size_download}\n" "$U" || true
-            grep -oE 'product\.kyobobook\.co\.kr/detail/S[0-9]+|/Product/Goods/[0-9]+|wproduct\.aspx\?ItemId=[0-9]+|search\.shopping\.naver\.com/book/catalog/[0-9]+|"nvMid":"?[0-9]+' /tmp/p | sort | uniq -c | sort -rn | head -4
+            "https://m.yes24.com/Search?query=$I" \
+            "https://m.yes24.com/search?query=$I&domain=BOOK" \
+            "https://www.yes24.com/product/search?query=$I" \
+            "https://www.yes24.com/Product/Search?domain=ALL&query=$I" ; do
+            for A in "$UA" "$UA2"; do
+            echo "== $U [${A:13:6}]"
+            curl -sSL -A "$A" -H "Accept-Language: ko-KR,ko;q=0.9" -m 25 -o /tmp/p -w "final=%{url_effective} code=%{http_code} size=%{size_download}\n" "$U" || true
+            grep -oE '/Product/Goods/[0-9]+|/Goods/Detail/[0-9]+' /tmp/p | sort | uniq -c | sort -rn | head -3
             grep -oE '<title>[^<]{0,80}' /tmp/p | head -1
-          done; done
-          echo "== robots"; for H in www.kyobobook.co.kr search.kyobobook.co.kr product.kyobobook.co.kr www.yes24.com www.aladin.co.kr search.shopping.naver.com; do echo "-- $H"; curl -sS -m 15 -A "$UA" https://$H/robots.txt | head -15; done
+            done
+          done
+          echo "== yes24 goods page title check"
+          curl -sSL -A "$UA2" -m 25 https://www.yes24.com/Product/Goods/155545012 -o /tmp/g -w "code=%{http_code} size=%{size_download}\n"; grep -oE '<title>[^<]{0,80}' /tmp/g | head -1
+          echo "== kyobo product"; curl -sSL -A "$UA2" -m 25 "http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=$I" -o /tmp/k -w "final=%{url_effective} code=%{http_code} size=%{size_download}\n"
