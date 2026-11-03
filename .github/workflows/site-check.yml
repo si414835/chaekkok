@@ -1,0 +1,35 @@
+name: 정보나루 도서관 API 점검 (임시)
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pip install requests
+      - env:
+          K: ${{ secrets.DATA4LIBRARY_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, requests, time
+          K = os.environ["K"]; B = "http://data4library.kr/api/"
+          def get(api, **p):
+              t = time.time()
+              r = requests.get(B + api, params={"authKey": K, "format": "json", **p}, timeout=60)
+              return r.json(), round(time.time() - t, 1)
+          d, t = get("extends/libSrch", libCode="141025")
+          lib = d["response"]["libs"][0]["lib"]
+          print("extends keys:", list(lib.keys()), t, "s")
+          print("loanByhours:", json.dumps(lib.get("loanByhours"), ensure_ascii=False)[:700])
+          print("loanByDayofWeek:", json.dumps(lib.get("loanByDayofWeek"), ensure_ascii=False)[:500])
+          print("newBooks:", json.dumps(lib.get("newBooks"), ensure_ascii=False)[:900])
+          d, t = get("libSrchByBook", isbn="9791140712250", region="31", pageSize=100)
+          r = d["response"]; print("libSrchByBook pageSize100:", r.get("numFound"), r.get("resultNum"), t, "s")
+          d, t = get("libSrchByBook", isbn="9791140712250", region="31", dtl_region="31010")
+          r = d["response"]; print("libSrchByBook dtl_region 31010:", r.get("numFound"), r.get("resultNum"), [x["lib"]["libName"] for x in r.get("libs", [])][:5], t, "s")
+          d, t = get("loanItemSrchByLib", libCode="141025", startDt="2026-10-03", endDt="2026-11-02", pageSize=5)
+          r = d["response"]; print("byLib 30d:", r.get("resultNum"), [x["doc"]["bookname"][:20] for x in r.get("docs", [])], t, "s", r.get("error"))
+          d, t = get("bookExist", libCode="141143", isbn13="9791140712250")
+          print("bookExist 설악(소장):", d["response"].get("result"), t, "s")
+          d, t = get("usageTrend", libCode="141025", type="D", startDt="2026-10-01", endDt="2026-10-31")
+          print("usageTrend w/ dates:", json.dumps(d, ensure_ascii=False)[:300])
+          PY
