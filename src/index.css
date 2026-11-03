@@ -2767,3 +2767,117 @@ a.lib__info {
   font-size: inherit;
   color: inherit;
 }
+
+/* 하단 시트: 스크롤바가 둥근 모서리를 덮지 않게 잘라 내고, 얇게 */
+.sheet__panel {
+  clip-path: inset(0 round 24px 24px 0 0);
+}
+/* 크롬·사파리는 아래 ::-webkit-scrollbar(화살표 없음)를 쓰고, 그걸 모르는 파이어폭스만 표준 속성을 쓴다
+   (크롬은 표준 속성이 있으면 ::-webkit-scrollbar를 무시하고 화살표가 남는다) */
+@supports not selector(::-webkit-scrollbar) {
+  .sheet__panel {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  }
+}
+.sheet__panel::-webkit-scrollbar {
+  width: 4px;
+}
+.sheet__panel::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.sheet__panel::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 24px 0;
+}
+.sheet__panel::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 2px;
+}
+
+/* 알림 설정: 항목마다 바로 켜고 끄는 스위치 */
+.setrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.setrow:last-child {
+  border-bottom: 0;
+}
+.setrow__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.setrow__text .sub {
+  word-break: keep-all;
+}
+
+/* 설정 화면: 오른쪽에서 밀려 들어온다 */
+.settings {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  margin: 0 auto;
+  max-width: 480px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.settings.is-shown {
+  transform: translateX(0);
+}
+.settings__bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg);
+}
+.settings__title {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0;
+}
+.settings__spacer {
+  width: 40px;
+}
+.settings__body {
+  padding: 8px 16px 32px;
+}
+.settings__group {
+  margin: 18px 4px 8px;
+}
+.settings__card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 0 16px;
+}
+.settings__card .line:last-child {
+  border-bottom: 0;
+}
+.settings__note {
+  padding: 14px 16px;
+}
+.settings__note .sub {
+  margin: 0;
+  word-break: keep-all;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings {
+    transition: none;
+  }
+}

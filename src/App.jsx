@@ -2014,7 +2014,6 @@ function Alerts({ alerts, markRead, clear }) {
 // 알림 설정: 마이 탭 오른쪽 위 톱니바퀴 → 항목 목록 → 항목을 누르면 설명과 켜기/끄기
 function AlertSettingsSheet({ alertState, push, onClose }) {
   const { prefs, setPrefs } = alertState
-  const [open, setOpen] = useState(null)
   const pushDesc =
     push.support === 'ios-home'
       ? '아이폰은 Safari 공유 버튼 → 홈 화면에 추가한 뒤, 홈 화면의 책콕에서 켤 수 있어요.'
@@ -2030,45 +2029,84 @@ function AlertSettingsSheet({ alertState, push, onClose }) {
       <div className="sheet__head">
         <div>
           <h2 className="h2">알림 설정</h2>
-          <p className="sub">항목을 누르면 켜고 끌 수 있어요</p>
+          <p className="sub">스위치를 밀어 켜고 끌 수 있어요</p>
         </div>
       </div>
       <div className="setlist">
         {items.map((it) => (
-          <div key={it.id} className={`setitem${open === it.id ? ' is-open' : ''}`}>
-            <button className="line setitem__head" aria-expanded={open === it.id} onClick={() => setOpen(open === it.id ? null : it.id)}>
+          <div key={it.id} className="setrow">
+            <div className="setrow__text">
               <span className="line__label">{it.label}</span>
-              <span className="line__value">
-                <span className={`setitem__state${it.on ? ' is-on' : ''}`}>{it.busy ? '설정 중…' : it.on ? '켜짐' : '꺼짐'}</span>
-                <span className={`line__chev${open === it.id ? ' is-open' : ''}`}>{Icon.chev()}</span>
-              </span>
+              <span className="sub small">{it.busy ? '설정 중…' : it.desc}</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={it.on}
+              aria-label={it.label}
+              aria-busy={it.busy}
+              disabled={it.disabled}
+              className={`switch${it.on ? ' is-on' : ''}${it.busy ? ' is-busy' : ''}`}
+              onClick={it.toggle}
+            >
+              <i />
             </button>
-            {open === it.id && (
-              <div className="setitem__body">
-                <p className="sub">{it.desc}</p>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={it.on}
-                  aria-label={it.label}
-                  aria-busy={it.busy}
-                  disabled={it.disabled}
-                  className={`switch${it.on ? ' is-on' : ''}${it.busy ? ' is-busy' : ''}`}
-                  onClick={it.toggle}
-                >
-                  <i />
-                </button>
-              </div>
-            )}
           </div>
         ))}
       </div>
       {push.msg && <p className="sub small pushbox__msg">{push.msg}</p>}
-      <a className="line" href="/alerts" onClick={onClose}>
-        <span>받은 알림 보기</span>
-        <span className="line__chev">{Icon.chev()}</span>
-      </a>
     </Sheet>
+  )
+}
+
+// 마이 ⚙: 오른쪽에서 밀려 들어오는 설정 화면
+function SettingsPanel({ alertState, push, onClose }) {
+  useLockBody()
+  const [shown, setShown] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  const close = () => {
+    setShown(false)
+    setTimeout(onClose, 280)
+  }
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && !alertsOpen && close()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+  const onCount = ALERT_TYPES.filter((t) => alertState.prefs[t.id]).length + (push.on ? 1 : 0)
+  return (
+    <div className={`settings${shown ? ' is-shown' : ''}`} role="dialog" aria-modal="true" aria-label="설정">
+      <header className="settings__bar">
+        <button className="iconbtn" onClick={close} aria-label="뒤로">{Icon.back()}</button>
+        <h2 className="settings__title">설정</h2>
+        <span className="settings__spacer" />
+      </header>
+      <div className="settings__body">
+        <p className="label settings__group">알림</p>
+        <div className="settings__card">
+          <button type="button" className="line" onClick={() => setAlertsOpen(true)}>
+            <span className="line__label">알림 설정</span>
+            <span className="line__value">
+              <span className="sub small">{onCount}개 켜짐</span>
+              <span className="line__chev">{Icon.chev()}</span>
+            </span>
+          </button>
+          <a className="line" href="/alerts" onClick={onClose}>
+            <span className="line__label">받은 알림 보기</span>
+            <span className="line__chev">{Icon.chev()}</span>
+          </a>
+        </div>
+        <p className="label settings__group">저장</p>
+        <div className="settings__card settings__note">
+          <p className="sub small">콕한 책, 취향, 내 도서관은 로그인 없이 이 기기(브라우저)에만 저장돼요. 브라우저 기록을 지우면 함께 지워져요.</p>
+        </div>
+      </div>
+      {alertsOpen && <AlertSettingsSheet alertState={alertState} push={push} onClose={() => setAlertsOpen(false)} />}
+    </div>
   )
 }
 
@@ -2900,11 +2938,11 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
       <header className="pagehead pagehead--withmenu">
         <Eyebrow>MY PAGE</Eyebrow>
         <h1 className="h1 display">마이</h1>
-        <button className="iconbtn menubtn" onClick={() => setSettings(true)} aria-label="알림 설정">
+        <button className="iconbtn menubtn" onClick={() => setSettings(true)} aria-label="설정">
           {Icon.gear()}
         </button>
       </header>
-      {settings && <AlertSettingsSheet alertState={alertState} push={push} onClose={() => setSettings(false)} />}
+      {settings && <SettingsPanel alertState={alertState} push={push} onClose={() => setSettings(false)} />}
       <div className="stack">
         <section className="card profile">
           <span className="profile__avatar">{Icon.user(false)}</span>
