@@ -909,6 +909,215 @@ function useBook(isbn, index) {
   return { book, ...extra }
 }
 
+/* ================= 순위 기록 · 콕 적중 ================= */
+
+const DAY_MS = 86400000
+const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / DAY_MS)
+const STAGE_COLOR = { 포착: '#7a3fd1', 떠오름: '#007a56', 확산: '#4640de', 스테디: '#4e5968' }
+
+// 콕한 날 (예전 기록은 'M/D'만 있어서 올해 날짜로 바꾼다)
+function savedOnOf(w) {
+  if (!w) return null
+  if (w.savedOn) return w.savedOn
+  const m = /^(\d{1,2})\/(\d{1,2})$/.exec(w.savedAt || '')
+  if (!m) return null
+  const today = kstToday()
+  let y = Number(today.slice(0, 4))
+  const iso = (yy) => `${yy}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`
+  if (iso(y) > today) y -= 1
+  return iso(y)
+}
+
+// 적중: 콕할 때 분야 10위 밖(또는 순위 밖)이던 책이, 콕한 뒤 분야 TOP10에 들어간 경우
+function evalHit(rows, savedOn) {
+  if (!savedOn) return null
+  const before = rows.filter((r) => r.snapshot_date <= savedOn && dayDiff(r.snapshot_date, savedOn) <= 7)
+  const atSave = before.length ? before[before.length - 1].rank_now : null
+  const after = rows.filter((r) => r.snapshot_date > savedOn && r.rank_now != null)
+  const top = after.find((r) => r.rank_now <= 10)
+  const hit = !!top && (atSave == null || atSave > 10)
+  const best = after.reduce((m, r) => (m == null || r.rank_now < m ? r.rank_now : m), null)
+  return {
+    savedOn,
+    atSave,
+    best,
+    hit,
+    top10Date: hit ? top.snapshot_date : null,
+    leadDays: hit ? dayDiff(savedOn, top.snapshot_date) : null,
+    rose: atSave != null && best != null && best < atSave ? atSave - best : null,
+  }
+}
+
+// 콕한 책들의 순위 기록을 한 번에 받아 적중 여부를 계산
+function useWishHits(wish) {
+  const [map, setMap] = useState(new Map())
+  const key = wish.map((w) => w.isbn13 + '@' + (savedOnOf(w) || '')).join(',')
+  useEffect(() => {
+    const list = wish.map((w) => ({ isbn: w.isbn13, on: savedOnOf(w) })).filter((x) => x.on)
+    if (!list.length) {
+      setMap(new Map())
+      return
+    }
+    let off = false
+    const minOn = list.reduce((m, x) => (x.on < m ? x.on : m), list[0].on)
+    const from = new Date(Date.parse(minOn) - 8 * DAY_MS).toISOString().slice(0, 10)
+    ;(async () => {
+      const ids = list.map((x) => x.isbn)
+      const rows = []
+      for (let i = 0; i < ids.length; i += 100) {
+        for (let start = 0; start < 10000; start += 1000) {
+          const { data, error } = await supabase
+            .from('book_state')
+            .select('isbn13,snapshot_date,rank_now')
+            .in('isbn13', ids.slice(i, i + 100))
+            .gte('snapshot_date', from)
+            .order('snapshot_date', { ascending: true })
+            .range(start, start + 999)
+          if (error || !data) break
+          rows.push(...data)
+          if (data.length < 1000) break
+        }
+      }
+      if (off) return
+      const by = new Map()
+      rows.forEach((r) => {
+        if (!by.has(r.isbn13)) by.set(r.isbn13, [])
+        by.get(r.isbn13).push(r)
+      })
+      const out = new Map()
+      list.forEach((x) => out.set(x.isbn, evalHit(by.get(x.isbn) || [], x.on)))
+      setMap(out)
+    })()
+    return () => {
+      off = true
+    }
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return map
+}
+
+function useRankHistory(isbn) {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    let off = false
+    setRows(null)
+    supabase
+      .from('book_state')
+      .select('snapshot_date,rank_now,stage,list_size,cat')
+      .eq('isbn13', isbn)
+      .order('snapshot_date', { ascending: false })
+      .limit(45)
+      .then(({ data }) => {
+        if (!off) setRows((data || []).reverse())
+      })
+    return () => {
+      off = true
+    }
+  }, [isbn])
+  return rows
+}
+
+// 분야 순위 그래프: 위로 갈수록 높은 순위. TOP10 구간을 띠로 표시하고, 단계가 바뀐 날을 점으로 찍는다
+function RankChart({ isbn, firstSpotted, hit }) {
+  const rows = useRankHistory(isbn)
+  if (!rows) return null
+  const ranked = rows.filter((r) => r.rank_now != null)
+  if (ranked.length < 2) return null
+  const W = 320
+  const H = 150
+  const L = 30
+  const R = 14
+  const T = 12
+  const B = 24
+  const maxRank = Math.max(10, ...ranked.map((r) => r.rank_now))
+  const top = Math.ceil((maxRank + 2) / 5) * 5
+  const x = (i) => L + (rows.length === 1 ? 0 : (i * (W - L - R)) / (rows.length - 1))
+  const y = (rank) => T + ((rank - 1) * (H - T - B)) / Math.max(top - 1, 1)
+  // 순위 밖인 날은 선을 끊는다
+  const segs = []
+  let cur = []
+  rows.forEach((r, i) => {
+    if (r.rank_now == null) {
+      if (cur.length) segs.push(cur)
+      cur = []
+    } else cur.push([x(i), y(r.rank_now)])
+  })
+  if (cur.length) segs.push(cur)
+  // 단계가 바뀐 날 (순위 밖이던 날은 건너뛰고 직전 단계와 비교)
+  const changes = []
+  let prevStage = null
+  rows.forEach((r, i) => {
+    if (r.rank_now == null || !r.stage) return
+    if (r.stage !== prevStage) changes.push({ ...r, i })
+    prevStage = r.stage
+  })
+  const first = ranked[0]
+  const last = ranked[ranked.length - 1]
+  const lastIdx = rows.indexOf(last)
+  const top10 = rows.find((r) => r.rank_now != null && r.rank_now <= 10 && (!firstSpotted || r.snapshot_date >= firstSpotted))
+  const savedIdx = hit?.savedOn ? rows.findIndex((r) => r.snapshot_date >= hit.savedOn) : -1
+  const cat = last.cat || first.cat || '분야'
+  const diff = first.rank_now - last.rank_now
+  return (
+    <section className="card rise rankcard" style={{ animationDelay: '0.4s' }}>
+      <Eyebrow>RANK FLOW</Eyebrow>
+      <h2 className="h2 display">순위가 어떻게 움직였을까요</h2>
+      <p className="sub">
+        {cat} 인기대출 순위 · {fmtDate(first.snapshot_date)} <b className="num">{first.rank_now}위</b> → {fmtDate(last.snapshot_date)}{' '}
+        <b className={`num${diff > 0 ? ' up' : ''}`}>{last.rank_now}위</b>
+        {diff > 0 ? ` (▲${diff})` : ''}
+      </p>
+      {hit?.hit && (
+        <p className="hitline">
+          {Icon.ginkgo(true, 18)}
+          <span>
+            내가 <b>{fmtDate(hit.savedOn)}</b>에 콕한 책이 <b>{hit.leadDays}일 뒤</b> TOP10에 들었어요
+          </span>
+        </p>
+      )}
+      <svg className="rankchart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${cat} 순위 ${first.rank_now}위에서 ${last.rank_now}위로`}>
+        <rect x={L} y={y(1) - 4} width={W - L - R} height={y(10) - y(1) + 8} rx="6" className="rankchart__band" />
+        <text x={W - R - 4} y={y(10) - 6} textAnchor="end" className="rankchart__bandlabel">TOP10</text>
+        {[1, 10, top].map((v) => (
+          <text key={v} x={L - 8} y={y(v) + 4} textAnchor="end" className="rankchart__tick num">
+            {v}
+          </text>
+        ))}
+        {savedIdx >= 0 && (
+          <g>
+            <line x1={x(savedIdx)} x2={x(savedIdx)} y1={T - 4} y2={H - B + 2} className="rankchart__saved" />
+            <text x={x(savedIdx) + 4} y={H - B - 4} className="rankchart__savedlabel">내가 콕</text>
+          </g>
+        )}
+        {segs.map((pts, k) => (
+          <polyline key={k} points={pts.map((p) => p.join(',')).join(' ')} className="rankchart__line" pathLength="1" />
+        ))}
+        {changes.map((c) => (
+          <circle key={c.snapshot_date} cx={x(c.i)} cy={y(c.rank_now)} r="4.5" fill={STAGE_COLOR[c.stage] || '#4e5968'} className="rankchart__dot" />
+        ))}
+        {top10 && <circle cx={x(rows.indexOf(top10))} cy={y(top10.rank_now)} r="4.5" fill="#e9b949" className="rankchart__dot" />}
+        <circle cx={x(lastIdx)} cy={y(last.rank_now)} r="6" className="rankchart__now" />
+        <text x={L} y={H - 6} className="rankchart__date">{fmtDate(rows[0].snapshot_date)}</text>
+        <text x={W - R} y={H - 6} textAnchor="end" className="rankchart__date">{fmtDate(rows[rows.length - 1].snapshot_date)}</text>
+      </svg>
+      <div className="rankchart__legend">
+        {[
+          ...changes.map((c) => ({ d: c.snapshot_date, label: c.stage, color: STAGE_COLOR[c.stage] })),
+          ...(top10 ? [{ d: top10.snapshot_date, label: 'TOP10 진입', top: true }] : []),
+        ]
+          .sort((a, b) => a.d.localeCompare(b.d))
+          .map((m) => (
+            <span key={m.label + m.d} className="rankchart__mile">
+              <i className={m.top ? 'is-top' : ''} style={m.top ? undefined : { background: m.color }} aria-hidden="true" />
+              {m.label} <b className="num">{fmtDate(m.d)}</b>
+            </span>
+          ))}
+      </div>
+      <p className="sub small">점은 트렌드 단계가 바뀐 날이에요. 선이 끊긴 곳은 그날 분야 순위 목록에 없던 날이에요.</p>
+    </section>
+  )
+}
+
 function LoanChart({ history, motionKey }) {
   const p = useCountUp(motionKey)
   const rows = (history || []).filter((h) => h.loanCnt != null).slice(-12)
@@ -1046,7 +1255,7 @@ function CopyIsbn({ isbn }) {
   )
 }
 
-function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
+function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary, hits }) {
   const { book, usage, coCovers, loading } = useBook(isbn, index)
   useEffect(() => {
     if (book) setPageMeta(`${shortTitle(book.title)}${cleanAuthor(book.author) ? ' — ' + cleanAuthor(book.author) : ''} | 책콕`, `/book/${book.isbn13}`)
@@ -1172,6 +1381,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
           </div>
         </section>
 
+        <RankChart isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
         <LoanChart history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
         <Groups groups={usage?.loan_grps} />
 
@@ -1576,7 +1786,14 @@ function useAlerts({ states, statesDate, keywords, wish, interests, index, feedR
   const unread = alerts.filter((a) => !a.read).length
   const markRead = () => setAlerts((list) => (list.some((a) => !a.read) ? list.map((a) => ({ ...a, read: true })) : list))
   const clear = () => setAlerts([])
-  return { prefs, setPrefs, alerts, unread, markRead, clear }
+  // 다른 곳(적중 계산 등)에서 만든 소식을 한 번만 넣는다
+  const addAlerts = (items) =>
+    setAlerts((list) => {
+      const ids = new Set(list.map((a) => a.id))
+      const fresh = items.filter((a) => !ids.has(a.id)).map((a) => ({ ...a, read: false }))
+      return fresh.length ? [...fresh, ...list].slice(0, MAX_ALERTS) : list
+    })
+  return { prefs, setPrefs, alerts, unread, markRead, clear, addAlerts }
 }
 
 // 휴대폰 알림 켜기·끄기, 콕한 책·관심 분야가 바뀌면 서버의 구독 정보도 맞춰 둔다
@@ -1650,7 +1867,7 @@ function Alerts({ alerts, markRead, clear }) {
     markRead()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const back = () => (window.history.length > 1 ? window.history.back() : go('/'))
-  const TONE = { wish: 'ginkgo', keyword: 'kw', interest: 'spot' }
+  const TONE = { wish: 'ginkgo', hit: 'ginkgo', keyword: 'kw', interest: 'spot' }
   return (
     <>
       <header className="detail__bar">
@@ -1674,7 +1891,7 @@ function Alerts({ alerts, markRead, clear }) {
           {alerts.map((a, i) => (
             <a key={a.id} className={`alert rise${fresh.has(a.id) ? ' is-new' : ''}`} style={delay(i, 0.05, 0.04)} href={a.url}>
               <span className={`alert__icon alert__icon--${TONE[a.type] || 'kw'}`} aria-hidden="true">
-                {a.type === 'wish' ? Icon.ginkgo(true, 20) : a.type === 'keyword' ? '#' : Icon.trend(true)}
+                {a.type === 'wish' || a.type === 'hit' ? Icon.ginkgo(true, 20) : a.type === 'keyword' ? '#' : Icon.trend(true)}
               </span>
               <span className="alert__body">
                 <span className="alert__text">{a.text}</span>
@@ -1949,8 +2166,8 @@ function LibraryPicker({ libs, setLibs, onClose }) {
 
 /* ================= 콕한 책 ================= */
 
-function Wish({ wish, index, toggleWish }) {
-  const items = wish.map((w) => ({ ...w, live: index.get(w.isbn13) }))
+function Wish({ wish, index, toggleWish, hits }) {
+  const items = wish.map((w) => ({ ...w, live: index.get(w.isbn13), hit: hits.get(w.isbn13) }))
   return (
     <>
       <header className="pagehead">
@@ -1966,12 +2183,12 @@ function Wish({ wish, index, toggleWish }) {
               <strong>{items.length}권</strong>
             </div>
             <div>
-              <span>지금 급상승</span>
-              <strong className="up">{items.filter((w) => w.live?.rank_diff).length}권</strong>
+              <span>콕 적중</span>
+              <strong className="accent">{items.filter((w) => w.hit?.hit).length}권</strong>
             </div>
             <div>
-              <span>종합 순위권</span>
-              <strong className="accent">{items.filter((w) => w.live?.score != null).length}권</strong>
+              <span>콕한 뒤 오름</span>
+              <strong className="up">{items.filter((w) => w.hit?.rose).length}권</strong>
             </div>
           </div>
         </section>
@@ -1993,7 +2210,14 @@ function Wish({ wish, index, toggleWish }) {
                     {cleanAuthor(w.author)} · {w.savedAt} 콕
                   </span>
                   <span className="row__meta">
-                    {w.live?.rank_diff ? (
+                    {w.hit?.hit ? (
+                      <span className="hitbadge">
+                        {Icon.ginkgo(true, 14)}
+                        적중 · 콕하고 {w.hit.leadDays}일 뒤 TOP10
+                      </span>
+                    ) : w.hit?.rose ? (
+                      <b className="up">콕한 뒤 순위 ▲{w.hit.rose}</b>
+                    ) : w.live?.rank_diff ? (
                       <b className="up">대출순위 ▲{w.live.rank_diff}</b>
                     ) : w.live?.score != null ? (
                       <b>종합 {w.live.score}점</b>
@@ -2044,7 +2268,64 @@ const STAGE_GUIDE = [
   },
 ]
 
-function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary, alertState, push }) {
+function MyHits({ wish, hits }) {
+  const list = wish.map((w) => ({ ...w, hit: hits.get(w.isbn13) }))
+  const got = list.filter((w) => w.hit?.hit)
+  const rose = list.filter((w) => w.hit?.rose)
+  const avg = got.length ? Math.round(got.reduce((s, w) => s + w.hit.leadDays, 0) / got.length) : null
+  const fastest = got.slice().sort((a, b) => a.hit.leadDays - b.hit.leadDays)[0]
+  return (
+    <section className="card myhits">
+      <h2 className="h3">내 콕 적중 기록</h2>
+      {wish.length === 0 ? (
+        <p className="sub">요즘 뜰 것 같은 책을 콕해 두세요. 나중에 분야 TOP10에 들면 '적중'으로 기록돼요.</p>
+      ) : (
+        <>
+          <div className="hitgrid hitgrid--3">
+            <div>
+              <span>적중</span>
+              <strong className="num">
+                {got.length}
+                <small>권</small>
+              </strong>
+            </div>
+            <div>
+              <span>평균 앞선 날</span>
+              <strong className="num">
+                {avg ?? '-'}
+                {avg != null && <small>일</small>}
+              </strong>
+            </div>
+            <div>
+              <span>콕한 뒤 오름</span>
+              <strong className="num up">
+                {rose.length}
+                <small>권</small>
+              </strong>
+            </div>
+          </div>
+          {fastest ? (
+            <p className="hitline">
+              {Icon.ginkgo(true, 18)}
+              <span>
+                가장 빨리 알아본 책: <b>{shortTitle(fastest.title)}</b> · 콕하고 {fastest.hit.leadDays}일 뒤 TOP10
+              </span>
+            </p>
+          ) : (
+            <p className="sub small">아직 적중한 책이 없어요. 콕한 책이 분야 TOP10에 들면 여기에 기록돼요.</p>
+          )}
+        </>
+      )}
+      <a className="line" href="/wish">
+        <span>콕한 책 보기</span>
+        <span className="line__chev">{Icon.chev()}</span>
+      </a>
+      <p className="sub small">콕할 때 분야 10위 밖이던 책이 그 뒤 분야 TOP10에 들면 적중이에요. 콕한 날 이후 기록만 세요.</p>
+    </section>
+  )
+}
+
+function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary, alertState, push, wish, hits }) {
   const [openInfo, setOpenInfo] = useState(null)
   const toggle = (c) => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])
   const infos = [
@@ -2073,6 +2354,8 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
             <p className="sub">콕한 책과 취향 설정은 이 기기에 저장돼요</p>
           </div>
         </section>
+
+        <MyHits wish={wish} hits={hits} />
 
         <section className="card">
           <h2 className="h3">내 도서관</h2>
@@ -2345,6 +2628,26 @@ export default function App() {
   }, [states])
   const alertState = useAlerts({ states, statesDate, keywords, wish, interests, index, feedReady: !loading && !error })
   const push = usePush({ prefs: alertState.prefs, wish, interests })
+  const hits = useWishHits(wish)
+  // 콕한 책이 적중하면 알림함에 한 번 알려준다
+  useEffect(() => {
+    if (!alertState.prefs.wish || hits.size === 0) return
+    const items = []
+    for (const w of wish) {
+      const h = hits.get(w.isbn13)
+      if (!h?.hit) continue
+      const t = shortTitle(w.title)
+      items.push({
+        id: `hit:${w.isbn13}`,
+        type: 'hit',
+        date: h.top10Date,
+        text: `적중! 『${t}』${josa(t, '이', '가')} 콕하고 ${h.leadDays}일 만에 TOP10에 들었어요`,
+        sub: `${fmtDate(h.savedOn)}에 콕 · 그때 ${h.atSave ? h.atSave + '위' : '순위 밖'}`,
+        url: `/book/${w.isbn13}`,
+      })
+    }
+    if (items.length) alertState.addAlerts(items)
+  }, [hits]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleWish = (b) => {
     setWish((list) =>
@@ -2357,6 +2660,7 @@ export default function App() {
               author: b.author,
               cover_url: b.cover_url,
               savedAt: `${today.getMonth() + 1}/${today.getDate()}`,
+              savedOn: kstToday(),
             },
             ...list,
           ],
@@ -2376,12 +2680,12 @@ export default function App() {
         {route.name === 'trend' && (
           <Trend tab={trendTab} feed={feed} loading={loading} error={error} prefs={prefs} interests={interests} demo={demo} onOpenFilter={() => setSheet(true)} />
         )}
-        {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} onPickLibrary={() => setLibPicker(true)} />}
-        {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} />}
+        {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} onPickLibrary={() => setLibPicker(true)} hits={hits} />}
+        {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} hits={hits} />}
         {route.name === 'search' && <Search />}
         {route.name === 'keyword' && route.param && <KeywordPage word={route.param} index={index} />}
         {route.name === 'alerts' && <Alerts alerts={alertState.alerts} markRead={alertState.markRead} clear={alertState.clear} />}
-        {route.name === 'my' && <My prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={() => setSheet(true)} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} alertState={alertState} push={push} />}
+        {route.name === 'my' && <My prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={() => setSheet(true)} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} alertState={alertState} push={push} wish={wish} hits={hits} />}
       </main>
       {navTab && <BottomNav current={navTab} />}
       {libPicker && <LibraryPicker libs={libs} setLibs={setLibs} onClose={() => setLibPicker(false)} />}

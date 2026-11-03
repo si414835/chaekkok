@@ -2287,3 +2287,133 @@ a.kw__main {
   background: #fff;
   border: 1px solid var(--line);
 }
+
+/* ---------- 순위 그래프 ---------- */
+.rankcard .sub b {
+  color: var(--ink);
+}
+.rankcard .sub b.up {
+  color: var(--up);
+}
+.rankchart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 12px;
+  overflow: visible;
+}
+.rankchart__band {
+  fill: #fff4cc;
+}
+.rankchart__bandlabel {
+  font-size: 9px;
+  font-weight: 800;
+  fill: #8a5a00;
+  letter-spacing: 0.5px;
+}
+.rankchart__tick,
+.rankchart__date {
+  font-size: 10px;
+  fill: var(--ink-soft);
+}
+.rankchart__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: rankdraw 1.1s ease-out 0.45s forwards;
+}
+@keyframes rankdraw {
+  to { stroke-dashoffset: 0; }
+}
+.rankchart__dot {
+  stroke: #fff;
+  stroke-width: 2;
+}
+.rankchart__now {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop 0.55s var(--spring) 1.4s backwards;
+}
+.rankchart__saved {
+  stroke: #e2a400;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+.rankchart__savedlabel {
+  font-size: 9.5px;
+  font-weight: 800;
+  fill: #8a5a00;
+}
+.rankchart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 10px 0 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.rankchart__mile {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.rankchart__mile i {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+}
+.rankchart__mile i.is-top {
+  background: #e9b949;
+}
+.rankchart__mile b {
+  color: var(--ink);
+}
+
+/* ---------- 콕 적중 ---------- */
+.hitline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff4cc;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #3d3628;
+  word-break: keep-all;
+}
+.hitline svg {
+  flex-shrink: 0;
+}
+.hitline b {
+  color: #1f1b14;
+}
+.hitbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: #fff4cc;
+  color: #8a5a00;
+  font-size: 12px;
+  font-weight: 800;
+}
+.hitgrid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+.hitgrid--3 strong {
+  font-size: 24px;
+}
+.myhits .line {
+  margin-top: 8px;
+}
