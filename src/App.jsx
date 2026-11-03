@@ -1416,7 +1416,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             <div className="hero__text">
               {eyebrow && (
                 <span className="rise" style={{ animationDelay: '0.12s' }}>
-                  <Eyebrow tone={book.rank_diff ? 'up' : undefined}>{eyebrow}</Eyebrow>
+                  <Eyebrow tone={st?.stage ? { 포착: 'spot', 떠오름: 'up' }[st.stage] : book.rank_diff ? 'up' : undefined}>{eyebrow}</Eyebrow>
                 </span>
               )}
               <h1 className="hero__title display rise" style={{ animationDelay: '0.18s' }}>
