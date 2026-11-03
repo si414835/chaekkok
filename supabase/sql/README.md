@@ -23,3 +23,11 @@ TOP10에 2/3 이상 머문 책은 15점 감점.
 
 지난달 대출 증가·지역 확산·출간 예정은 '지금' 데이터라 최근 3일 계산에만 반영한다(과거 계산에 미래 정보가 섞이지 않게).
 함수 원문은 Supabase 대시보드 Database > Functions 에서 볼 수 있다.
+
+## 키워드·알림
+
+| 이름 | 종류 | 하는 일 |
+|---|---|---|
+| `v_keyword_books` | 뷰 | 책마다 정보나루가 뽑은 키워드(book_usage.keywords)를 한 줄씩 펼침. 키워드 페이지에서 사용 (어린이 책 제외) |
+| `push_subscriptions` | 표 | 휴대폰 알림 구독(기기별 endpoint, 콕한 책, 관심 분야, 알림 종류). 브라우저는 직접 못 읽고 `push-subscribe` 함수만 씀 |
+| `get_vapid_private_key()` | 함수 | Vault에 둔 알림 비밀키를 꺼냄. service_role만 실행 가능 (send_alerts.py) |
