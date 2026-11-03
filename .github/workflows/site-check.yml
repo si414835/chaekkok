@@ -1,39 +1,17 @@
-name: 정보나루 도서관 API 점검 (임시)
+name: 도서관 함수 점검 (임시)
 on:
   workflow_dispatch:
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - run: pip install requests
       - env:
-          K: ${{ secrets.DATA4LIBRARY_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: |
-          python - <<'PY'
-          import os, json, requests, time
-          K = os.environ["K"]; B = "http://data4library.kr/api/"
-          def get(api, **p):
-              t = time.time()
-              r = requests.get(B + api, params={"authKey": K, "format": "json", **p}, timeout=60)
-              return r.json(), round(time.time() - t, 1)
-          d, _ = get("libSrchByBook", isbn="9791140712250", region="31", pageSize=100)
-          libs = [x["lib"] for x in d["response"]["libs"]][:12]
-          libs.append({"libCode": "141025", "libName": "수원시립선경도서관"})
-          d, _ = get("libSrchByBook", isbn="9791140712250", region="11", pageSize=5)
-          libs += [x["lib"] for x in d["response"]["libs"]][:4]
-          for L in libs:
-              c = L["libCode"]
-              e, _ = get("extends/libSrch", libCode=c)
-              lb = e["response"]["libs"][0]["lib"] if e["response"].get("libs") else {}
-              hrs = sum(x["result"]["loan"] for x in lb.get("loanByhours", []))
-              nb = len(lb.get("newBooks") or [])
-              res = {}
-              for days in (30, 90, 365):
-                  from datetime import date, timedelta
-                  st = (date(2026,11,2) - timedelta(days=days)).isoformat()
-                  b, _ = get("loanItemSrchByLib", libCode=c, startDt=st, endDt="2026-11-02", pageSize=3)
-                  res[days] = b["response"].get("resultNum")
-              be, _ = get("bookExist", libCode=c, isbn13="9791140712250")
-              print(f"{c} {L['libName'][:14]:14} hours={hrs} new={nb} byLib30={res[30]} 90={res[90]} 365={res[365]} exist={be['response'].get('result')}")
-          print("newBooks sample:", json.dumps((lb.get("newBooks") or [])[:1], ensure_ascii=False)[:500])
-          PY
+          F="$SUPABASE_URL/functions/v1/library-info"
+          echo "== nearby (위치: 수원역)"; time curl -sS -X POST "$F" -H 'content-type: application/json' -d '{"action":"nearby","isbn":"9791140712250","lat":37.2664,"lng":126.9997}' | python3 -c "import json,sys; d=json.load(sys.stdin); print({k:d.get(k) for k in ['region','total','sortedBy','checked','checkedAt','error']}); [print(' ', l['name'], l.get('distanceKm'), l.get('hasBook'), l.get('loanAvailable'), l.get('closedToday'), '|', l.get('closed')[:30]) for l in d.get('libs',[])[:10]]"
+          echo "== nearby (지역만, 찜 도시=수원시)"; curl -sS -X POST "$F" -H 'content-type: application/json' -d '{"action":"nearby","isbn":"9791140712250","region":"31","preferCities":["수원시"]}' | python3 -c "import json,sys; d=json.load(sys.stdin); print({k:d.get(k) for k in ['region','total','sortedBy','checked']}); [print(' ', l['name'], l.get('hasBook'), l.get('loanAvailable')) for l in d.get('libs',[])[:6]]"
+          for L in 141143 141025 111070; do
+          echo "== library $L"; curl -sS -X POST "$F" -H 'content-type: application/json' -d "{\"action\":\"library\",\"libCode\":\"$L\"}" | python3 -c "import json,sys; d=json.load(sys.stdin); i=d.get('info',{}); print(i.get('name'), '| closedToday', i.get('closedToday'), '| hours', len(d.get('hours',[])), '| days', len(d.get('days',[])), '| new', len(d.get('newBooks',[])), '| popular', len(d.get('popular',[])), 'period', d.get('periodDays'), 'fresh', d.get('fresh'), d.get('error')); print('  top:', [p['title'][:15] for p in d.get('popular',[])[:3]], 'loans', [p.get('loans') for p in d.get('popular',[])[:3]]); print('  hours', d.get('hours')[:4])"
+          done
+          echo "== bad input"; curl -sS -X POST "$F" -H 'content-type: application/json' -d '{"action":"nearby","isbn":"x"}'; echo
