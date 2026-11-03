@@ -1004,14 +1004,46 @@ function Groups({ groups }) {
 function shopLinks(isbn) {
   const q = encodeURIComponent(firstIsbn(isbn))
   return [
-    { id: 'coupang', name: '쿠팡', mark: '쿠', url: COUPANG_LINKS[isbn] || COUPANG_LINKS[firstIsbn(isbn)] || `https://www.coupang.com/np/search?q=${q}` },
+    {
+      id: 'coupang', name: '쿠팡', mark: '쿠', domain: 'coupang.com', sub: '로켓배송 도서', direct: !!(COUPANG_LINKS[isbn] || COUPANG_LINKS[firstIsbn(isbn)]),
+      url: COUPANG_LINKS[isbn] || COUPANG_LINKS[firstIsbn(isbn)] || `https://www.coupang.com/np/search?q=${q}`,
+    },
     // 교보문고·알라딘은 ISBN 주소가 그 책 상품 페이지로 바로 연결된다 (2026-11-03 확인)
-    { id: 'kyobo', name: '교보문고', mark: '교', url: `http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=${q}` },
-    { id: 'aladin', name: '알라딘', mark: '알', url: `https://www.aladin.co.kr/shop/wproduct.aspx?ISBN=${q}` },
+    { id: 'kyobo', name: '교보문고', mark: '교', domain: 'kyobobook.co.kr', sub: '이 책 상품 페이지로 바로', direct: true, url: `http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=${q}` },
+    { id: 'aladin', name: '알라딘', mark: '알', domain: 'aladin.co.kr', sub: '이 책 상품 페이지로 바로', direct: true, url: `https://www.aladin.co.kr/shop/wproduct.aspx?ISBN=${q}` },
     // YES24·네이버는 ISBN으로 바로 가는 공개 주소가 없어 ISBN 검색 결과(보통 그 책 1권)로 연결한다
-    { id: 'yes24', name: 'YES24', mark: 'Y', url: `https://www.yes24.com/Product/Search?domain=BOOK&query=${q}` },
-    { id: 'naver', name: '네이버 도서', mark: 'N', url: `https://search.shopping.naver.com/book/search?query=${q}` },
+    { id: 'yes24', name: 'YES24', mark: 'Y', domain: 'yes24.com', sub: 'ISBN으로 정확히 검색', direct: false, url: `https://www.yes24.com/Product/Search?domain=BOOK&query=${q}` },
+    { id: 'naver', name: '네이버 도서', mark: 'N', domain: 'naver.com', sub: '여러 판매처 가격 비교', direct: false, url: `https://search.shopping.naver.com/book/search?query=${q}` },
   ]
+}
+
+// 서점 로고: 각 사이트가 직접 쓰는 아이콘(파비콘)을 불러온다. 못 불러오면 글자 아이콘으로.
+function ShopLogo({ shop }) {
+  const [fail, setFail] = useState(false)
+  if (fail || !shop.domain) return <span className={`shop__mark shop__mark--${shop.id}`}>{shop.mark}</span>
+  return (
+    <span className="shop__logo">
+      <img src={`https://www.google.com/s2/favicons?domain=${shop.domain}&sz=128`} alt="" width="28" height="28" loading="lazy" onError={() => setFail(true)} />
+    </span>
+  )
+}
+
+function CopyIsbn({ isbn }) {
+  const [done, setDone] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(isbn)
+      setDone(true)
+      setTimeout(() => setDone(false), 1600)
+    } catch (_e) {
+      // 복사가 막힌 브라우저
+    }
+  }
+  return (
+    <button type="button" className={`pill pill--btn isbncopy${done ? ' is-on' : ''}`} onClick={copy} aria-live="polite">
+      {done ? '복사했어요' : 'ISBN 복사'}
+    </button>
+  )
 }
 
 function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
@@ -1173,12 +1205,25 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
         <section className="card" id="buy" ref={buyRef}>
           <Eyebrow>WHERE TO BUY</Eyebrow>
           <h2 className="h2 display">어디서 살까요</h2>
+          <p className="sub buy__lead">새 책은 도서정가제로 서점마다 가격이 거의 같아요. 배송·적립 혜택을 비교해 보세요.</p>
+          <div className="buy__book">
+            <Cover src={book.cover_url} alt="" className="buy__cover" title={book.title} />
+            <span className="buy__info">
+              <strong>{shortTitle(book.title)}</strong>
+              <span className="num">ISBN {firstIsbn(book.isbn13)}</span>
+            </span>
+            <CopyIsbn isbn={firstIsbn(book.isbn13)} />
+          </div>
           <div className="shops">
-            {shopLinks(book.isbn13).map((s) => (
-              <a key={s.id} className="shop" href={s.url} target="_blank" rel="noopener noreferrer sponsored">
-                <span className={`shop__mark shop__mark--${s.id}`}>{s.mark}</span>
-                <span className="shop__name">{s.name}</span>
-                <span className="shop__go">가격 보기 {Icon.chev()}</span>
+            {shopLinks(book.isbn13).map((s, i) => (
+              <a key={s.id} className="shop rise" style={delay(i, 0.05, 0.04)} href={s.url} target="_blank" rel="noopener noreferrer sponsored">
+                <ShopLogo shop={s} />
+                <span className="shop__text">
+                  <span className="shop__name">{s.name}</span>
+                  <span className="shop__sub">{s.sub}</span>
+                </span>
+                <span className={`shop__tag${s.direct ? ' is-direct' : ''}`}>{s.direct ? '바로가기' : '검색'}</span>
+                <span className="shop__chev">{Icon.chev()}</span>
               </a>
             ))}
           </div>
