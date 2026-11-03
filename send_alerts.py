@@ -155,7 +155,14 @@ def main():
                             continue
                         update["fail_count"] = (s.get("fail_count") or 0) + 1
                         print(f"  [발송 실패] 상태 {code}")
+                    except Exception as e:  # 네트워크 오류 등: 다음 날 다시 시도
+                        update["fail_count"] = (s.get("fail_count") or 0) + 1
+                        print(f"  [발송 실패] {type(e).__name__}")
             if not DRY:
+                if update.get("fail_count", 0) >= 30:
+                    supabase.table("push_subscriptions").delete().eq("endpoint", s["endpoint"]).execute()
+                    gone += 1
+                    continue
                 supabase.table("push_subscriptions").update(update).eq("endpoint", s["endpoint"]).execute()
     finally:
         if key_path:

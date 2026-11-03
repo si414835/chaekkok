@@ -1,0 +1,42 @@
+name: 알림 연결 점검 (한 번만)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install supabase pywebpush
+      - name: 구독 저장 함수 점검
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          F="$SUPABASE_URL/functions/v1/push-subscribe"
+          echo "잘못된 입력:"; curl -s -X POST "$F" -H 'content-type: application/json' -d '{"subscription":{"endpoint":"http://x"}}'; echo
+          echo "저장:"; curl -s -X POST "$F" -H 'content-type: application/json' -d '{"subscription":{"endpoint":"https://selftest.invalid/push/abc","keys":{"p256dh":"BEGvGNmo3Wtc3LsB6VeR1lR9KV-xpAztk1HQVxVRblmJaOupnaCZKDpj1nF-XxK2vLQ8oaau2Sixkj5hPtQZ4sk","auth":"AAAAAAAAAAAAAAAAAAAAAA"}},"wish":["9791140712250"],"interests":["문학"]}'; echo
+      - name: 발송 점검 (가짜 구독이라 실패가 정상)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          from supabase import create_client
+          db = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+          pem = db.rpc("get_vapid_private_key", {}).execute().data
+          print("비밀키 읽기:", "성공" if pem and "BEGIN PRIVATE KEY" in pem else "실패")
+          # 키워드가 바뀐 것처럼 만들어 소식이 생기게 함
+          db.table("push_subscriptions").update({"last_keyword": "점검용"}).eq("endpoint", "https://selftest.invalid/push/abc").execute()
+          PY
+          python send_alerts.py --dry-run
+          python send_alerts.py
+      - name: 해제
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          curl -s -X POST "$SUPABASE_URL/functions/v1/push-subscribe" -H 'content-type: application/json' -d '{"action":"unsubscribe","subscription":{"endpoint":"https://selftest.invalid/push/abc"}}'; echo
