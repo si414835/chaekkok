@@ -1,0 +1,14 @@
+name: 사이트 점검 (임시)
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          B=https://chaekkok.vercel.app
+          echo "== book"; curl -sS -A "Mozilla/5.0 (compatible; Yeti/1.1)" $B/book/9791140712250 -o /tmp/b -w "%{http_code}\n"; grep -oE '<title>[^<]*</title>|name="description" content="[^"]*"|rel="canonical" href="[^"]*"|og:image" content="[^"]*"' /tmp/b; grep -o '<div id="root">.\{0,160\}' /tmp/b
+          echo "== keyword"; curl -sS "$B/keyword/%EC%9D%B8%EA%B0%84" -o /tmp/k -w "%{http_code}\n"; grep -oE '<title>[^<]*</title>|name="description" content="[^"]*"' /tmp/k
+          echo "== trend (spa)"; curl -sS $B/trend/rising -o /tmp/t -w "%{http_code}\n"; grep -oE '<title>[^<]*</title>' /tmp/t
+          echo "== sitemap"; curl -sS $B/sitemap.xml -o /tmp/s -w "%{http_code} %{content_type}\n"; grep -c "<url>" /tmp/s; grep -c "/book/" /tmp/s; head -c 400 /tmp/s; echo
+          echo "== files"; for p in robots.txt sw.js manifest.webmanifest google215162353bf4ef4e.html; do curl -sS -o /dev/null -w "$p %{http_code} %{content_type}\n" $B/$p; done

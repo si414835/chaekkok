@@ -121,19 +121,19 @@ def main():
                     pv = (before.get(i) or {}).get("stage")
                     if cur in ("떠오름", "확산", "스테디") and STAGE_ORDER[cur] > STAGE_ORDER.get(pv, 0):
                         t = short(titles.get(i))
-                        events.append({"text": f"『{t}』{josa(t, '이', '가')} {cur} 단계가 됐어요", "url": f"/#/book/{i}"})
+                        events.append({"text": f"『{t}』{josa(t, '이', '가')} {cur} 단계가 됐어요", "url": f"/book/{i}"})
             if prefs.get("keyword", True) and top_kw and s.get("last_keyword") and top_kw != s["last_keyword"]:
-                events.append({"text": f"이달의 키워드가 #{top_kw}{josa(top_kw, '으로', '로')} 바뀌었어요", "url": f"/#/keyword/{top_kw}"})
+                events.append({"text": f"이달의 키워드가 #{top_kw}{josa(top_kw, '으로', '로')} 바뀌었어요", "url": f"/keyword/{top_kw}"})
             if prefs.get("interest", True) and s.get("interests"):
                 picks = [b for b in fresh_books if b["cat"] in s["interests"]]
                 if picks:
                     cats = sorted({b["cat"] for b in picks})
-                    events.append({"text": f"관심 분야({', '.join(cats[:2])})에서 새로 포착된 책 {len(picks)}권: 『{short(picks[0]['title'])}』", "url": f"/#/book/{picks[0]['isbn13']}"})
+                    events.append({"text": f"관심 분야({', '.join(cats[:2])})에서 새로 포착된 책 {len(picks)}권: 『{short(picks[0]['title'])}』", "url": f"/book/{picks[0]['isbn13']}"})
 
             update = {"last_keyword": top_kw}
             if events and s.get("last_sent_on") != d:
                 body = events[0]["text"] + (f" 외 {len(events) - 1}건" if len(events) > 1 else "")
-                payload = {"title": "책콕 새 소식", "body": body, "url": events[0]["url"] if len(events) == 1 else "/#/alerts", "tag": f"chaekkok-{d}"}
+                payload = {"title": "책콕 새 소식", "body": body, "url": events[0]["url"] if len(events) == 1 else "/alerts", "tag": f"chaekkok-{d}"}
                 if DRY:
                     print(f"  [보낼 알림] {s['endpoint'][:40]}… {payload}")
                 else:

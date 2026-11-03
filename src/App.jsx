@@ -100,29 +100,73 @@ function useStored(key, fallback) {
   return [v, setV]
 }
 
-// 해시 주소로 화면 전환: #/  #/trend/탭  #/book/ISBN  #/keyword/단어  #/wish  #/my  #/alerts  #/hits
-function parseHash() {
-  const parts = (window.location.hash.replace(/^#\/?/, '') || '').split('/')
-  return { name: parts[0] || 'home', param: parts[1] ? decodeURIComponent(parts[1]) : null }
+// 화면 주소: /  /trend/탭  /book/ISBN  /keyword/단어  /wish  /my  /alerts  /hits  /search
+// (책·키워드 주소는 검색 로봇이 각각 다른 페이지로 읽을 수 있게 #이 없는 진짜 주소로 쓴다)
+const ROUTES = ['trend', 'book', 'keyword', 'wish', 'my', 'alerts', 'hits', 'search']
+function parsePath() {
+  // 예전 주소(#/book/…)로 들어오면 새 주소로 바꿔 준다 (공유된 링크·알림 호환)
+  if (window.location.hash.startsWith('#/')) {
+    window.history.replaceState(null, '', window.location.hash.slice(1) || '/')
+  }
+  const parts = window.location.pathname.replace(/^\/+/, '').split('/')
+  const name = ROUTES.includes(parts[0]) ? parts[0] : 'home'
+  let param = null
+  try {
+    param = parts[1] ? decodeURIComponent(parts[1]) : null
+  } catch (_e) {
+    param = parts[1] || null
+  }
+  return { name, param }
+}
+const NAV_EVENT = 'chaekkok:nav'
+const SITE_URL = 'https://chaekkok.vercel.app'
+const DEFAULT_TITLE = typeof document !== 'undefined' ? document.title : '책콕'
+// 화면마다 브라우저 제목과 대표 주소(canonical)를 맞춘다
+function setPageMeta(title, path) {
+  try {
+    document.title = title || DEFAULT_TITLE
+    const link = document.querySelector('link[rel="canonical"]')
+    if (link) link.setAttribute('href', SITE_URL + (path || '/'))
+  } catch (_e) {
+    // 무시
+  }
+}
+const go = (path) => {
+  if (path === window.location.pathname + window.location.search) return
+  window.history.pushState(null, '', path)
+  window.dispatchEvent(new Event(NAV_EVENT))
 }
 function useRoute() {
-  const [route, setRoute] = useState(parseHash)
+  const [route, setRoute] = useState(parsePath)
   useEffect(() => {
     const on = () => {
-      const next = parseHash()
+      const next = parsePath()
       setRoute((prev) => {
         // 같은 화면 안 탭 전환이 아니면 맨 위로
         if (prev.name !== next.name || next.name === 'book' || next.name === 'keyword') window.scrollTo(0, 0)
         return next
       })
     }
-    window.addEventListener('hashchange', on)
-    return () => window.removeEventListener('hashchange', on)
+    // 앱 안 링크(<a href="/…">)는 새로고침 없이 화면만 바꾼다
+    const onClick = (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const a = e.target.closest && e.target.closest('a[href]')
+      if (!a || a.target || a.hasAttribute('download')) return
+      const href = a.getAttribute('href')
+      if (!href || !href.startsWith('/') || href.startsWith('//')) return
+      e.preventDefault()
+      go(href)
+    }
+    window.addEventListener('popstate', on)
+    window.addEventListener(NAV_EVENT, on)
+    document.addEventListener('click', onClick)
+    return () => {
+      window.removeEventListener('popstate', on)
+      window.removeEventListener(NAV_EVENT, on)
+      document.removeEventListener('click', onClick)
+    }
   }, [])
   return route
-}
-const go = (path) => {
-  window.location.hash = path
 }
 
 /* ================= 모션 도우미 ================= */
@@ -275,7 +319,7 @@ function BottomNav({ current }) {
       {items.map((it) => {
         const on = it.id === current
         return (
-          <a key={it.id} href={'#' + it.path} className={`tabbar__item${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined}>
+          <a key={it.id} href={it.path} className={`tabbar__item${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined}>
             <span className={`tabbar__icon${on ? ' hop' : ''}`}>{it.icon(on)}</span>
             <span>{it.label}</span>
           </a>
@@ -288,7 +332,7 @@ function BottomNav({ current }) {
 function BookRow({ rank, book, value, valueTone, order = 0 }) {
   const st = useBookState(book.isbn13)
   return (
-    <a className="row rise" style={delay(order, 0.05, 0.04)} href={`#/book/${encodeURIComponent(book.isbn13)}`}>
+    <a className="row rise" style={delay(order, 0.05, 0.04)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
       {rank != null && <span className={`row__rank num${rank === 1 ? ' is-first' : ''}`}>{rank}</span>}
       <Cover src={book.cover_url} alt="" className="row__cover" title={book.title} />
       <span className="row__info">
@@ -318,7 +362,7 @@ function Loading() {
 
 /* ================= 홈 ================= */
 
-const keywordHref = (w) => `#/keyword/${encodeURIComponent(w)}`
+const keywordHref = (w) => `/keyword/${encodeURIComponent(w)}`
 
 function KeywordHero({ keywords }) {
   const [wiggle, setWiggle] = useState(null)
@@ -480,10 +524,10 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread }) {
         </span>
         <span className="topbar__right">
           <span className="sub num">{DATE_LABEL}</span>
-          <a className={`iconbtn bellbtn${unread ? ' has-new' : ''}`} href="#/alerts" aria-label={unread ? `새 알림 ${unread}개` : '알림'}>
+          <a className={`iconbtn bellbtn${unread ? ' has-new' : ''}`} href="/alerts" aria-label={unread ? `새 알림 ${unread}개` : '알림'}>
             {Icon.bell(unread > 0)}
           </a>
-          <a className="iconbtn" href="#/search" aria-label="책 검색">
+          <a className="iconbtn" href="/search" aria-label="책 검색">
             {Icon.search()}
           </a>
         </span>
@@ -506,7 +550,7 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread }) {
               {rising3.map((b, i) => (
                 <BookRow key={b.isbn13} rank={i + 1} order={i + 14} book={b} value={`▲${b.rank_diff ?? 0}`} valueTone="up" />
               ))}
-              <a className="btn btn--soft btn--block" href="#/trend">
+              <a className="btn btn--soft btn--block" href="/trend">
                 트렌드 순위 전체 보기 {Icon.chev()}
               </a>
             </section>
@@ -540,7 +584,7 @@ function Upcoming({ list: all }) {
       <p className="sub">요즘 뜨는 작가의 신작 · 국립중앙도서관 출간예정 정보</p>
       <div className="hscroll">
         {list.slice(0, 10).map((b) => (
-          <a key={b.isbn13} className="mini" href={`#/book/${encodeURIComponent(b.isbn13)}`}>
+          <a key={b.isbn13} className="mini" href={`/book/${encodeURIComponent(b.isbn13)}`}>
             <span className="mini__coverwrap">
               <Cover src={b.cover_url} alt="" className="mini__cover" title={b.title} />
               <span className="mini__date num">D-{daysUntil(b.publish_date)}</span>
@@ -559,7 +603,7 @@ function Upcoming({ list: all }) {
 function HitTeaser({ stats }) {
   if (!stats || !stats.matured_total) return null
   return (
-    <a className="card hitteaser rise press" style={{ animationDelay: '0.9s' }} href="#/hits">
+    <a className="card hitteaser rise press" style={{ animationDelay: '0.9s' }} href="/hits">
       <div className="titlegroup">
         <Eyebrow>TRACK RECORD</Eyebrow>
         <strong className="display">책콕 적중 기록</strong>
@@ -644,7 +688,7 @@ function Hits({ stats, index }) {
           {books && books.length === 0 && <p className="state">아직 기록이 없어요. 매일 쌓이고 있어요.</p>}
           {books &&
             books.map((b, i) => (
-              <a key={b.isbn13} className="row rise" style={delay(i, 0.2, 0.04)} href={`#/book/${encodeURIComponent(b.isbn13)}`}>
+              <a key={b.isbn13} className="row rise" style={delay(i, 0.2, 0.04)} href={`/book/${encodeURIComponent(b.isbn13)}`}>
                 <Cover src={b.cover_url || index.get(b.isbn13)?.cover_url} alt="" className="row__cover" title={b.title} />
                 <span className="row__info">
                   <span className="row__title">{shortTitle(b.title)}</span>
@@ -718,7 +762,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo
       </header>
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
-          <a key={t.id} role="tab" aria-selected={tab === t.id} className={`tabs__item${tab === t.id ? ' is-on' : ''}`} href={`#/trend/${t.id}`}>
+          <a key={t.id} role="tab" aria-selected={tab === t.id} className={`tabs__item${tab === t.id ? ' is-on' : ''}`} href={`/trend/${t.id}`}>
             {t.label}
           </a>
         ))}
@@ -958,6 +1002,9 @@ function shopLinks(isbn) {
 
 function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
   const { book, usage, coCovers, loading } = useBook(isbn, index)
+  useEffect(() => {
+    if (book) setPageMeta(`${shortTitle(book.title)}${cleanAuthor(book.author) ? ' — ' + cleanAuthor(book.author) : ''} | 책콕`, `/book/${book.isbn13}`)
+  }, [book])
   const buyRef = useRef(null)
   const [libOpen, setLibOpen] = useState(false)
   const [heartKey, setHeartKey] = useState(0)
@@ -1093,7 +1140,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
             <p className="sub">도서관 대출 기록 기준</p>
             <div className="hscroll">
               {co.map((c) => (
-                <a key={c.isbn13 || c.title} className="mini" href={`#/book/${encodeURIComponent(c.isbn13)}`}>
+                <a key={c.isbn13 || c.title} className="mini" href={`/book/${encodeURIComponent(c.isbn13)}`}>
                   <Cover src={coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} alt="" className="mini__cover" title={c.title} />
                   <span className="mini__title">{shortTitle(c.title)}</span>
                   <span className="mini__author">{cleanAuthor(c.author)}</span>
@@ -1206,6 +1253,7 @@ function Search() {
 
 function KeywordPage({ word, index }) {
   const [res, setRes] = useState({ loading: true, list: [], related: [], error: null })
+  useEffect(() => setPageMeta(`#${word} 관련 요즘 책 | 책콕`, `/keyword/${encodeURIComponent(word)}`), [word])
   const ready = index.size > 0
   useEffect(() => {
     let off = false
@@ -1308,7 +1356,7 @@ function KeywordPage({ word, index }) {
             <div className="empty">
               <p>이 키워드로 모인 책이 아직 없어요.</p>
               <p className="sub">키워드는 매일 아침 새 데이터로 다시 모여요.</p>
-              <a className="btn btn--soft" href="#/trend">트렌드 보러 가기</a>
+              <a className="btn btn--soft" href="/trend">트렌드 보러 가기</a>
             </div>
           )}
           {!res.loading &&
@@ -1544,7 +1592,7 @@ function Alerts({ alerts, markRead, clear }) {
     <>
       <header className="detail__bar">
         <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
-        <a className="pill pill--btn alerts__set" href="#/my">알림 설정</a>
+        <a className="pill pill--btn alerts__set" href="/my">알림 설정</a>
       </header>
       <header className="pagehead pagehead--tight">
         <Eyebrow>NOTIFICATIONS</Eyebrow>
@@ -1557,11 +1605,11 @@ function Alerts({ alerts, markRead, clear }) {
             <div className="empty">
               <p>아직 새 소식이 없어요.</p>
               <p className="sub">책을 콕하거나 관심 분야를 고르면, 단계가 오르거나 새 책이 포착될 때 여기로 알려드려요.</p>
-              <a className="btn btn--soft" href="#/my">알림 설정 보기</a>
+              <a className="btn btn--soft" href="/my">알림 설정 보기</a>
             </div>
           )}
           {alerts.map((a, i) => (
-            <a key={a.id} className={`alert rise${fresh.has(a.id) ? ' is-new' : ''}`} style={delay(i, 0.05, 0.04)} href={'#' + a.url}>
+            <a key={a.id} className={`alert rise${fresh.has(a.id) ? ' is-new' : ''}`} style={delay(i, 0.05, 0.04)} href={a.url}>
               <span className={`alert__icon alert__icon--${TONE[a.type] || 'kw'}`} aria-hidden="true">
                 {a.type === 'wish' ? Icon.ginkgo(true, 20) : a.type === 'keyword' ? '#' : Icon.trend(true)}
               </span>
@@ -1633,7 +1681,7 @@ function AlertSettings({ alertState, push }) {
         )}
       </div>
       {push.msg && <p className="sub small pushbox__msg">{push.msg}</p>}
-      <a className="line" href="#/alerts">
+      <a className="line" href="/alerts">
         <span>받은 알림 보기</span>
         <span className="line__chev">{Icon.chev()}</span>
       </a>
@@ -1869,12 +1917,12 @@ function Wish({ wish, index, toggleWish }) {
             <div className="empty">
               <p>아직 콕한 책이 없어요.</p>
               <p className="sub">책 상세에서 오른쪽 위 은행잎을 누르면 여기에 모여요.</p>
-              <a className="btn btn--soft" href="#/trend">트렌드 보러 가기</a>
+              <a className="btn btn--soft" href="/trend">트렌드 보러 가기</a>
             </div>
           )}
           {items.map((w) => (
             <div key={w.isbn13} className="row row--wish">
-              <a className="row__link" href={`#/book/${encodeURIComponent(w.isbn13)}`}>
+              <a className="row__link" href={`/book/${encodeURIComponent(w.isbn13)}`}>
                 <Cover src={w.cover_url} alt="" className="row__cover" title={w.title} />
                 <span className="row__info">
                   <span className="row__title">{shortTitle(w.title)}</span>
@@ -1901,7 +1949,7 @@ function Wish({ wish, index, toggleWish }) {
         <section className="card">
           <h2 className="h2">콕한 책 소식 받기</h2>
           <p className="sub">콕한 책이 떠오름·확산·스테디 단계로 올라가면 알림으로 알려드려요.</p>
-          <a className="btn btn--soft btn--block" href="#/my">알림 설정 {Icon.chev()}</a>
+          <a className="btn btn--soft btn--block" href="/my">알림 설정 {Icon.chev()}</a>
         </section>
       </div>
     </>
@@ -2025,7 +2073,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
         </section>
 
         <section className="card">
-          <a className="line" href="#/hits">
+          <a className="line" href="/hits">
             <span>책콕 적중 기록</span>
             <span className="line__chev">{Icon.chev()}</span>
           </a>
@@ -2210,6 +2258,11 @@ function useDemo(prefs) {
 
 export default function App() {
   const route = useRoute()
+  useEffect(() => {
+    if (route.name === 'book' || route.name === 'keyword') return // 각 화면에서 정함
+    const names = { trend: '트렌드 순위', wish: '콕한 책', my: '마이', alerts: '알림', hits: '적중 기록', search: '검색' }
+    setPageMeta(names[route.name] ? `${names[route.name]} | 책콕` : DEFAULT_TITLE, window.location.pathname)
+  }, [route.name, route.param])
   const { feed, loading, error } = useFeed()
   const index = useIndex(feed)
   const keywords = useKeywords()

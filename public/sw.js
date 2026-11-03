@@ -16,14 +16,14 @@ self.addEventListener('push', (event) => {
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       tag: data.tag || 'chaekkok',
-      data: { url: data.url || '/#/alerts' },
+      data: { url: data.url || '/alerts' },
     }),
   )
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const target = new URL(event.notification.data?.url || '/#/alerts', self.location.origin).href
+  const target = new URL(event.notification.data?.url || '/alerts', self.location.origin).href
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
