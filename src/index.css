@@ -8,8 +8,14 @@
   --line: #e5e8eb;
   --line-2: #f2f4f6;
   --muted: #8b95a1;
-  --accent: #4640de;
-  --accent-soft: #eeedfd;
+  /* 핵심 색 두 가지: 인디고 블루(기본) + 은행잎 노랑(강조) */
+  --accent: #3d48c8;
+  --accent-soft: #eceefb;
+  --ginkgo: #ecbe48;
+  --ginkgo-deep: #c99a1e;
+  --ginkgo-soft: #fff5da;
+  --ginkgo-mark: rgba(240, 196, 76, 0.45);
+  --ginkgo-ink: #7f5d00;
   --up: #007a56;
   --up-soft: #e3f7ef;
   --down: #c2261c;
@@ -254,7 +260,7 @@ p {
   bottom: 8px;
   height: 22px;
   border-radius: 6px;
-  background: #dcd9ff;
+  background: var(--ginkgo-mark);
   transform-origin: left center;
 }
 .kw__desc b {
@@ -1372,7 +1378,7 @@ p {
   font-style: italic;
 }
 .row__rank.is-first {
-  color: var(--accent);
+  color: var(--ginkgo-deep);
 }
 .delta {
   flex-shrink: 0;
@@ -2055,7 +2061,7 @@ a.kw__main {
   border-bottom: 0;
 }
 .alert.is-new {
-  background: linear-gradient(90deg, #fff8e1, transparent 70%);
+  background: linear-gradient(90deg, var(--ginkgo-soft), transparent 70%);
 }
 .alert__icon {
   width: 40px;
@@ -2068,7 +2074,7 @@ a.kw__main {
   font-size: 18px;
   font-weight: 900;
 }
-.alert__icon--ginkgo { background: #fff4cc; }
+.alert__icon--ginkgo { background: var(--ginkgo-soft); }
 .alert__icon--kw { background: var(--accent-soft); color: var(--accent); }
 .alert__icon--spot { background: #f3ecfe; color: #7a3fd1; }
 .alert__body {
@@ -2309,7 +2315,7 @@ a.kw__main {
   overflow: visible;
 }
 .rankchart__band {
-  fill: #fff4cc;
+  fill: var(--ginkgo-soft);
 }
 .rankchart__bandlabel {
   font-size: 9px;
@@ -2376,7 +2382,7 @@ a.kw__main {
   border-radius: 4px;
 }
 .rankchart__mile i.is-top {
-  background: #e9b949;
+  background: var(--ginkgo);
 }
 .rankchart__mile b {
   color: var(--ink);
@@ -2390,7 +2396,7 @@ a.kw__main {
   margin-top: 10px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #fff4cc;
+  background: var(--ginkgo-soft);
   font-size: 13.5px;
   line-height: 1.5;
   color: #3d3628;
@@ -2408,8 +2414,8 @@ a.kw__main {
   gap: 4px;
   padding: 2px 8px 2px 6px;
   border-radius: 999px;
-  background: #fff4cc;
-  color: #8a5a00;
+  background: var(--ginkgo-soft);
+  color: var(--ginkgo-ink);
   font-size: 12px;
   font-weight: 800;
 }
@@ -2745,4 +2751,19 @@ a.lib__info {
 }
 .morebtn__chev.is-open {
   transform: translateY(3px) rotate(180deg);
+}
+
+/* 형광펜 강조: 은행잎 노랑을 글자 아래쪽에만 은은하게 */
+.hl {
+  color: inherit;
+  padding: 0 2px;
+  margin: 0 -1px;
+  background: linear-gradient(transparent 52%, var(--ginkgo-mark) 52%, var(--ginkgo-mark) 94%, transparent 94%);
+  border-radius: 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.statgrid strong .hl {
+  font-size: inherit;
+  color: inherit;
 }

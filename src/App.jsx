@@ -262,9 +262,9 @@ const Icon = {
   ),
   // 콕(은행잎): 꺼짐 = 윤곽선, 켜짐 = 노랗게 차오름
   ginkgo: (on, size = 22) => (
-    <svg className={`ginkgo${on ? ' is-on' : ''}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={on ? '#E2A400' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {on && <path className="ginkgo__fill" d={GINKGO_LEAF} fill="#FFC928" stroke="none" />}
-      {on && <path className="ginkgo__veins" d="M12 14.4V7.4M12 14.2 6.6 7.6M12 14.2 17.4 7.6" stroke="#F0B400" strokeWidth=".9" />}
+    <svg className={`ginkgo${on ? ' is-on' : ''}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={on ? '#C99A1E' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {on && <path className="ginkgo__fill" d={GINKGO_LEAF} fill="#ECBE48" stroke="none" />}
+      {on && <path className="ginkgo__veins" d="M12 14.4V7.4M12 14.2 6.6 7.6M12 14.2 17.4 7.6" stroke="#D9A82A" strokeWidth=".9" />}
       <path d={GINKGO_LEAF} />
       <path d="M12 15.8C12.1 17.8 11.8 19.7 11.1 21.5" />
     </svg>
@@ -413,7 +413,7 @@ function KeywordHero({ keywords }) {
       </a>
       </h2>
       <p className="kw__desc rise" style={{ animationDelay: `${after + 0.1}s` }}>
-        요즘 뜨는 책{top.books ? <b> {top.books}권</b> : ''}에서
+        요즘 뜨는 책{top.books ? <> <b className="hl">{top.books}권</b></> : ''}에서
         <br />
         가장 많이 나온 단어예요 · 누르면 관련 책을 보여줘요
       </p>
@@ -630,7 +630,7 @@ function HitTeaser({ stats }) {
         <Eyebrow>TRACK RECORD</Eyebrow>
         <strong className="display">책콕 적중 기록</strong>
         <span className="sub">
-          먼저 포착한 책의 <b className="accent num">{stats.rose_rate}%</b>가 2주 안에 순위가 더 올랐어요
+          먼저 포착한 책의 <b className="hl num">{stats.rose_rate}%</b>가 2주 안에 순위가 더 올랐어요
         </span>
       </div>
       <span className="hitteaser__go">{Icon.chev()}</span>
@@ -672,8 +672,8 @@ function Hits({ stats, index }) {
               </div>
               <div>
                 <span>2주 안에 더 오름</span>
-                <strong className="num accent">
-                  {s.rose_rate ?? '-'}
+                <strong className="num">
+                  <span className="hl">{s.rose_rate ?? '-'}</span>
                   <small>%</small>
                 </strong>
               </div>
@@ -995,7 +995,7 @@ function useBook(isbn, index) {
 const DAY_MS = 86400000
 const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / DAY_MS)
-const STAGE_COLOR = { 포착: '#7a3fd1', 떠오름: '#007a56', 확산: '#4640de', 스테디: '#4e5968' }
+const STAGE_COLOR = { 포착: '#7a3fd1', 떠오름: '#007a56', 확산: '#3d48c8', 스테디: '#4e5968' }
 
 // 콕한 날 (예전 기록은 'M/D'만 있어서 올해 날짜로 바꾼다)
 function savedOnOf(w) {
@@ -1186,7 +1186,7 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
         {changes.map((c) => (
           <circle key={c.snapshot_date} cx={x(c.i)} cy={y(c.rank_now)} r="4.5" fill={STAGE_COLOR[c.stage] || '#4e5968'} className="rankchart__dot" />
         ))}
-        {top10 && <circle cx={x(rows.indexOf(top10))} cy={y(top10.rank_now)} r="4.5" fill="#e9b949" className="rankchart__dot" />}
+        {top10 && <circle cx={x(rows.indexOf(top10))} cy={y(top10.rank_now)} r="4.5" fill="#ecbe48" className="rankchart__dot" />}
         <circle cx={x(lastIdx)} cy={y(last.rank_now)} r="6" className="rankchart__now" />
         <text x={L} y={H - 6} className="rankchart__date">{fmtDate(rows[0].snapshot_date)}</text>
         <text x={W - R} y={H - 6} textAnchor="end" className="rankchart__date">{fmtDate(rows[rows.length - 1].snapshot_date)}</text>
@@ -1374,7 +1374,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   const stats = [
     { label: '모멘텀', value: book.score != null ? (Number(book.score) * p).toFixed(1) : '-', unit: book.score != null ? '점' : '' },
     st?.rank_now != null
-      ? { label: `${st.cat || '분야'} 순위`, value: st.rank_now, unit: '위', tone: st.rank_now <= 10 ? 'accent' : '' }
+      ? { label: `${st.cat || '분야'} 순위`, value: st.rank_now, unit: '위', tone: st.rank_now <= 10 ? 'hl' : '' }
       : { label: '분야 순위', value: '순위 밖', unit: '', small: true },
     {
       label: '30일 대출',
@@ -1468,8 +1468,8 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             {stats.map((s) => (
               <div key={s.label}>
                 <span>{s.label}</span>
-                <strong className={`num ${s.tone || ''}${s.small ? ' is-small' : ''}`}>
-                  {s.value}
+                <strong className={`num${s.small ? ' is-small' : ''}`}>
+                  {s.tone === 'hl' ? <span className="hl">{s.value}</span> : s.value}
                   {s.unit && <small>{s.unit}</small>}
                 </strong>
               </div>
@@ -2716,7 +2716,7 @@ function Wish({ wish, index, toggleWish, hits }) {
             </div>
             <div>
               <span>콕 적중</span>
-              <strong className="accent">{items.filter((w) => w.hit?.hit).length}권</strong>
+              <strong className="hl">{items.filter((w) => w.hit?.hit).length}권</strong>
             </div>
             <div>
               <span>콕한 뒤 오름</span>
