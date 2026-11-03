@@ -2158,3 +2158,16 @@ a.kw__main {
 .pushbox__msg {
   margin-top: 8px;
 }
+
+/* 쿠팡 파트너스 배너 */
+.adbanner {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+.adbanner img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
