@@ -1,0 +1,10 @@
+name: site-check
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s -X POST "https://dksazvdyezxokcbjuqvp.supabase.co/functions/v1/library-info" -H "content-type: application/json" \
+            -d '{"action":"books","isbns":["9791191891287","9791192579504","9791165343729"]}' | python3 -c "import json,sys;d=json.load(sys.stdin);[print(b.get('found'),b.get('title','')[:30],b.get('cover')) for b in d.get('books',[])] if 'books' in d else print(d)"
+          curl -s -o /dev/null -w "book page %{http_code}\n" https://chaekkok.vercel.app/book/9791191891287
