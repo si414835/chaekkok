@@ -1,0 +1,24 @@
+name: 서점 링크 점검 (임시)
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+          for I in 9791140712250 9788936434120; do
+          echo "########## $I"
+          for U in \
+            "https://www.aladin.co.kr/shop/wproduct.aspx?ISBN=$I" \
+            "http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=$I" \
+            "https://product.kyobobook.co.kr/detail/$I" \
+            "https://search.kyobobook.co.kr/search?keyword=$I" \
+            "https://www.yes24.com/Product/Search?domain=BOOK&query=$I" \
+            "https://search.shopping.naver.com/book/search?query=$I" ; do
+            echo "== $U"
+            curl -sSL -A "$UA" -m 25 -o /tmp/p -w "final=%{url_effective} code=%{http_code} size=%{size_download}\n" "$U" || true
+            grep -oE 'product\.kyobobook\.co\.kr/detail/S[0-9]+|/Product/Goods/[0-9]+|wproduct\.aspx\?ItemId=[0-9]+|search\.shopping\.naver\.com/book/catalog/[0-9]+|"nvMid":"?[0-9]+' /tmp/p | sort | uniq -c | sort -rn | head -4
+            grep -oE '<title>[^<]{0,80}' /tmp/p | head -1
+          done; done
+          echo "== robots"; for H in www.kyobobook.co.kr search.kyobobook.co.kr product.kyobobook.co.kr www.yes24.com www.aladin.co.kr search.shopping.naver.com; do echo "-- $H"; curl -sS -m 15 -A "$UA" https://$H/robots.txt | head -15; done
