@@ -33,7 +33,9 @@ const TABS = [
 
 const LIST_SIZE = 30
 const today = new Date()
-const DATE_LABEL = `${today.getMonth() + 1}월 ${today.getDate()}일 기준`
+// 기기·검색 로봇의 시간대와 상관없이 한국 날짜로 표시 (데이터는 한국 시간 아침에 갱신)
+const KST_NOW = new Date(Date.now() + 9 * 3600 * 1000)
+const DATE_LABEL = `${KST_NOW.getUTCMonth() + 1}월 ${KST_NOW.getUTCDate()}일 기준`
 
 /* ================= 작은 도우미 ================= */
 
