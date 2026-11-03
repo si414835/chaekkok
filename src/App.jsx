@@ -598,12 +598,13 @@ function daysUntil(ymd) {
 function Upcoming({ list: all }) {
   // 출간일이 지난 책은 '곧 나올 책'에서 뺀다 (서버에서도 거르지만 날짜가 바뀐 직후를 대비)
   const list = (all || []).filter((b) => daysUntil(b.publish_date) != null)
-  if (list.length === 0) return null
+  // 3권보다 적으면 칸만 덩그러니 남아서 숨긴다
+  if (list.length < 3) return null
   return (
     <section className="card card--bleed rise" style={{ animationDelay: '0.8s' }}>
       <Eyebrow tone="spot">COMING SOON</Eyebrow>
       <h2 className="h2 display">곧 나올 책</h2>
-      <p className="sub">요즘 뜨는 작가의 신작 · 국립중앙도서관 출간 예정일 기준이에요. 서점에서는 출간 전에 예약 판매를 하기도 해요.</p>
+      <p className="sub">요즘 뜨는 작가의 신작 · 출간 전 예약 판매도 해요</p>
       <div className="hscroll">
         {list.slice(0, 10).map((b) => (
           <a key={b.isbn13} className="mini" href={`/book/${encodeURIComponent(b.isbn13)}`}>
@@ -890,7 +891,7 @@ function FilterSheet({ prefs, onApply, onClose }) {
             aria-label="연령·성별 필터"
             onClick={() => setDraft({ ...draft, on: !draft.on })}
           >
-            <span />
+            <i />
           </button>
         </div>
         <div className={`sheet__body${draft.on ? '' : ' is-off'}`}>
@@ -995,7 +996,7 @@ function useBook(isbn, index) {
 const DAY_MS = 86400000
 const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / DAY_MS)
-const STAGE_COLOR = { 포착: '#7a3fd1', 떠오름: '#007a56', 확산: '#3d48c8', 스테디: '#4e5968' }
+const STAGE_COLOR = { 포착: '#c99a1e', 떠오름: '#007a56', 확산: '#3d48c8', 스테디: '#4e5968' }
 
 // 콕한 날 (예전 기록은 'M/D'만 있어서 올해 날짜로 바꾼다)
 function savedOnOf(w) {
@@ -2831,17 +2832,17 @@ const STAGE_GUIDE = [
   {
     stage: '포착',
     title: '뜨기 전에 먼저 잡은 신호',
-    body: '아직 분야 인기대출 순위가 낮거나(목록 아래쪽 절반) 순위에 없지만 신호가 먼저 보인 책이에요. 사서 추천 책이나 올해 나온 신간이면서 유튜브 언급·검색 관심이 갑자기 늘었거나 지난달 대출이 30% 이상 늘었을 때 붙어요. 요즘 뜨는 작가의 신작이 곧 나올 때도 포착이에요.',
+    body: '분야 인기대출 200위 안에서 순위가 오르기 시작했지만 아직 아래쪽 절반(100위 밖)에 있는 책이에요. 지난달 대출이 30% 이상 늘었거나, 요즘 뜨는 작가의 신작이 곧 나올 때도 포착이에요.',
   },
   {
     stage: '떠오름',
     title: '순위가 오르기 시작',
-    body: '분야 인기대출 순위가 일주일 전보다 3계단 이상 올랐거나, 순위에 새로 들어왔거나, 최근 7일 안에 전국 대출 급상승 목록에 오른 책이에요.',
+    body: '분야 인기대출 위쪽 절반(100위 안)에서 순위가 오르는 책이에요. 일주일 전보다 3계단 이상이면서 10% 이상 올랐거나, 지난주 목록에 없다가 새로 들어왔거나, 최근 7일 안에 전국 대출 급상승 목록에 오르면 붙어요.',
   },
   {
     stage: '확산',
     title: '여러 곳에서 함께 뜨는 중',
-    body: '모멘텀 점수가 45점 이상이고, 대출 순위·사서 추천·지역 인기·유튜브·검색 중 서로 다른 신호가 2가지 이상 함께 잡힌 책이에요. 한 군데서만이 아니라 여기저기서 반응이 오는 단계예요.',
+    body: '순위가 오르는 중이면서 분야 상위 25%(50위 안)에 있고, 3개 이상 지역이나 3개 이상 연령·성별 인기 목록에 함께 오른 책이에요. 한 군데서만이 아니라 여기저기서 반응이 오는 단계예요.',
   },
   {
     stage: '스테디',
@@ -2937,7 +2938,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
     {
       id: 'score',
       label: '모멘텀 점수와 신뢰도는 뭔가요?',
-      body: '모멘텀은 책이 얼마나 빠르게 뜨고 있는지를 0~100점으로 나타낸 점수예요. 분야 순위가 오른 폭이 가장 크게 반영되고, 순위 신규 진입·전국 대출 급상승·지난달 대출 증가·최근 출간·사서 추천·여러 지역 인기·유튜브 언급·검색 관심을 더해요. 이미 TOP10에 오래 머문 책은 점수를 덜 받아요. 신뢰도는 함께 잡힌 신호의 가짓수로, 1가지면 낮음, 2가지면 보통, 3가지 이상이면 높음이에요.',
+      body: '모멘텀은 책이 얼마나 빠르게 뜨고 있는지를 0~100점으로 나타낸 점수예요. 분야 순위가 오른 비율이 가장 크게 반영되고, 신규 진입·전국 대출 급상승·지난달 대출 증가·최근 출간·사서 추천·여러 지역·연령 인기·유튜브 언급·검색 관심을 더해요. 이미 TOP10에 오래 머문 책은 점수를 덜 받아요. 신뢰도는 서로 다른 근거가 몇 개 겹치는지예요. 근거는 ① 순위 20% 이상 상승 ② 새로 진입 ③ 전국 급상승 ④ 일주일 내내 꾸준히 상승 ⑤ 지난달 대출 20% 이상 증가 ⑥ 3곳 이상 지역 또는 3개 이상 연령·성별 목록 ⑦ 사서 추천·유튜브·검색 급증, 7가지예요. 1개면 낮음, 2개면 보통, 3개 이상이면 높음이에요. 스테디는 10일 넘게 지켜본 책이면 높음이에요.',
     },
     {
       id: 'source',
@@ -3050,7 +3051,14 @@ function useFeed() {
       // v_feed는 탭마다 '올바른 날짜'의 데이터만 준다. 한 번에 최대 1,000건이라 탭별로 나눠 받는다.
       const types = ['composite', 'rising', 'popular', 'recommended']
       const res = await Promise.all(
-        types.map((t) => supabase.from('v_feed').select('*').eq('trend_type', t).order('snapshot_date', { ascending: false }).limit(1000)),
+        types.map((t) => {
+          let q = supabase.from('v_feed').select('*').eq('trend_type', t)
+          // 분야별 인기대출은 200위까지 모으지만 화면에는 분야마다 60위까지만 받는다 (한 번에 1,000건 제한)
+          if (t === 'popular') q = q.lte('rank', 60).order('rank')
+          else if (t === 'composite') q = q.order('score', { ascending: false })
+          else q = q.order('snapshot_date', { ascending: false })
+          return q.limit(1000)
+        }),
       )
       if (off) return
       const bad = res.find((r) => r.error)
@@ -3108,13 +3116,25 @@ function useIndex(feed) {
 function useBookStates() {
   const [map, setMap] = useState(new Map())
   useEffect(() => {
-    supabase
-      .from('v_book_state_latest')
-      .select('isbn13,snapshot_date,stage,reason,confidence,momentum,first_spotted,rank_now,cat')
-      .limit(1000)
-      .then(({ data }) => {
-        if (data) setMap(new Map(data.map((r) => [r.isbn13, r])))
-      })
+    // 분야별 200위까지 모으면서 후보가 2천 권을 넘어, 1,000건씩 나눠 받는다
+    let off = false
+    ;(async () => {
+      const all = []
+      for (let from = 0; from < 5000; from += 1000) {
+        const { data, error } = await supabase
+          .from('v_book_state_latest')
+          .select('isbn13,snapshot_date,stage,reason,confidence,momentum,first_spotted,rank_now,cat')
+          .order('isbn13')
+          .range(from, from + 999)
+        if (error || !data) break
+        all.push(...data)
+        if (data.length < 1000) break
+      }
+      if (!off && all.length) setMap(new Map(all.map((r) => [r.isbn13, r])))
+    })()
+    return () => {
+      off = true
+    }
   }, [])
   return map
 }

@@ -156,9 +156,11 @@ PAGE_SIZE = 100
 PAGES_PER_KDC = 2
 
 
-def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None, from_age=20, to_age=99):
-    end_dt = kst_yesterday_str()
-    start_dt = (kst_today() - timedelta(days=30)).strftime("%Y-%m-%d")
+def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None, from_age=20, to_age=99, snapshot=None):
+    # snapshot 날짜 기준 '전날까지 30일' 인기대출. snapshot을 주면 지난 날짜도 다시 만들 수 있다.
+    base = datetime.strptime(snapshot, "%Y-%m-%d") if snapshot else kst_today()
+    end_dt = (base - timedelta(days=1)).strftime("%Y-%m-%d")
+    start_dt = (base - timedelta(days=30)).strftime("%Y-%m-%d")
     params = {
         "authKey": DATA4LIBRARY_KEY,
         "format": "json",
@@ -196,12 +198,12 @@ def _save_loan_docs(docs, snapshot_date):
 def _collect_one_part(part, snapshot_date):
     """part = KDC 숫자(0~9) 또는 'child'. 저장 건수를 돌려준다."""
     if part == "child":
-        data = fetch_loan_items(page_no=1, page_size=PAGE_SIZE, kdc=None, from_age=0, to_age=13)
+        data = fetch_loan_items(page_no=1, page_size=PAGE_SIZE, kdc=None, from_age=0, to_age=13, snapshot=snapshot_date)
         docs = data.get("response", {}).get("docs", [])
     else:
         docs = []
         for page in range(1, PAGES_PER_KDC + 1):
-            data = fetch_loan_items(page_no=page, page_size=PAGE_SIZE, kdc=part, from_age=14, to_age=99)
+            data = fetch_loan_items(page_no=page, page_size=PAGE_SIZE, kdc=part, from_age=14, to_age=99, snapshot=snapshot_date)
             got = data.get("response", {}).get("docs", [])
             if not got:
                 if page == 1:
@@ -217,12 +219,12 @@ def _collect_one_part(part, snapshot_date):
     return _save_loan_docs(docs, snapshot_date)
 
 
-def collect_loan_items():
+def collect_loan_items(snapshot_date=None, with_child=True):
     """분야(KDC) 10개 + 어린이 목록을 하나씩 수집한다.
     한 분야가 실패해도 나머지는 계속 받고, 실패한 분야만 마지막에 한 번 더 시도한다.
     (예전에는 한 분야에서 오류가 나면 뒤 분야를 통째로 건너뛰어 '일부 분야만 저장된 날'이 생겼다.)"""
-    snapshot_date = kst_today_str()
-    parts = KDC_CODES + ["child"]
+    snapshot_date = snapshot_date or kst_today_str()
+    parts = KDC_CODES + (["child"] if with_child else [])
     total, failed = 0, []
 
     for round_no in (1, 2):
@@ -253,7 +255,35 @@ def collect_loan_items():
     return failed
 
 
+def backfill_shallow_days(max_days=1):
+    """예전에는 분야별 30~100위까지만 받았다. 순위 비교(7일 전·3~4일 전)에 쓰는 지난 날짜가
+    얕으면 200위 안쪽 책을 비교할 수 없으니, 최근 12일 중 얕은 날을 하루 max_days개씩 다시 받는다.
+    (하루 20회 정도 호출. 몇 날 지나면 저절로 다 채워져 더는 호출하지 않는다)"""
+    today = kst_today().date()
+    since = (today - timedelta(days=12)).isoformat()
+    rows = (supabase.table("v_popular_complete_dates").select("snapshot_date").gte("snapshot_date", since)
+            .lt("snapshot_date", today.isoformat()).order("snapshot_date").execute().data or [])
+    done = 0
+    for r in rows:
+        d = r["snapshot_date"]
+        deep = (supabase.table("trend_scores").select("isbn13", count="exact").eq("trend_type", "popular")
+                .eq("snapshot_date", d).gt("rank", 150).limit(1).execute())
+        if (deep.count or 0) >= 300:
+            continue
+        print(f"[되채우기] {d}: 200위까지 다시 받기")
+        collect_loan_items(snapshot_date=d, with_child=False)
+        done += 1
+        if done >= max_days:
+            break
+
+
 def main():
+    import sys
+    # 예: python collect.py --backfill 2026-10-27 2026-10-28  -> 그 날짜들만 200위까지 다시 받기
+    if "--backfill" in sys.argv:
+        for d in sys.argv[sys.argv.index("--backfill") + 1:]:
+            collect_loan_items(snapshot_date=d, with_child=False)
+        return
     try:
         count = collect_hot_trend()
         log_run("rising", None, "ok", count)
@@ -262,6 +292,10 @@ def main():
         print(f"::warning::hotTrend 수집 실패: {e}")
 
     collect_loan_items()
+    try:
+        backfill_shallow_days()
+    except Exception as e:
+        print(f"::warning::지난 날짜 되채우기 실패: {e}")
     print("\n전체 수집 완료")
 
 
