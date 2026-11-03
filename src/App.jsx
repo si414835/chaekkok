@@ -1005,9 +1005,12 @@ function shopLinks(isbn) {
   const q = encodeURIComponent(firstIsbn(isbn))
   return [
     { id: 'coupang', name: '쿠팡', mark: '쿠', url: COUPANG_LINKS[isbn] || COUPANG_LINKS[firstIsbn(isbn)] || `https://www.coupang.com/np/search?q=${q}` },
-    { id: 'kyobo', name: '교보문고', mark: '교', url: `https://search.kyobobook.co.kr/search?keyword=${q}` },
+    // 교보문고·알라딘은 ISBN 주소가 그 책 상품 페이지로 바로 연결된다 (2026-11-03 확인)
+    { id: 'kyobo', name: '교보문고', mark: '교', url: `http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=${q}` },
+    { id: 'aladin', name: '알라딘', mark: '알', url: `https://www.aladin.co.kr/shop/wproduct.aspx?ISBN=${q}` },
+    // YES24·네이버는 ISBN으로 바로 가는 공개 주소가 없어 ISBN 검색 결과(보통 그 책 1권)로 연결한다
     { id: 'yes24', name: 'YES24', mark: 'Y', url: `https://www.yes24.com/Product/Search?domain=BOOK&query=${q}` },
-    { id: 'aladin', name: '알라딘', mark: '알', url: `https://www.aladin.co.kr/search/wsearchresult.aspx?SearchTarget=Book&SearchWord=${q}` },
+    { id: 'naver', name: '네이버 도서', mark: 'N', url: `https://search.shopping.naver.com/book/search?query=${q}` },
   ]
 }
 

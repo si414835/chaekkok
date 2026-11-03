@@ -1073,6 +1073,10 @@ p {
   background: #f3ecfb;
   color: #5b2a9a;
 }
+.shop__mark--naver {
+  color: #027a3c;
+  background: #e6f7ee;
+}
 .shop__name {
   flex: 1;
   font-size: 15px;
