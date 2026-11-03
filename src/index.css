@@ -2881,3 +2881,17 @@ a.lib__info {
     transition: none;
   }
 }
+
+/* 어디서 빌릴까요: 근처 도서관은 눌러야 펼쳐진다 */
+.nearby__open {
+  border-bottom: 0;
+  padding: 6px 0;
+}
+.nearby__opentext {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nearby__chev {
+  transform: rotate(90deg);
+}

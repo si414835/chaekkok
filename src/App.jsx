@@ -2173,10 +2173,12 @@ function NearbyLibraries({ book, libs, setLibs }) {
   const [locMsg, setLocMsg] = useState('')
   const [res, setRes] = useState({ loading: false, data: null, error: null })
   const [more, setMore] = useState(false)
+  // 찜한 도서관이 있으면 그걸 먼저 보여 주고, 근처 도서관은 눌렀을 때만 펼친다
+  const [open, setOpen] = useState(libs.length === 0)
   const isbn = firstIsbn(book.isbn13)
 
   useEffect(() => {
-    if (!pos && !region) return
+    if (!open || (!pos && !region)) return
     let off = false
     setRes({ loading: true, data: null, error: null })
     supabase.functions
@@ -2194,7 +2196,7 @@ function NearbyLibraries({ book, libs, setLibs }) {
     return () => {
       off = true
     }
-  }, [isbn, region, pos]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isbn, region, pos, open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const locate = () => {
     if (!navigator.geolocation) return setLocMsg('이 기기에서는 위치를 쓸 수 없어요. 지역을 골라 주세요.')
@@ -2218,8 +2220,21 @@ function NearbyLibraries({ book, libs, setLibs }) {
     )
   const d = res.data
   const list = d?.libs || []
-  const shown = more ? list : list.slice(0, 8)
+  const FIRST = 5
+  const shown = more ? list : list.slice(0, FIRST)
   const regionName = REGION_LIST.find(([c]) => c === (d?.region || region))?.[1]
+  if (!open)
+    return (
+      <div className="nearby nearby--closed">
+        <button type="button" className="line nearby__open" onClick={() => setOpen(true)} aria-expanded="false">
+          <span className="nearby__opentext">
+            <span className="line__label">근처에서 이 책 가진 도서관 찾기</span>
+            <span className="sub small">찜한 곳에 없으면 가까운 도서관을 찾아봐요</span>
+          </span>
+          <span className="line__chev nearby__chev">{Icon.chev()}</span>
+        </button>
+      </div>
+    )
   return (
     <div className="nearby">
       <div className="nearby__head">
@@ -2284,9 +2299,9 @@ function NearbyLibraries({ book, libs, setLibs }) {
               )
             })}
           </div>
-          {list.length > 8 && !more && (
+          {list.length > FIRST && !more && (
             <button className="btn btn--soft btn--full" onClick={() => setMore(true)}>
-              {list.length - 8}곳 더 보기
+              {list.length - FIRST}곳 더 보기
             </button>
           )}
           <p className="sub small">도서관 정보나루 기준 · {fmtDate(d.checkedAt)} 확인. 대출 상태는 도서관에서 하루 한 번 보내는 정보라 실제와 다를 수 있어요. 가기 전에 도서관에 전화로 확인해 보세요.</p>
