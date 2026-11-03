@@ -1023,7 +1023,7 @@ function ShopLogo({ shop }) {
   if (fail || !shop.domain) return <span className={`shop__mark shop__mark--${shop.id}`}>{shop.mark}</span>
   return (
     <span className="shop__logo">
-      <img src={`https://www.google.com/s2/favicons?domain=${shop.domain}&sz=128`} alt="" width="28" height="28" loading="lazy" onError={() => setFail(true)} />
+      <img src={`https://www.google.com/s2/favicons?domain=${shop.domain}&sz=128`} alt="" width="32" height="32" loading="lazy" onError={() => setFail(true)} />
     </span>
   )
 }
@@ -1220,7 +1220,6 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
                 <ShopLogo shop={s} />
                 <span className="shop__text">
                   <span className="shop__name">{s.name}</span>
-                  <span className="shop__sub">{s.sub}</span>
                 </span>
                 <span className={`shop__tag${s.direct ? ' is-direct' : ''}`}>{s.direct ? '바로가기' : '검색'}</span>
                 <span className="shop__chev">{Icon.chev()}</span>
