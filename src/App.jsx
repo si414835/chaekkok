@@ -1170,7 +1170,6 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
         <section className="card" id="buy" ref={buyRef}>
           <Eyebrow>WHERE TO BUY</Eyebrow>
           <h2 className="h2 display">어디서 살까요</h2>
-          {COUPANG_AFFILIATE && <p className="notice">{AFFILIATE_NOTICE}</p>}
           <div className="shops">
             {shopLinks(book.isbn13).map((s) => (
               <a key={s.id} className="shop" href={s.url} target="_blank" rel="noopener noreferrer sponsored">
@@ -1185,6 +1184,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
               <img src={COUPANG_BANNER.img} alt={COUPANG_BANNER.alt} width={COUPANG_BANNER.w} height={COUPANG_BANNER.h} loading="lazy" />
             </a>
           )}
+          {COUPANG_AFFILIATE && <p className="notice notice--below">{AFFILIATE_NOTICE}</p>}
         </section>
       </div>
 

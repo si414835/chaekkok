@@ -2161,13 +2161,20 @@ a.kw__main {
 
 /* 쿠팡 파트너스 배너 */
 .adbanner {
-  display: flex;
-  justify-content: center;
+  display: block;
   margin-top: 16px;
 }
 .adbanner img {
   display: block;
-  max-width: 100%;
+  width: 100%;
   height: auto;
-  border-radius: 8px;
+  aspect-ratio: 320 / 50;
+  border-radius: 10px;
+}
+.notice--below {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: keep-all;
 }
