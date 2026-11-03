@@ -3,9 +3,12 @@ import { supabase } from './lib/supabase'
 
 /* ================= 설정 ================= */
 
-// 쿠팡 파트너스 가입 후 받은 링크 형식을 넣으면 구매 버튼이 제휴 링크로 바뀌고
-// 공정위 표기 문구가 자동으로 나타난다. 예: (isbn) => `https://link.coupang.com/...${isbn}`
-const COUPANG_AFFILIATE = null
+// 쿠팡 파트너스: 최종 승인 전에는 API를 못 써서, 파트너스 화면에서 직접 만든 링크를 책별로 넣는다.
+// 예: { '9791140712250': 'https://link.coupang.com/a/xxxx' }
+// 여기 있는 책은 구매 버튼이 제휴 링크로 바뀌고, 공정위 표기 문구가 자동으로 나타난다.
+// (최종 승인 후에는 파트너스 API로 모든 책을 자동 연결할 예정)
+const COUPANG_LINKS = {}
+const COUPANG_AFFILIATE = Object.keys(COUPANG_LINKS).length > 0
 const AFFILIATE_NOTICE =
   '이 페이지는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.'
 
@@ -993,7 +996,7 @@ function Groups({ groups }) {
 function shopLinks(isbn) {
   const q = encodeURIComponent(firstIsbn(isbn))
   return [
-    { id: 'coupang', name: '쿠팡', mark: '쿠', url: COUPANG_AFFILIATE ? COUPANG_AFFILIATE(q) : `https://www.coupang.com/np/search?q=${q}` },
+    { id: 'coupang', name: '쿠팡', mark: '쿠', url: COUPANG_LINKS[isbn] || COUPANG_LINKS[firstIsbn(isbn)] || `https://www.coupang.com/np/search?q=${q}` },
     { id: 'kyobo', name: '교보문고', mark: '교', url: `https://search.kyobobook.co.kr/search?keyword=${q}` },
     { id: 'yes24', name: 'YES24', mark: 'Y', url: `https://www.yes24.com/Product/Search?domain=BOOK&query=${q}` },
     { id: 'aladin', name: '알라딘', mark: '알', url: `https://www.aladin.co.kr/search/wsearchresult.aspx?SearchTarget=Book&SearchWord=${q}` },
@@ -1159,7 +1162,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
         <section className="card" id="buy" ref={buyRef}>
           <Eyebrow>WHERE TO BUY</Eyebrow>
           <h2 className="h2 display">어디서 살까요</h2>
-          {COUPANG_AFFILIATE && <p className="notice">{AFFILIATE_NOTICE}</p>}
+          {(COUPANG_LINKS[book.isbn13] || COUPANG_LINKS[firstIsbn(book.isbn13)]) && <p className="notice">{AFFILIATE_NOTICE}</p>}
           <div className="shops">
             {shopLinks(book.isbn13).map((s) => (
               <a key={s.id} className="shop" href={s.url} target="_blank" rel="noopener noreferrer sponsored">
