@@ -2125,7 +2125,7 @@ function useLockBody() {
   }, [])
 }
 
-function Sheet({ label, onClose, children }) {
+function Sheet({ label, onClose, children, className = '' }) {
   useLockBody()
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -2135,7 +2135,7 @@ function Sheet({ label, onClose, children }) {
   return (
     <div className="sheet" role="dialog" aria-modal="true" aria-label={label}>
       <button className="sheet__dim" aria-label="닫기" onClick={onClose} />
-      <div className="sheet__panel">
+      <div className={`sheet__panel ${className}`}>
         <span className="sheet__grip" aria-hidden="true" />
         {children}
       </div>
@@ -2161,10 +2161,26 @@ const DAY_KO = { Sunday: '일', Monday: '월', Tuesday: '화', Wednesday: '수',
 const hourLabel = (h) => (h === 0 ? '자정' : h < 12 ? `오전 ${h}시` : h === 12 ? '낮 12시' : `오후 ${h - 12}시`)
 
 function libStatus(l) {
-  if (l.hasBook === false) return ['소장 확인 안 됨', 'muted']
+  if (l.hasBook === false) return ['확인 안 됨', 'muted']
   if (l.loanAvailable === true) return ['대출 가능', 'up']
   if (l.loanAvailable === false) return ['대출 중', 'warn']
-  return ['소장 · 대출 여부 모름', 'muted']
+  return ['소장', 'muted'] // 소장 목록에는 있지만 지금 대출 가능한지는 확인 안 한 곳
+}
+
+// 한 줄 제목을 누르면 아래 내용이 펼쳐지는 칸
+function Fold({ title, hint, open, onToggle, children }) {
+  return (
+    <div className={`fold${open ? ' is-open' : ''}`}>
+      <button type="button" className="fold__head" onClick={onToggle} aria-expanded={open}>
+        <span className="fold__text">
+          <span className="fold__title">{title}</span>
+          {hint && !open && <span className="fold__hint">{hint}</span>}
+        </span>
+        <span className="fold__chev" aria-hidden="true">{Icon.chev()}</span>
+      </button>
+      {open && <div className="fold__body">{children}</div>}
+    </div>
+  )
 }
 
 function NearbyLibraries({ book, libs, setLibs }) {
@@ -2173,8 +2189,8 @@ function NearbyLibraries({ book, libs, setLibs }) {
   const [locMsg, setLocMsg] = useState('')
   const [res, setRes] = useState({ loading: false, data: null, error: null })
   const [more, setMore] = useState(false)
-  // 찜한 도서관이 있으면 그걸 먼저 보여 주고, 근처 도서관은 눌렀을 때만 펼친다
-  const [open, setOpen] = useState(libs.length === 0)
+  // 근처 도서관은 눌렀을 때만 펼치고 불러온다
+  const [open, setOpen] = useState(false)
   const isbn = firstIsbn(book.isbn13)
 
   useEffect(() => {
@@ -2223,54 +2239,40 @@ function NearbyLibraries({ book, libs, setLibs }) {
   const FIRST = 5
   const shown = more ? list : list.slice(0, FIRST)
   const regionName = REGION_LIST.find(([c]) => c === (d?.region || region))?.[1]
-  if (!open)
-    return (
-      <div className="nearby nearby--closed">
-        <button type="button" className="line nearby__open" onClick={() => setOpen(true)} aria-expanded="false">
-          <span className="nearby__opentext">
-            <span className="line__label">근처에서 이 책 가진 도서관 찾기</span>
-            <span className="sub small">찜한 곳에 없으면 가까운 도서관을 찾아봐요</span>
-          </span>
-          <span className="line__chev nearby__chev">{Icon.chev()}</span>
-        </button>
-      </div>
-    )
+  const sortLabel = d?.sortedBy === 'distance' ? '가까운 순' : d?.sortedBy === 'city' ? '내 도서관 근처 먼저' : '이름순'
   return (
-    <div className="nearby">
-      <div className="nearby__head">
-        <p className="alt__title">근처에서 이 책 가진 도서관</p>
-        <div className="nearby__controls">
-          <button className={`pill pill--btn${pos ? ' is-on' : ''}`} onClick={locate}>
-            내 위치로 찾기
-          </button>
-          <label className="nearby__region">
-            <span className="sr-only">지역</span>
-            <select
-              value={pos ? '' : region || ''}
-              onChange={(e) => {
-                setPos(null)
-                setRegion(e.target.value || null)
-              }}
-            >
-              <option value="">{pos ? '내 위치 기준' : '지역 선택'}</option>
-              {REGION_LIST.map(([c, n]) => (
-                <option key={c} value={c}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+    <Fold title="근처 도서관 찾기" hint="이 책이 있는 도서관과 대출 가능 여부" open={open} onToggle={() => setOpen(!open)}>
+      <div className="nearby__controls">
+        <button className={`pill pill--btn${pos ? ' is-on' : ''}`} onClick={locate}>
+          내 위치로 찾기
+        </button>
+        <label className="nearby__region">
+          <span className="sr-only">지역</span>
+          <select
+            value={pos ? '' : region || ''}
+            onChange={(e) => {
+              setPos(null)
+              setRegion(e.target.value || null)
+            }}
+          >
+            <option value="">{pos ? '내 위치 기준' : '지역 선택'}</option>
+            {REGION_LIST.map(([c, n]) => (
+              <option key={c} value={c}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-      {locMsg && <p className="sub small">{locMsg}</p>}
-      {!pos && !region && <p className="sub">내 위치를 켜거나 지역을 고르면, 이 책을 가진 도서관을 찾아 대출 가능 여부까지 확인해 드려요.</p>}
-      {res.loading && <p className="state">이 책을 가진 도서관을 찾는 중이에요…</p>}
+      {locMsg && <p className="nearby__note">{locMsg}</p>}
+      {!pos && !region && <p className="nearby__note">내 위치를 켜거나 지역을 골라 주세요.</p>}
+      {res.loading && <p className="state">찾는 중이에요…</p>}
       {res.error && <p className="state state--error">{res.error}</p>}
-      {d && !res.loading && d.total === 0 && <p className="sub">{regionName} 지역에는 이 책을 가진 공공도서관이 정보나루에 없어요. 다른 지역을 골라 보거나 아래 책바다를 이용해 보세요.</p>}
+      {d && !res.loading && d.total === 0 && <p className="nearby__note">{regionName}에는 이 책을 가진 도서관이 없어요. 다른 지역을 골라 보세요.</p>}
       {d && !res.loading && d.total > 0 && (
         <>
-          <p className="sub small">
-            {regionName} {d.total.toLocaleString()}곳이 이 책을 가지고 있어요 · {d.sortedBy === 'distance' ? '가까운 순' : d.sortedBy === 'city' ? '내 도서관과 같은 시·군 먼저' : '이름순'} · 위 {d.checked}곳은 대출 가능 여부까지 확인했어요
+          <p className="nearby__note">
+            {regionName} <b>{d.total.toLocaleString()}곳</b> 소장 · {sortLabel}
           </p>
           <div className="libs">
             {shown.map((l) => {
@@ -2279,17 +2281,15 @@ function NearbyLibraries({ book, libs, setLibs }) {
               return (
                 <div key={l.libCode} className="lib lib--near">
                   <a className="lib__info" href={`/library/${l.libCode}`}>
-                    <strong>{l.name}</strong>
+                    <strong title={l.name}>{l.name}</strong>
                     <span className="sub">
                       {l.distanceKm != null ? `${l.distanceKm}km · ` : ''}
+                      {l.closedToday ? '오늘 휴관 · ' : ''}
                       {l.address}
-                    </span>
-                    <span className="lib__badges">
-                      <span className={`pill pill--${tone}`}>{label}</span>
-                      {l.closedToday && <span className="pill pill--warn">오늘 휴관</span>}
                     </span>
                   </a>
                   <span className="lib__acts">
+                    <span className={`pill pill--${tone} lib__state`}>{label}</span>
                     <a className="pill pill--btn" href={mapLink(l)} target="_blank" rel="noopener noreferrer">지도</a>
                     <button className={`pill pill--btn${saved ? ' is-on' : ''}`} onClick={() => toggleSave(l)} disabled={!saved && libs.length >= MAX_LIBS} aria-pressed={saved}>
                       {saved ? '찜함' : '찜'}
@@ -2304,10 +2304,10 @@ function NearbyLibraries({ book, libs, setLibs }) {
               {list.length - FIRST}곳 더 보기
             </button>
           )}
-          <p className="sub small">도서관 정보나루 기준 · {fmtDate(d.checkedAt)} 확인. 대출 상태는 도서관에서 하루 한 번 보내는 정보라 실제와 다를 수 있어요. 가기 전에 도서관에 전화로 확인해 보세요.</p>
+          <p className="nearby__note">대출 상태는 하루 한 번 바뀌어요. 가기 전에 전화로 확인해 보세요.</p>
         </>
       )}
-    </div>
+    </Fold>
   )
 }
 
@@ -2609,18 +2609,20 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick }) {
     return r.loanAvailable ? ['대출 가능', 'up'] : ['대출 중', 'warn']
   }
 
+  const [altOpen, setAltOpen] = useState(false)
   return (
-    <Sheet label="내 도서관 소장 현황" onClose={onClose}>
-      <div className="sheet__head">
-        <div>
-          <h2 className="h2">어디서 빌릴까요</h2>
-          <p className="sub">{shortTitle(book.title)}</p>
-        </div>
+    <Sheet label="어디서 빌릴까요" onClose={onClose} className="wsheet">
+      <div className="wsheet__head">
+        <h2 className="wsheet__title">어디서 빌릴까요?</h2>
+        <p className="wsheet__book">
+          <span className="hl">{shortTitle(book.title)}</span>
+        </p>
       </div>
       {libs.length === 0 ? (
-        <p className="sub">찜한 도서관이 없어서 근처 도서관에서 찾아볼게요. 자주 가는 곳은 '찜'을 눌러 두면 다음부터 맨 위에 보여요.</p>
+        <p className="wsheet__empty">찜한 도서관이 없어요. 아래에서 근처 도서관을 찾아보세요.</p>
       ) : (
-        <div className="libs">
+        <div className="libs wsheet__mine">
+          <p className="wsheet__label">내 도서관</p>
           {state.error && <p className="state state--error">{state.error}</p>}
           {libs.map((l) => {
             const [label, tone] = status(state.results[l.libCode])
@@ -2637,35 +2639,30 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick }) {
               </div>
             )
           })}
-          <p className="sub small">소장·대출 정보는 도서관 정보나루 기준이라 실제와 조금 다를 수 있어요.</p>
-
-          {!state.loading && !state.error && libs.some((l) => {
-            const r = state.results[l.libCode]
-            return r && !r.error && (!r.hasBook || r.loanAvailable === false)
-          }) && (
-            <div className="alt">
-              <p className="alt__title">바로 못 빌린다면</p>
-              <a className="alt__item press" href="https://books.nl.go.kr" target="_blank" rel="noopener noreferrer">
-                <span>
-                  <b>책바다 (상호대차)</b>
-                  <small>다른 지역 도서관 책을 내 도서관으로 택배 배송 · 택배비 일부 본인 부담</small>
-                </span>
-                {Icon.chev()}
-              </a>
-              {libs[0]?.homepage && (
-                <a className="alt__item press" href={libs[0].homepage} target="_blank" rel="noopener noreferrer">
-                  <span>
-                    <b>희망도서 바로대출</b>
-                    <small>도서관에 없는 신간을 동네 서점에서 바로 빌리기 · 도서관마다 운영 여부가 달라요</small>
-                  </span>
-                  {Icon.chev()}
-                </a>
-              )}
-            </div>
-          )}
         </div>
       )}
       <NearbyLibraries book={book} libs={libs} setLibs={setLibs} />
+      <Fold title="바로 못 빌린다면?" hint="책바다 · 희망도서 바로대출" open={altOpen} onToggle={() => setAltOpen(!altOpen)}>
+        <div className="alt">
+          <a className="alt__item press" href="https://books.nl.go.kr" target="_blank" rel="noopener noreferrer">
+            <span>
+              <b>책바다 (상호대차)</b>
+              <small>다른 지역 책을 내 도서관으로 택배 배송</small>
+            </span>
+            {Icon.chev()}
+          </a>
+          {libs[0]?.homepage && (
+            <a className="alt__item press" href={libs[0].homepage} target="_blank" rel="noopener noreferrer">
+              <span>
+                <b>희망도서 바로대출</b>
+                <small>없는 신간을 동네 서점에서 바로 빌리기</small>
+              </span>
+              {Icon.chev()}
+            </a>
+          )}
+        </div>
+      </Fold>
+      <p className="wsheet__foot">소장·대출 정보는 도서관 정보나루 기준이에요.</p>
       <div className="sheet__actions">
         <button className="btn btn--soft" onClick={onPick}>{libs.length > 0 ? '내 도서관 관리' : '도서관 이름으로 찾기'}</button>
       </div>

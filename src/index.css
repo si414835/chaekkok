@@ -2895,3 +2895,157 @@ a.lib__info {
 .nearby__chev {
   transform: rotate(90deg);
 }
+
+/* 어디서 빌릴까요? — 글자 조금 크게, 정보는 접어서 */
+.wsheet {
+  gap: 4px;
+}
+.wsheet__head {
+  padding: 4px 0 10px;
+}
+.wsheet__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+.wsheet__book {
+  margin: 8px 0 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.4;
+  word-break: keep-all;
+}
+.wsheet__label {
+  margin: 4px 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.wsheet__empty {
+  margin: 4px 0;
+  font-size: 15px;
+  color: var(--ink-3);
+}
+.wsheet .lib__info strong {
+  font-size: 16.5px;
+}
+.wsheet .lib__info .sub {
+  font-size: 13.5px;
+}
+.wsheet .pill {
+  font-size: 13.5px;
+}
+.wsheet__foot {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wsheet__mine .lib:last-child {
+  border-bottom: 0;
+}
+
+.fold {
+  border-top: 1px solid var(--line-2);
+}
+.fold__head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.fold__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fold__title {
+  font-size: 17px;
+  font-weight: 800;
+}
+.fold__hint {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.fold__chev {
+  display: inline-flex;
+  color: var(--muted);
+  transform: rotate(90deg);
+  transition: transform 0.25s;
+}
+.fold.is-open .fold__chev {
+  transform: rotate(-90deg);
+}
+.fold__body {
+  padding-bottom: 12px;
+  animation: fold-in 0.25s ease-out;
+}
+@keyframes fold-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fold .alt {
+  margin-top: 0;
+}
+.wsheet .alt__item b {
+  font-size: 15.5px;
+}
+.wsheet .alt__item small {
+  font-size: 13px;
+}
+.nearby__note {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.nearby__note b {
+  color: var(--ink);
+}
+.fold .nearby__controls .pill,
+.fold .nearby__region select {
+  height: 38px;
+  font-size: 14px;
+}
+.lib--near {
+  align-items: center;
+}
+.lib__state {
+  min-width: 0;
+}
+.lib__acts .lib__state {
+  padding-left: 9px;
+  padding-right: 9px;
+}
+/* 근처 도서관 줄: 이름은 한 줄(넘치면 …), 상태·지도·찜은 작게 붙여서 */
+.lib--near .lib__info strong {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib--near .lib__acts {
+  gap: 4px;
+}
+.lib--near .lib__acts .pill {
+  height: 34px;
+  padding: 0 10px;
+  min-width: 0;
+  font-size: 13.5px;
+}
