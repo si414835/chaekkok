@@ -8,12 +8,12 @@ import { supabase } from './lib/supabase'
 // 여기 있는 책은 구매 버튼이 제휴 링크로 바뀌고, 공정위 표기 문구가 자동으로 나타난다.
 // (최종 승인 후에는 파트너스 API로 모든 책을 자동 연결할 예정)
 const COUPANG_LINKS = {}
-// 쿠팡 파트너스 '배너 생성'(로켓 도서, 320x50)에서 받은 HTML 태그의 링크와 이미지
+// 쿠팡 파트너스 '배너 생성'(로켓 도서, 728x90)에서 받은 HTML 태그의 링크와 이미지
 const COUPANG_BANNER = {
-  href: 'https://link.coupang.com/a/indFclXm2K',
-  img: 'https://ads-partners.coupang.com/banners/1046137?trackingCode=AF4146233&subId=&traceId=V0-301-f5c692db558def48-I1046137&w=320&h=50',
-  w: 320,
-  h: 50,
+  href: 'https://link.coupang.com/a/indTOETos0',
+  img: 'https://ads-partners.coupang.com/banners/1046134?trackingCode=AF4146233&subId=&traceId=V0-301-f5c692db558def48-I1046134&w=728&h=90',
+  w: 728,
+  h: 90,
   alt: '쿠팡 로켓 도서 — 한 권만 사도 무료배송',
 }
 const COUPANG_AFFILIATE = Object.keys(COUPANG_LINKS).length > 0 || !!COUPANG_BANNER
