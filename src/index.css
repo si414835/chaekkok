@@ -1941,3 +1941,33 @@ p {
 .lead b {
   font-size: 18px;
 }
+
+/* 마이: 트렌드 단계 설명 */
+.glossary {
+  list-style: none;
+  margin: 14px 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.glossary__item {
+  padding-left: 12px;
+  border-left: 2px solid var(--line-2);
+}
+.glossary__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.glossary__head strong {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+.glossary__item p {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  word-break: keep-all;
+}

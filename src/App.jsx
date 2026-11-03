@@ -1431,19 +1431,42 @@ function Wish({ wish, index, toggleWish }) {
 
 /* ================= 마이 ================= */
 
+const STAGE_GUIDE = [
+  {
+    stage: '포착',
+    title: '뜨기 전에 먼저 잡은 신호',
+    body: '아직 분야 인기대출 순위가 낮거나(목록 아래쪽 절반) 순위에 없지만 신호가 먼저 보인 책이에요. 사서 추천 책이나 올해 나온 신간이면서 유튜브 언급·검색 관심이 갑자기 늘었거나 지난달 대출이 30% 이상 늘었을 때 붙어요. 요즘 뜨는 작가의 신작이 곧 나올 때도 포착이에요.',
+  },
+  {
+    stage: '떠오름',
+    title: '순위가 오르기 시작',
+    body: '분야 인기대출 순위가 일주일 전보다 3계단 이상 올랐거나, 순위에 새로 들어왔거나, 최근 7일 안에 전국 대출 급상승 목록에 오른 책이에요.',
+  },
+  {
+    stage: '확산',
+    title: '여러 곳에서 함께 뜨는 중',
+    body: '모멘텀 점수가 45점 이상이고, 대출 순위·사서 추천·지역 인기·유튜브·검색 중 서로 다른 신호가 2가지 이상 함께 잡힌 책이에요. 한 군데서만이 아니라 여기저기서 반응이 오는 단계예요.',
+  },
+  {
+    stage: '스테디',
+    title: '이미 자리 잡은 인기 책',
+    body: '최근 3주 동안 데이터가 모두 모인 날의 90% 이상을 분야 TOP10에 머문 책이에요. 새로 뜨는 책을 먼저 보여주려고 종합 순위에서는 빼고, 꾸준한 인기 탭에서 볼 수 있어요.',
+  },
+]
+
 function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary }) {
   const [openInfo, setOpenInfo] = useState(null)
   const toggle = (c) => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])
   const infos = [
     {
       id: 'score',
-      label: '책콕 점수는 어떻게 계산하나요',
-      body: '도서관 대출 급상승, 꾸준한 대출량, 유튜브 언급, 구글 검색 관심도를 합쳐 0~100점으로 계산해요. 뉴스·블로그 같은 신호는 연결되는 대로 더해질 예정이에요.',
+      label: '모멘텀 점수와 신뢰도는 뭔가요',
+      body: '모멘텀은 책이 얼마나 빠르게 뜨고 있는지를 0~100점으로 나타낸 점수예요. 분야 순위가 오른 폭이 가장 크게 반영되고, 순위 신규 진입·전국 대출 급상승·지난달 대출 증가·최근 출간·사서 추천·여러 지역 인기·유튜브 언급·검색 관심을 더해요. 이미 TOP10에 오래 머문 책은 점수를 덜 받아요. 신뢰도는 함께 잡힌 신호의 가짓수로, 1가지면 낮음, 2가지면 보통, 3가지 이상이면 높음이에요.',
     },
     {
       id: 'source',
       label: '데이터는 어디서 오나요',
-      body: '도서관 정보나루(전국 공공도서관 대출 데이터)와 국립중앙도서관 사서추천도서를 매일 아침 모아서 보여줘요.',
+      body: '도서관 정보나루(전국 공공도서관 대출 데이터), 국립중앙도서관 사서추천도서와 출간예정 도서 정보, 유튜브 언급량, 구글 검색 관심도를 매일 아침 모아서 보여줘요.',
     },
   ]
   return (
@@ -1512,6 +1535,25 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
         </section>
 
         <section className="card">
+          <h2 className="h3">트렌드 단계, 이렇게 읽어요</h2>
+          <p className="sub">책이 뜨기 시작해서 자리 잡기까지를 네 단계로 나눠요.</p>
+          <ol className="glossary">
+            {STAGE_GUIDE.map((g) => (
+              <li key={g.stage} className="glossary__item">
+                <span className="glossary__head">
+                  <StageBadge stage={g.stage} />
+                  <strong>{g.title}</strong>
+                </span>
+                <p>{g.body}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="sub small">
+            조건이 여러 개 맞으면 스테디 → 확산 → 떠오름 → 포착 순서로 먼저 맞는 단계 하나만 붙어요. 아무 조건에도 맞지 않으면 단계 없이 보여요.
+          </p>
+        </section>
+
+        <section className="card">
           <a className="line" href="#/hits">
             <span>책콕 적중 기록</span>
             <span className="line__chev">{Icon.chev()}</span>
@@ -1527,7 +1569,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
           ))}
         </section>
         <p className="foot">
-          데이터 출처: 도서관 정보나루, 국립중앙도서관 사서추천도서
+          데이터 출처: 도서관 정보나루, 국립중앙도서관(사서추천·출간예정), 유튜브, 구글 트렌드
           {COUPANG_AFFILIATE && (
             <>
               <br />
