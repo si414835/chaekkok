@@ -170,9 +170,20 @@ def collect_keywords():
 
 # ---------- 2. 연령·성별 인기대출 ----------
 
+def already_today(table, snapshot):
+    """같은 날 두 번 돌 때(예약 실행이 늦게 와서 직접 돌린 뒤 등) 정보나루 호출을 아끼려고 건너뛴다."""
+    try:
+        return bool(supabase.table(table).select("isbn13").eq("snapshot_date", snapshot).limit(1).execute().data)
+    except Exception:
+        return False
+
+
 def collect_demographics():
     today = now_kst()
     snapshot = today.strftime("%Y-%m-%d")
+    if already_today("demo_popular", snapshot):
+        print("[연령·성별] 오늘 이미 받아서 건너뜀")
+        return 0
     period = {
         "startDt": (today - timedelta(days=30)).strftime("%Y-%m-%d"),
         "endDt": (today - timedelta(days=1)).strftime("%Y-%m-%d"),
@@ -236,6 +247,9 @@ REGIONS = ["11", "21", "22", "23", "24", "25", "26", "29", "31", "32", "33", "34
 def collect_regions():
     today = now_kst()
     snapshot = today.strftime("%Y-%m-%d")
+    if already_today("region_popular", snapshot):
+        print("[지역] 오늘 이미 받아서 건너뜀")
+        return 0
     period = {
         "startDt": (today - timedelta(days=30)).strftime("%Y-%m-%d"),
         "endDt": (today - timedelta(days=1)).strftime("%Y-%m-%d"),

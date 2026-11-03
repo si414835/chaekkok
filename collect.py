@@ -305,7 +305,12 @@ def main():
         print(f"::warning::hotTrend 수집 실패: {e}")
 
     try:
-        collect_loan_items()
+        done = (supabase.table("trend_scores").select("isbn13", count="exact").eq("trend_type", "popular")
+                .eq("snapshot_date", kst_today_str()).gt("rank", 150).limit(1).execute())
+        if (done.count or 0) >= 300:
+            print("[loanItemSrch] 오늘 이미 200위까지 받아서 건너뜀")
+        else:
+            collect_loan_items()
     except BudgetExceeded as e:
         print(f"::warning::인기대출 수집 중단 - {e}")
         return
