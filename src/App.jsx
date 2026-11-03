@@ -245,6 +245,9 @@ function Delta({ value }) {
 
 const GINKGO_LEAF = 'M12 15.8C11 13 5.9 9.8 2.8 8C2.2 7.2 2.4 6.1 3.3 5.4C5.4 3.8 8.4 2.9 10.7 3L12 5.3L13.3 3C15.6 2.9 18.6 3.8 20.7 5.4C21.6 6.1 21.8 7.2 21.2 8C18.1 9.8 13 13 12 15.8Z'
 const Icon = {
+  menu: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg>
+  ),
   home: (on) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M4 10l8-6 8 6v10H4z" /></svg>
   ),
@@ -738,8 +741,47 @@ function Hits({ stats, index }) {
 
 /* ================= 트렌드 ================= */
 
-function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo }) {
+function PrefsSheet({ prefs, interests, setInterests, onOpenFilter, onClose }) {
+  const toggle = (c) => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])
+  return (
+    <Sheet label="내 취향" onClose={onClose}>
+      <div className="sheet__head">
+        <div>
+          <h2 className="h2">내 취향</h2>
+          <p className="sub">트렌드 순위를 나에게 맞게 볼 수 있어요</p>
+        </div>
+      </div>
+      <button
+        className="line"
+        onClick={() => {
+          onClose()
+          onOpenFilter()
+        }}
+      >
+        <span>연령대·성별</span>
+        <span className="line__value">
+          {prefs.on ? demoLabel(prefs) : '설정 안 함'} {Icon.chev()}
+        </span>
+      </button>
+      <p className="label">관심 분야</p>
+      <div className="chips chips--wrap">
+        {CATEGORIES.filter((c) => c !== '전체').map((c) => (
+          <button key={c} className={`chip${interests.includes(c) ? ' is-picked' : ''}`} aria-pressed={interests.includes(c)} onClick={() => toggle(c)}>
+            {c === '어린이' ? '어린이 책' : c}
+          </button>
+        ))}
+      </div>
+      <p className="sub small">관심 분야는 분야 버튼 앞쪽에 먼저 보이고, 새로 포착된 책 알림에도 쓰여요.</p>
+      <button className="btn btn--primary btn--full" onClick={onClose}>
+        완료
+      </button>
+    </Sheet>
+  )
+}
+
+function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOpenFilter, demo }) {
   const [cat, setCat] = useState('전체')
+  const [menu, setMenu] = useState(false)
   const demoActive = tab === 'popular' && prefs.on
 
   const cats = useMemo(() => {
@@ -766,11 +808,15 @@ function Trend({ tab, feed, loading, error, prefs, interests, onOpenFilter, demo
 
   return (
     <>
-      <header className="pagehead">
+      <header className="pagehead pagehead--withmenu">
         <Eyebrow>TREND</Eyebrow>
         <h1 className="h1 display">트렌드</h1>
         <span className="sub">{DATE_LABEL} · 전국 공공도서관 대출 데이터</span>
+        <button className={`iconbtn menubtn${prefs.on || interests.length ? ' has-set' : ''}`} onClick={() => setMenu(true)} aria-label="내 취향 설정">
+          {Icon.menu()}
+        </button>
       </header>
+      {menu && <PrefsSheet prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={onOpenFilter} onClose={() => setMenu(false)} />}
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
           <a key={t.id} role="tab" aria-selected={tab === t.id} className={`tabs__item${tab === t.id ? ' is-on' : ''}`} href={`/trend/${t.id}`}>
@@ -1446,11 +1492,11 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary, hits }) {
       </div>
 
       <div className="actionbar">
-        <button className="btn btn--soft" onClick={() => setLibOpen(true)}>
-          도서관에서 빌리기
-        </button>
-        <button className="btn btn--primary" onClick={() => buyRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <button className="btn btn--soft" onClick={() => buyRef.current?.scrollIntoView({ behavior: 'smooth' })}>
           구매하기
+        </button>
+        <button className="btn btn--primary" onClick={() => setLibOpen(true)}>
+          도서관에서 빌리기
         </button>
       </div>
       {libOpen && (
@@ -1949,16 +1995,25 @@ function AlertSettings({ alertState, push }) {
               ? '아이폰은 Safari 공유 버튼 → 홈 화면에 추가한 뒤, 홈 화면의 책콕에서 켤 수 있어요.'
               : push.support === 'no'
                 ? '이 브라우저는 휴대폰 알림을 지원하지 않아요. 알림은 앱 안 종 모양에서 볼 수 있어요.'
-                : push.on
-                  ? '켜짐 · 매일 아침 새 소식이 있을 때만 한 번 보내요'
-                  : '앱을 닫아 둬도 새 소식을 알려드려요'}
+                : push.busy
+                  ? '설정하는 중이에요…'
+                  : push.on
+                    ? '켜짐 · 매일 아침 새 소식이 있을 때만 한 번 보내요'
+                    : '꺼짐 · 켜면 앱을 닫아 둬도 새 소식을 알려드려요'}
           </span>
         </span>
-        {push.support === 'ok' && (
-          <button className={`btn ${push.on ? 'btn--soft' : 'btn--primary'} btn--sm`} disabled={push.busy} onClick={push.on ? push.disable : push.enable}>
-            {push.busy ? '잠시만요' : push.on ? '끄기' : '켜기'}
-          </button>
-        )}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={push.on}
+          aria-label="휴대폰 알림"
+          aria-busy={push.busy}
+          disabled={push.support !== 'ok' || push.busy}
+          className={`switch${push.on ? ' is-on' : ''}${push.busy ? ' is-busy' : ''}`}
+          onClick={push.on ? push.disable : push.enable}
+        >
+          <i />
+        </button>
       </div>
       {push.msg && <p className="sub small pushbox__msg">{push.msg}</p>}
       <a className="line" href="/alerts">
@@ -2327,16 +2382,38 @@ function MyHits({ wish, hits }) {
 
 function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary, alertState, push, wish, hits }) {
   const [openInfo, setOpenInfo] = useState(null)
-  const toggle = (c) => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])
   const infos = [
     {
+      id: 'stages',
+      label: '트렌드 단계, 이렇게 읽어요',
+      body: (
+        <>
+          <span className="glossary__lead">책이 뜨기 시작해서 자리 잡기까지를 네 단계로 나눠요.</span>
+          <ol className="glossary">
+            {STAGE_GUIDE.map((g) => (
+              <li key={g.stage} className="glossary__item">
+                <span className="glossary__head">
+                  <StageBadge stage={g.stage} />
+                  <strong>{g.title}</strong>
+                </span>
+                <span className="glossary__text">{g.body}</span>
+              </li>
+            ))}
+          </ol>
+          <span className="glossary__lead">
+            조건이 여러 개 맞으면 스테디 → 확산 → 떠오름 → 포착 순서로 먼저 맞는 단계 하나만 붙어요. 아무 조건에도 맞지 않으면 단계 없이 보여요.
+          </span>
+        </>
+      ),
+    },
+    {
       id: 'score',
-      label: '모멘텀 점수와 신뢰도는 뭔가요',
+      label: '모멘텀 점수와 신뢰도는 뭔가요?',
       body: '모멘텀은 책이 얼마나 빠르게 뜨고 있는지를 0~100점으로 나타낸 점수예요. 분야 순위가 오른 폭이 가장 크게 반영되고, 순위 신규 진입·전국 대출 급상승·지난달 대출 증가·최근 출간·사서 추천·여러 지역 인기·유튜브 언급·검색 관심을 더해요. 이미 TOP10에 오래 머문 책은 점수를 덜 받아요. 신뢰도는 함께 잡힌 신호의 가짓수로, 1가지면 낮음, 2가지면 보통, 3가지 이상이면 높음이에요.',
     },
     {
       id: 'source',
-      label: '데이터는 어디서 오나요',
+      label: '데이터는 어디서 오나요?',
       body: '도서관 정보나루(전국 공공도서관 대출 데이터), 국립중앙도서관 사서추천도서와 출간예정 도서 정보, 유튜브 언급량, 구글 검색 관심도를 매일 아침 모아서 보여줘요.',
     },
   ]
@@ -2372,51 +2449,13 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
             </div>
           ))}
           {libs.length < MAX_LIBS && (
-            <button className="btn btn--soft btn--full" onClick={onPickLibrary}>
-              도서관 찾아서 찜하기
+            <button className="btn btn--primary btn--full" onClick={onPickLibrary}>
+              도서관 찜하기
             </button>
           )}
         </section>
 
-        <section className="card">
-          <h2 className="h3">내 취향</h2>
-          <button className="line" onClick={onOpenFilter}>
-            <span>연령대·성별</span>
-            <span className="line__value">
-              {prefs.on ? demoLabel(prefs) : '설정 안 함'} {Icon.chev()}
-            </span>
-          </button>
-          <p className="label">관심 분야</p>
-          <div className="chips chips--wrap">
-            {CATEGORIES.filter((c) => c !== '전체').map((c) => (
-              <button key={c} className={`chip${interests.includes(c) ? ' is-picked' : ''}`} aria-pressed={interests.includes(c)} onClick={() => toggle(c)}>
-                {c === '어린이' ? '어린이 책' : c}
-              </button>
-            ))}
-          </div>
-          <p className="sub small">관심 분야는 트렌드 화면의 분야 버튼 앞쪽에 먼저 보여요.</p>
-        </section>
-
         <AlertSettings alertState={alertState} push={push} />
-
-        <section className="card">
-          <h2 className="h3">트렌드 단계, 이렇게 읽어요</h2>
-          <p className="sub">책이 뜨기 시작해서 자리 잡기까지를 네 단계로 나눠요.</p>
-          <ol className="glossary">
-            {STAGE_GUIDE.map((g) => (
-              <li key={g.stage} className="glossary__item">
-                <span className="glossary__head">
-                  <StageBadge stage={g.stage} />
-                  <strong>{g.title}</strong>
-                </span>
-                <p>{g.body}</p>
-              </li>
-            ))}
-          </ol>
-          <p className="sub small">
-            조건이 여러 개 맞으면 스테디 → 확산 → 떠오름 → 포착 순서로 먼저 맞는 단계 하나만 붙어요. 아무 조건에도 맞지 않으면 단계 없이 보여요.
-          </p>
-        </section>
 
         <section className="card">
           <a className="line" href="/hits">
@@ -2429,7 +2468,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
                 <span>{it.label}</span>
                 <span className={`line__chev${openInfo === it.id ? ' is-open' : ''}`}>{Icon.chev()}</span>
               </button>
-              {openInfo === it.id && <p className="line__body">{it.body}</p>}
+              {openInfo === it.id && <div className="line__body">{it.body}</div>}
             </div>
           ))}
         </section>
@@ -2678,7 +2717,7 @@ export default function App() {
         )}
         {route.name === 'hits' && <Hits stats={home.hitStats} index={index} />}
         {route.name === 'trend' && (
-          <Trend tab={trendTab} feed={feed} loading={loading} error={error} prefs={prefs} interests={interests} demo={demo} onOpenFilter={() => setSheet(true)} />
+          <Trend tab={trendTab} feed={feed} loading={loading} error={error} prefs={prefs} interests={interests} setInterests={setInterests} demo={demo} onOpenFilter={() => setSheet(true)} />
         )}
         {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} onPickLibrary={() => setLibPicker(true)} hits={hits} />}
         {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} hits={hits} />}
