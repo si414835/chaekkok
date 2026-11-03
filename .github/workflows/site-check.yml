@@ -16,20 +16,24 @@ jobs:
               t = time.time()
               r = requests.get(B + api, params={"authKey": K, "format": "json", **p}, timeout=60)
               return r.json(), round(time.time() - t, 1)
-          d, t = get("extends/libSrch", libCode="141025")
-          lib = d["response"]["libs"][0]["lib"]
-          print("extends keys:", list(lib.keys()), t, "s")
-          print("loanByhours:", json.dumps(lib.get("loanByhours"), ensure_ascii=False)[:700])
-          print("loanByDayofWeek:", json.dumps(lib.get("loanByDayofWeek"), ensure_ascii=False)[:500])
-          print("newBooks:", json.dumps(lib.get("newBooks"), ensure_ascii=False)[:900])
-          d, t = get("libSrchByBook", isbn="9791140712250", region="31", pageSize=100)
-          r = d["response"]; print("libSrchByBook pageSize100:", r.get("numFound"), r.get("resultNum"), t, "s")
-          d, t = get("libSrchByBook", isbn="9791140712250", region="31", dtl_region="31010")
-          r = d["response"]; print("libSrchByBook dtl_region 31010:", r.get("numFound"), r.get("resultNum"), [x["lib"]["libName"] for x in r.get("libs", [])][:5], t, "s")
-          d, t = get("loanItemSrchByLib", libCode="141025", startDt="2026-10-03", endDt="2026-11-02", pageSize=5)
-          r = d["response"]; print("byLib 30d:", r.get("resultNum"), [x["doc"]["bookname"][:20] for x in r.get("docs", [])], t, "s", r.get("error"))
-          d, t = get("bookExist", libCode="141143", isbn13="9791140712250")
-          print("bookExist 설악(소장):", d["response"].get("result"), t, "s")
-          d, t = get("usageTrend", libCode="141025", type="D", startDt="2026-10-01", endDt="2026-10-31")
-          print("usageTrend w/ dates:", json.dumps(d, ensure_ascii=False)[:300])
+          d, _ = get("libSrchByBook", isbn="9791140712250", region="31", pageSize=100)
+          libs = [x["lib"] for x in d["response"]["libs"]][:12]
+          libs.append({"libCode": "141025", "libName": "수원시립선경도서관"})
+          d, _ = get("libSrchByBook", isbn="9791140712250", region="11", pageSize=5)
+          libs += [x["lib"] for x in d["response"]["libs"]][:4]
+          for L in libs:
+              c = L["libCode"]
+              e, _ = get("extends/libSrch", libCode=c)
+              lb = e["response"]["libs"][0]["lib"] if e["response"].get("libs") else {}
+              hrs = sum(x["result"]["loan"] for x in lb.get("loanByhours", []))
+              nb = len(lb.get("newBooks") or [])
+              res = {}
+              for days in (30, 90, 365):
+                  from datetime import date, timedelta
+                  st = (date(2026,11,2) - timedelta(days=days)).isoformat()
+                  b, _ = get("loanItemSrchByLib", libCode=c, startDt=st, endDt="2026-11-02", pageSize=3)
+                  res[days] = b["response"].get("resultNum")
+              be, _ = get("bookExist", libCode=c, isbn13="9791140712250")
+              print(f"{c} {L['libName'][:14]:14} hours={hrs} new={nb} byLib30={res[30]} 90={res[90]} 365={res[365]} exist={be['response'].get('result')}")
+          print("newBooks sample:", json.dumps((lb.get("newBooks") or [])[:1], ensure_ascii=False)[:500])
           PY
