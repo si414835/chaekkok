@@ -367,6 +367,18 @@ def collect_upcoming():
                            "cover_url": d.get("TITLE_URL") or None,
                            "addition_symbol": str(d.get("EA_ADD_CODE") or "").strip() or None}
         time.sleep(0.5)
+    if found:
+        # 이미 도서관 대출 순위에 오른 책은 실제로 나온 책이므로 '출간예정'에서 뺀다
+        keys = list(found)
+        loaned = set()
+        for i in range(0, len(keys), 100):
+            loaned |= {r["isbn13"] for r in (supabase.table("trend_scores").select("isbn13")
+                       .in_("isbn13", keys[i:i + 100]).in_("trend_type", ["popular", "rising"]).execute().data or [])}
+        for k in loaned:
+            found.pop(k, None)
+            books.pop(k, None)
+        if loaned:
+            print(f"  [출간예정] 이미 대출 기록이 있어 뺀 책 {len(loaned)}권")
     if books:
         # 이미 있는 책(정보나루 정보가 더 자세함)은 덮어쓰지 않고 새 책만 넣는다
         existing = set()

@@ -592,7 +592,7 @@ function Upcoming({ list: all }) {
     <section className="card card--bleed rise" style={{ animationDelay: '0.8s' }}>
       <Eyebrow tone="spot">COMING SOON</Eyebrow>
       <h2 className="h2 display">곧 나올 책</h2>
-      <p className="sub">요즘 뜨는 작가의 신작 · 국립중앙도서관 출간예정 정보</p>
+      <p className="sub">요즘 뜨는 작가의 신작 · 국립중앙도서관 출간 예정일 기준이에요. 서점에서는 출간 전에 예약 판매를 하기도 해요.</p>
       <div className="hscroll">
         {list.slice(0, 10).map((b) => (
           <a key={b.isbn13} className="mini" href={`/book/${encodeURIComponent(b.isbn13)}`}>
@@ -602,7 +602,7 @@ function Upcoming({ list: all }) {
             </span>
             <span className="mini__title">{shortTitle(b.title)}</span>
             <span className="mini__author">
-              {b.matched_author || cleanAuthor(b.author)} · {fmtDate(b.publish_date)} 출간
+              {b.matched_author || cleanAuthor(b.author)} · {fmtDate(b.publish_date)} 출간 예정
             </span>
           </a>
         ))}
