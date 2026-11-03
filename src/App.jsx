@@ -186,6 +186,7 @@ function Delta({ value }) {
 
 /* ================= 아이콘 ================= */
 
+const GINKGO_LEAF = 'M12 15.8C11 13 5.9 9.8 2.8 8C2.2 7.2 2.4 6.1 3.3 5.4C5.4 3.8 8.4 2.9 10.7 3L12 5.3L13.3 3C15.6 2.9 18.6 3.8 20.7 5.4C21.6 6.1 21.8 7.2 21.2 8C18.1 9.8 13 13 12 15.8Z'
 const Icon = {
   home: (on) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M4 10l8-6 8 6v10H4z" /></svg>
@@ -193,8 +194,14 @@ const Icon = {
   trend: (on) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={on ? 2.6 : 2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>
   ),
-  heart: (on) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M12 20s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.5-7 10-7 10z" /></svg>
+  // 콕(은행잎): 꺼짐 = 윤곽선, 켜짐 = 노랗게 차오름
+  ginkgo: (on, size = 22) => (
+    <svg className={`ginkgo${on ? ' is-on' : ''}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={on ? '#E2A400' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {on && <path className="ginkgo__fill" d={GINKGO_LEAF} fill="#FFC928" stroke="none" />}
+      {on && <path className="ginkgo__veins" d="M12 14.4V7.4M12 14.2 6.6 7.6M12 14.2 17.4 7.6" stroke="#F0B400" strokeWidth=".9" />}
+      <path d={GINKGO_LEAF} />
+      <path d="M12 15.8C12.1 17.8 11.8 19.7 11.1 21.5" />
+    </svg>
   ),
   user: (on) => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></svg>
@@ -251,7 +258,7 @@ function BottomNav({ current }) {
   const items = [
     { id: 'home', label: '홈', icon: Icon.home, path: '/' },
     { id: 'trend', label: '트렌드', icon: Icon.trend, path: '/trend' },
-    { id: 'wish', label: '찜', icon: Icon.heart, path: '/wish' },
+    { id: 'wish', label: '콕', icon: Icon.ginkgo, path: '/wish' },
     { id: 'my', label: '마이', icon: Icon.user, path: '/my' },
   ]
   return (
@@ -958,7 +965,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
     <div className="detail">
       <header className="detail__bar">
         <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
-        <button className={`iconbtn heartbtn${saved ? ' is-saved' : ''}`} onClick={onHeart} aria-pressed={saved} aria-label={saved ? '찜 해제' : '찜하기'}>
+        <button className={`iconbtn heartbtn${saved ? ' is-saved' : ''}`} onClick={onHeart} aria-pressed={saved} aria-label={saved ? '콕 해제' : '콕하기'}>
           {saved && heartKey > 0 && (
             <span className="sparks" key={'s' + heartKey} aria-hidden="true">
               {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
@@ -967,7 +974,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
             </span>
           )}
           <span key={heartKey} className={heartKey ? 'heartpop' : ''}>
-            {Icon.heart(saved)}
+            {Icon.ginkgo(saved, 26)}
           </span>
         </button>
       </header>
@@ -1007,7 +1014,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, onPickLibrary }) {
             <div className="stagebar rise" style={{ animationDelay: '0.28s' }}>
               <div className="stagebar__steps" role="img" aria-label={`트렌드 단계: ${st.stage}`}>
                 {STAGES.map((s) => (
-                  <span key={s} className={`stagebar__step${s === st.stage ? ' is-on stage--' + STAGE_TONE[s] : ''}`}>
+                  <span key={s} data-tone={STAGE_TONE[s]} className={`stagebar__step${s === st.stage ? ' is-on' : ''}`}>
                     {s}
                   </span>
                 ))}
@@ -1358,7 +1365,7 @@ function LibraryPicker({ libs, setLibs, onClose }) {
   )
 }
 
-/* ================= 찜 ================= */
+/* ================= 콕한 책 ================= */
 
 function Wish({ wish, index, toggleWish }) {
   const items = wish.map((w) => ({ ...w, live: index.get(w.isbn13) }))
@@ -1366,14 +1373,14 @@ function Wish({ wish, index, toggleWish }) {
     <>
       <header className="pagehead">
         <Eyebrow>MY BOOKS</Eyebrow>
-        <h1 className="h1 display">찜한 책</h1>
+        <h1 className="h1 display">콕한 책</h1>
         <span className="sub">이 기기에 저장돼요</span>
       </header>
       <div className="stack">
         <section className="card">
           <div className="statgrid">
             <div>
-              <span>찜한 책</span>
+              <span>콕한 책</span>
               <strong>{items.length}권</strong>
             </div>
             <div>
@@ -1389,8 +1396,8 @@ function Wish({ wish, index, toggleWish }) {
         <section className="card card--list">
           {items.length === 0 && (
             <div className="empty">
-              <p>아직 찜한 책이 없어요.</p>
-              <p className="sub">책 상세에서 ♡를 누르면 여기에 모여요.</p>
+              <p>아직 콕한 책이 없어요.</p>
+              <p className="sub">책 상세에서 오른쪽 위 은행잎을 누르면 여기에 모여요.</p>
               <a className="btn btn--soft" href="#/trend">트렌드 보러 가기</a>
             </div>
           )}
@@ -1401,7 +1408,7 @@ function Wish({ wish, index, toggleWish }) {
                 <span className="row__info">
                   <span className="row__title">{shortTitle(w.title)}</span>
                   <span className="row__meta">
-                    {cleanAuthor(w.author)} · {w.savedAt} 찜
+                    {cleanAuthor(w.author)} · {w.savedAt} 콕
                   </span>
                   <span className="row__meta">
                     {w.live?.rank_diff ? (
@@ -1414,15 +1421,15 @@ function Wish({ wish, index, toggleWish }) {
                   </span>
                 </span>
               </a>
-              <button className="iconbtn is-saved" onClick={() => toggleWish(w)} aria-label={`${shortTitle(w.title)} 찜 해제`}>
-                {Icon.heart(true)}
+              <button className="iconbtn is-saved" onClick={() => toggleWish(w)} aria-label={`${shortTitle(w.title)} 콕 해제`}>
+                {Icon.ginkgo(true)}
               </button>
             </div>
           ))}
         </section>
         <section className="card">
           <h2 className="h2">알림은 준비 중이에요</h2>
-          <p className="sub">찜한 책이 급상승하거나 단계가 바뀌면 알려드리는 기능을 만들고 있어요.</p>
+          <p className="sub">콕한 책이 급상승하거나 단계가 바뀌면 알려드리는 기능을 만들고 있어요.</p>
         </section>
       </div>
     </>
@@ -1480,7 +1487,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
           <span className="profile__avatar">{Icon.user(false)}</span>
           <div>
             <strong>로그인 없이 쓰는 중</strong>
-            <p className="sub">찜과 취향 설정은 이 기기에 저장돼요</p>
+            <p className="sub">콕한 책과 취향 설정은 이 기기에 저장돼요</p>
           </div>
         </section>
 
@@ -1526,7 +1533,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
 
         <section className="card">
           <h2 className="h3">알림</h2>
-          {['찜한 책 트렌드 알림', '이달의 키워드 알림', '관심 분야 신간 알림'].map((t) => (
+          {['콕한 책 트렌드 알림', '이달의 키워드 알림', '관심 분야 신간 알림'].map((t) => (
             <div key={t} className="line line--static">
               <span>{t}</span>
               <span className="badge">준비 중</span>

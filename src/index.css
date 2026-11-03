@@ -1553,20 +1553,36 @@ p {
   height: 6px;
   margin: -3px;
   border-radius: 3px;
-  background: #ff4d5e;
+  background: #ffc928;
   animation: burst 0.55s ease-out forwards;
 }
 .sparks i:nth-child(4n + 2) {
   background: #ffb84d;
 }
 .sparks i:nth-child(4n + 3) {
-  background: var(--accent);
+  background: #9bcb3c;
 }
 .sparks i:nth-child(4n) {
-  background: #00b37e;
+  background: #e2a400;
 }
 .iconbtn.is-saved {
-  color: #ff4d5e;
+  color: #e2a400;
+}
+
+/* 콕 은행잎: 켜지면 잎자루 쪽에서부터 노랗게 차오름 */
+.ginkgo .ginkgo__fill,
+.ginkgo .ginkgo__veins {
+  transform-box: view-box;
+  transform-origin: 12px 16px;
+  animation: leaffill 0.5s var(--spring) backwards;
+}
+.ginkgo .ginkgo__veins {
+  opacity: 0.7;
+  animation-delay: 0.12s;
+}
+@keyframes leaffill {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
 }
 
 /* 하단 탭 */
@@ -1774,18 +1790,29 @@ p {
   gap: 4px;
 }
 .stagebar__step {
+  --c: var(--ink-3);
+  --c-soft: var(--line-2);
   text-align: center;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
+  font-weight: 700;
+  color: var(--c);
   padding: 6px 0;
   border-radius: 8px;
-  background: var(--line-2);
+  background: var(--c-soft);
+  opacity: 0.55;
   transition: transform 0.35s var(--spring);
 }
+.stagebar__step[data-tone='spot'] { --c: #7a3fd1; --c-soft: #f3ecfe; }
+.stagebar__step[data-tone='rise'] { --c: var(--up); --c-soft: var(--up-soft); }
+.stagebar__step[data-tone='spread'] { --c: var(--accent); --c-soft: var(--accent-soft); }
+.stagebar__step[data-tone='steady'] { --c: #4e5968; --c-soft: #e9ecef; }
 .stagebar__step.is-on {
+  color: #fff;
+  background: var(--c);
   font-weight: 900;
+  opacity: 1;
   transform: scale(1.06);
+  box-shadow: 0 4px 10px -4px var(--c);
 }
 .stagebar__reason {
   font-size: 15px;
