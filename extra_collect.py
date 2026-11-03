@@ -318,6 +318,8 @@ def collect_upcoming():
     for i in range(0, len(isbns), 100):
         for b in (supabase.table("books").select("isbn13,author,title,class_no,addition_symbol")
                   .in_("isbn13", isbns[i:i + 100]).execute().data or []):
+            if str(b.get("addition_symbol") or "").startswith("7"):
+                continue  # 어린이 책 작가는 출간예정 출처에서 뺌
             name = clean_author_name(b.get("author"))
             cls = content_class(b.get("addition_symbol"), b.get("class_no"))
             if name and cls:
