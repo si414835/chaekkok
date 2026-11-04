@@ -75,6 +75,8 @@ jobs:
       - name: 블로그 글 초안 만들기
         if: always()
         env:
+          # 줄거리(책 소개)용 정보나루 호출 2~3회를 위해 수집 한도(400)보다 조금 여유를 둔다
+          API_DAILY_BATCH_LIMIT: '415'
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

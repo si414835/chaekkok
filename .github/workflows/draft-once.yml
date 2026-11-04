@@ -13,5 +13,5 @@ jobs:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          API_DAILY_BATCH_LIMIT: '430'
+          API_DAILY_BATCH_LIMIT: '448'
         run: python blog_draft.py && python blog_draft.py --print
