@@ -189,6 +189,7 @@ def book_intro(isbn):
         return None
     text = re.sub(r"<[^>]+>", " ", html.unescape(desc))
     text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"([!?])(?=[^\s!?”\"'’)])", r"\1 ", text)  # '신화!오직'처럼 붙은 문장 띄우기
     # 문장 단위로 잘라 150자 안쪽까지만 (너무 길게 옮기지 않는다)
     sents = re.split(r"(?<=[.!?。])\s+", text)
     out = ""
