@@ -113,7 +113,7 @@ function useStored(key, fallback) {
 
 // 화면 주소: /  /trend/탭  /book/ISBN  /keyword/단어  /wish  /my  /alerts  /hits  /search
 // (책·키워드 주소는 검색 로봇이 각각 다른 페이지로 읽을 수 있게 #이 없는 진짜 주소로 쓴다)
-const ROUTES = ['trend', 'book', 'keyword', 'wish', 'my', 'alerts', 'hits', 'search', 'library']
+const ROUTES = ['trend', 'book', 'keyword', 'wish', 'my', 'alerts', 'hits', 'search', 'library', 'draft']
 function parsePath() {
   // 예전 주소(#/book/…)로 들어오면 새 주소로 바꿔 준다 (공유된 링크·알림 호환)
   if (window.location.hash.startsWith('#/')) {
@@ -1457,6 +1457,79 @@ function ShopLogo({ shop }) {
     <span className="shop__logo">
       <img src={`https://www.google.com/s2/favicons?domain=${shop.domain}&sz=128`} alt="" width="32" height="32" loading="lazy" onError={() => setFail(true)} />
     </span>
+  )
+}
+
+// 블로그 초안 (/draft): 매일 아침 자동으로 만든 네이버 블로그 글. 검색에는 안 나오게 한다.
+function CopyBtn({ text, label }) {
+  const [done, setDone] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setDone(true)
+      setTimeout(() => setDone(false), 1600)
+    } catch (_e) {
+      // 복사가 막힌 브라우저: 길게 눌러 직접 복사
+    }
+  }
+  return (
+    <button type="button" className={`btn ${done ? 'btn--primary' : 'btn--soft'} draft__copy`} onClick={copy} aria-live="polite">
+      {done ? '복사했어요 ✓' : label}
+    </button>
+  )
+}
+
+function Drafts() {
+  const [list, setList] = useState(null)
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    setPageMeta('블로그 초안 | 책콕', '/draft')
+    const m = document.createElement('meta')
+    m.name = 'robots'
+    m.content = 'noindex, nofollow'
+    document.head.appendChild(m)
+    supabase
+      .from('blog_drafts')
+      .select('*')
+      .order('day', { ascending: false })
+      .limit(14)
+      .then(({ data }) => setList(data || []))
+    return () => m.remove()
+  }, [])
+  const d = list?.[i]
+  return (
+    <>
+      <header className="pagehead">
+        <Eyebrow>BLOG DRAFT</Eyebrow>
+        <h1 className="h1 display">블로그 초안</h1>
+        <span className="sub">매일 아침 데이터가 들어오면 자동으로 만들어져요. 복사해서 네이버 블로그에 붙여 넣으세요.</span>
+      </header>
+      <div className="stack">
+        {!list && <section className="card"><Loading /></section>}
+        {list && list.length === 0 && <section className="card"><p className="state">아직 만들어진 초안이 없어요.</p></section>}
+        {list && list.length > 0 && (
+          <section className="card draft">
+            <div className="draft__days">
+              {list.map((x, n) => (
+                <button key={x.day} type="button" className={`pill pill--btn${n === i ? ' is-on' : ''}`} onClick={() => setI(n)}>
+                  {fmtDate(x.day)}
+                </button>
+              ))}
+            </div>
+            <p className="label">1. 제목</p>
+            <p className="draft__title">{d.title}</p>
+            <CopyBtn text={d.title} label="제목 복사" />
+            <p className="label">2. 본문</p>
+            <pre className="draft__body">{d.body}</pre>
+            <CopyBtn text={d.body} label="본문 복사" />
+            <p className="label">3. 태그</p>
+            <p className="draft__tags">{d.tags}</p>
+            <CopyBtn text={d.tags} label="태그 복사" />
+            <p className="sub small">책 표지 사진은 저작권 문제가 생길 수 있어서 넣지 않았어요. 사진이 필요하면 책콕 화면을 캡처해서 넣어 주세요.</p>
+          </section>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -3460,6 +3533,7 @@ export default function App() {
           <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} unread={alertState.unread} libs={libs} />
         )}
         {route.name === 'hits' && <Hits stats={home.hitStats} index={index} />}
+        {route.name === 'draft' && <Drafts />}
         {route.name === 'trend' && (
           <Trend tab={trendTab} feed={feed} loading={loading} error={error} prefs={prefs} interests={interests} setInterests={setInterests} demo={demo} onOpenFilter={() => setSheet(true)} />
         )}

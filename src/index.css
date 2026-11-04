@@ -3170,3 +3170,44 @@ a.lib__info {
 .local .state {
   padding: 0 20px;
 }
+
+/* 블로그 초안 */
+.draft .label {
+  margin: 18px 0 6px;
+}
+.draft__days {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.draft__title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+.draft__body {
+  margin: 0 0 8px;
+  padding: 14px;
+  max-height: 50vh;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: var(--line-2);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}
+.draft__tags {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--accent);
+  word-break: keep-all;
+}
+.draft__copy {
+  width: 100%;
+}

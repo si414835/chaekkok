@@ -72,6 +72,13 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python compute_composite.py
 
+      - name: 블로그 글 초안 만들기
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python blog_draft.py
+
       - name: 휴대폰 알림 보내기
         if: always()
         env:
