@@ -1,0 +1,14 @@
+name: site-check
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s https://chaekkok.vercel.app/robots.txt; echo
+          for ua in "Googlebot" "Yeti"; do
+            curl -s -A "Mozilla/5.0 (compatible; $ua/2.1)" -o page.html -w "$ua home %{http_code}\n" https://chaekkok.vercel.app/
+            grep -o '<meta name="robots"[^>]*>\|<title>[^<]*</title>\|<link rel="canonical"[^>]*>' page.html
+          done
+          curl -s -A "Googlebot" https://chaekkok.vercel.app/book/9791140712250 | grep -o '<title>[^<]*</title>\|noindex'
+          curl -sI https://chaekkok.vercel.app/ | grep -i "x-robots-tag" || echo "no x-robots-tag header"
