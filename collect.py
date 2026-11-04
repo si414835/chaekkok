@@ -264,12 +264,13 @@ def collect_loan_items(snapshot_date=None, with_child=True):
     return failed
 
 
-def backfill_shallow_days(max_days=1):
+def backfill_shallow_days(max_days=2):
     """예전에는 분야별 30~100위까지만 받았다. 순위 비교(7일 전·3~4일 전)에 쓰는 지난 날짜가
     얕으면 200위 안쪽 책을 비교할 수 없으니, 최근 12일 중 얕은 날을 하루 max_days개씩 다시 받는다.
     (하루 20회 정도 호출. 몇 날 지나면 저절로 다 채워져 더는 호출하지 않는다)"""
     today = kst_today().date()
-    since = (today - timedelta(days=12)).isoformat()
+    # 내일·모레 순위 비교에 쓰일 날(약 7일 전)부터 차례로 채운다
+    since = (today - timedelta(days=7)).isoformat()
     rows = (supabase.table("v_popular_complete_dates").select("snapshot_date").gte("snapshot_date", since)
             .lt("snapshot_date", today.isoformat()).order("snapshot_date").execute().data or [])
     done = 0
