@@ -5,8 +5,8 @@
 초안을 blog_drafts 표에 저장하면, 책콕의 /draft 화면에서 제목·본문·태그를 복사해 붙여 넣는다.
 
 양식(고정)
-  제목  [책콕] M월 D일, 도서관에서 뜨기 시작한 책 N권 — 첫 책 · 둘째 책
-  본문  인사 → 책 2~3권(왜 뜨나요 · 누가 많이 빌렸나요 · 함께 나온 키워드 · 책콕 링크) → 책콕 소개 → 데이터 출처
+  제목  M월 D일 오늘의 책 추천!
+  본문  친근한 인사 → 책 2~3권(책 소개 → 책콕 데이터 → 책콕 링크) → 책콕 추천 → 데이터 출처
   태그  고정 태그 + 분야 + 책 제목
 
 책 고르는 기준
@@ -15,15 +15,18 @@
   · 최근 14일 안에 블로그에 소개한 책은 빼고, 가능하면 분야가 겹치지 않게
   · 신뢰도 보통 이상이 3권이면 3권, 아니면 2권
 
-정보나루는 부르지 않는다 (DB에 있는 데이터만 씀).
+정보나루는 책 소개(줄거리)에만 책 1권당 1회 부른다 (하루 2~3회, api_budget으로 같이 셈).
   python blog_draft.py            # 오늘 초안 만들기(이미 있으면 다시 만듦)
   python blog_draft.py --print    # 저장하지 않고 출력만
 """
 
+import html
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 
+import requests
 from supabase import create_client
 
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
@@ -35,11 +38,11 @@ NUM = ["1", "2", "3"]
 
 # 같은 글이 매일 똑같아 보이지 않게 인사말만 날짜에 따라 돌려 쓴다 (양식은 그대로)
 INTROS = [
-    "오늘 아침 전국 공공도서관 대출 데이터를 살펴보니, 요즘 순위가 오르기 시작한 책이 눈에 띄었어요.",
-    "서점 베스트셀러가 아니라, 사람들이 실제로 도서관에서 빌려 읽는 책 중에 요즘 뜨기 시작한 책을 골라 봤어요.",
-    "아직 베스트셀러 목록에는 잘 안 보이지만, 도서관에서는 조용히 대출이 늘고 있는 책들이에요.",
-    "오늘도 전국 도서관 대출 순위를 비교해서, 일주일 사이 눈에 띄게 오른 책을 모아 왔어요.",
-    "다음에 읽을 책 고민 중이라면, 요즘 도서관에서 먼저 반응이 오는 책부터 살펴보세요.",
+    "서점 베스트셀러가 아니라, 사람들이 실제로 빌려 읽는 책 기준이라 조금 다른 책을 만날 수 있어요.",
+    "아직 베스트셀러 목록엔 잘 안 보이지만, 도서관에서는 조용히 대출이 늘고 있는 책들이에요.",
+    "일주일 사이 도서관 대출 순위가 눈에 띄게 오른 책들이니, 하나쯤은 마음에 드실 거예요.",
+    "주말에 읽을 책, 출퇴근길에 읽을 책을 찾고 계셨다면 한번 살펴보세요.",
+    "남들보다 한발 먼저, 요즘 뜨기 시작한 책을 만나 보세요.",
 ]
 
 
@@ -166,6 +169,40 @@ def pick_books(day):
     return d, picked
 
 
+def book_intro(isbn):
+    """줄거리: 정보나루 도서 상세의 책 소개 앞부분 1~2문장 (출처 표시). 없으면 None. 책 1권에 정보나루 1회."""
+    key = os.environ.get("DATA4LIBRARY_KEY")
+    if not key:
+        return None
+    try:
+        import api_budget
+        api_budget.init(supabase)
+        api_budget.spend()
+        res = requests.get("http://data4library.kr/api/srchDtlList",
+                           params={"authKey": key, "isbn13": isbn, "loaninfoYN": "N", "format": "json"}, timeout=30)
+        detail = (res.json().get("response") or {}).get("detail") or []
+        desc = ((detail[0] or {}).get("book") or {}).get("description") if detail else None
+    except Exception as e:
+        print(f"  [책 소개 {isbn}] {type(e).__name__}")
+        return None
+    if not desc:
+        return None
+    text = re.sub(r"<[^>]+>", " ", html.unescape(desc))
+    text = re.sub(r"\s+", " ", text).strip()
+    # 문장 단위로 잘라 150자 안쪽까지만 (너무 길게 옮기지 않는다)
+    sents = re.split(r"(?<=[.!?。])\s+", text)
+    out = ""
+    for st in [x.strip() for x in sents if x and x.strip()]:
+        if len(out) + len(st) > 150:
+            break
+        out = (out + " " + st).strip()
+        if out.count(".") >= 2:
+            break
+    if not out:
+        out = text[:120].rstrip() + "…"
+    return out
+
+
 def build(day):
     d, picked = pick_books(day)
     if not picked:
@@ -173,13 +210,12 @@ def build(day):
     base = supabase.table("hit_baseline").select("*").limit(1).execute().data
     base = base[0] if base else None
     md = f"{day.month}월 {day.day}일"
-    names = [short_title(c[3]["title"]) for c in picked]
-    title = f"[책콕] {md}, 도서관에서 뜨기 시작한 책 {len(picked)}권 — {' · '.join(names[:2])}{' 외' if len(names) > 2 else ''}"
+    title = f"{md} 오늘의 책 추천!"
 
     lines = [
-        "안녕하세요, 책콕이에요 🍂",
+        "요즘 뭐 읽을지 고민되시는 독자분들, 안녕하세요 😊",
+        f"오늘은 전국 도서관에서 요즘 부쩍 많이 빌려 가는 책 {len(picked)}권을 골라 왔어요.",
         INTROS[day.toordinal() % len(INTROS)],
-        "서점 판매량이 아니라 '도서관 대출' 기준이라, 베스트셀러와는 조금 다른 책을 만날 수 있어요.",
         "",
     ]
     tag_titles, tag_cats = [], []
@@ -188,22 +224,18 @@ def build(day):
         cat = CAT[int(cat_no)] if cat_no.isdigit() else (s.get("cat") or "")
         author = clean_author(b.get("author"))
         meta = " · ".join(x for x in [author, (b.get("publisher") or "").strip(), cat] if x)
-        lines += [
-            "━━━━━━━━━━━━━━",
-            f"📚 {NUM[n]}. 『{short_title(b['title'])}』",
-            meta,
-            f"지금 단계: {s['stage']} (신뢰도 {s['confidence']})",
-            "━━━━━━━━━━━━━━",
-            "",
-            "📈 왜 뜨나요",
-        ]
+        lines += ["━━━━━━━━━━━━━━", f"📖 {NUM[n]}. 『{short_title(b['title'])}』", meta, "━━━━━━━━━━━━━━", ""]
+        intro = book_intro(s["isbn13"])
+        if intro:
+            lines += ["📝 어떤 책이에요?", intro, "(책 소개 출처: 도서관 정보나루)", ""]
+        lines += ["📊 책콕 데이터로 보면", f"· 지금 단계: {s['stage']} (신뢰도 {s['confidence']})"]
         lines += [f"· {e}" for e in evidence(s)]
         reader = top_reader(u.get("loan_grps"))
         if reader:
-            lines += ["", "👀 누가 많이 빌렸나요", f"{reader} 독자가 가장 많이 빌렸어요"]
+            lines.append(f"· {reader} 독자가 가장 많이 빌렸어요")
         kws = keywords(u.get("keywords"), b.get("title"), author)
         if kws:
-            lines += ["", "🔖 함께 나온 키워드", " ".join(kws)]
+            lines.append(f"· 함께 나온 키워드 {' '.join(kws)}")
         lines += [
             "",
             "👉 내 동네 도서관에 있는지, 순위가 어떻게 움직였는지 보기",
@@ -216,8 +248,9 @@ def build(day):
 
     lines += [
         "━━━━━━━━━━━━━━",
-        "🍂 책콕은 이런 곳이에요",
+        "🍂 이런 책, 어디서 찾았냐면요",
         "━━━━━━━━━━━━━━",
+        "오늘 소개한 책은 모두 '책콕'에서 골랐어요.",
         "책콕은 전국 공공도서관 대출 데이터로 '뜨기 시작한 책'을 먼저 알려 주는 무료 웹사이트예요.",
         "· 포착 → 떠오름 → 확산 → 스테디, 책의 트렌드 단계를 매일 아침 업데이트해요",
     ]
@@ -229,11 +262,11 @@ def build(day):
         )
     lines += [
         "· 우리 동네 도서관에 그 책이 있는지, 지금 빌릴 수 있는지도 바로 확인할 수 있어요",
-        f"로그인 없이 바로 둘러보세요 👉 {SITE}",
+        f"다음에 읽을 책, 책콕에서 먼저 찾아보세요 👉 {SITE}",
         "",
         f"※ 데이터 출처: 도서관 정보나루(전국 공공도서관 대출 데이터) · {int(d[5:7])}월 {int(d[8:10])}일 기준",
     ]
-    tags = ["#책추천", "#요즘읽을책", "#도서관추천도서", "#책콕", "#읽을만한책"] + list(dict.fromkeys(tag_cats)) + tag_titles
+    tags = ["#책추천", "#오늘의책", "#요즘읽을책", "#도서관추천도서", "#책콕", "#읽을만한책"] + list(dict.fromkeys(tag_cats)) + tag_titles
     return {
         "day": day.isoformat(),
         "title": title,
