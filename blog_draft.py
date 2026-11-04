@@ -70,7 +70,10 @@ def evidence(s):
     if (s.get("hot_diff") or 0) > 0:
         out.append(f"전국 도서관 대출 급상승 목록 ▲{s['hot_diff']}")
     if s.get("rise_steady"):
-        out.append(f"{s['rank_prev']}위 → {s['rank_mid']}위 → {s['rank_now']}위, 일주일 내내 상승")
+        if s["rank_mid"] == s["rank_now"]:
+            out.append(f"{s['rank_prev']}위 → {s['rank_mid']}위로 오른 뒤 그 자리를 지키는 중")
+        else:
+            out.append(f"{s['rank_prev']}위 → {s['rank_mid']}위 → {s['rank_now']}위, 일주일 내내 상승")
     if float(s.get("loan_growth") or 0) >= 0.2:
         out.append(f"지난달 대출이 그 전 석 달 평균보다 {round(float(s['loan_growth']) * 100)}% 증가")
     if (s.get("regions") or 0) >= 3:
@@ -90,12 +93,30 @@ def top_reader(grps):
     return f"{b.get('age', '')} {b.get('gender', '')}".strip()
 
 
+# 어느 책에나 나오는 너무 흔한 말은 키워드에서 뺀다 (DB의 keyword_stopwords와 함께 씀)
+GENERIC = {"세계", "문제", "최초", "인간", "사람", "독자", "이야기", "작가", "소설", "한국", "시간", "생각", "삶",
+           "책", "출간", "작품", "저자", "세상", "우리", "자신", "마음", "순간", "장편소설", "에세이", "산문", "부록"}
+
+
+def stopwords():
+    try:
+        return {r["word"] for r in supabase.table("keyword_stopwords").select("word").execute().data or []}
+    except Exception:
+        return set()
+
+
+STOP = None
+
+
 def keywords(kw, title, author):
+    global STOP
+    if STOP is None:
+        STOP = stopwords() | GENERIC
     skip = set((title or "").replace(":", " ").split()) | set((author or "").split())
     out = []
     for k in kw or []:
         w = (k.get("word") or "").strip()
-        if not w or w in skip or any(w in t for t in (title or "", author or "")) or len(w) < 2:
+        if not w or w in skip or w in STOP or w.lower() in STOP or any(w in t for t in (title or "", author or "")) or len(w) < 2:
             continue
         out.append("#" + w.replace(" ", ""))
         if len(out) == 3:
@@ -212,7 +233,7 @@ def build(day):
         "",
         f"※ 데이터 출처: 도서관 정보나루(전국 공공도서관 대출 데이터) · {int(d[5:7])}월 {int(d[8:10])}일 기준",
     ]
-    tags = ["#책추천", "#요즘읽을책", "#도서관추천도서", "#책콕", "#베스트셀러"] + list(dict.fromkeys(tag_cats)) + tag_titles
+    tags = ["#책추천", "#요즘읽을책", "#도서관추천도서", "#책콕", "#읽을만한책"] + list(dict.fromkeys(tag_cats)) + tag_titles
     return {
         "day": day.isoformat(),
         "title": title,

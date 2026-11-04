@@ -1578,7 +1578,11 @@ function evidenceOf(e) {
     out.push({ title: `순위 ${Math.round(rcr * 100)}% 상승`, desc: `${cat} ${e.rank_prev}위 → ${e.rank_now}위, 일주일 동안` })
   if (e.new_entry) out.push({ title: '새로 진입', desc: `지난주엔 ${cat} 인기대출 목록에 없다가 ${e.rank_now}위로 들어왔어요` })
   if (e.hot_diff > 0) out.push({ title: '전국 대출 급상승', desc: `전국 공공도서관 대출 급상승 목록 ▲${e.hot_diff}` })
-  if (e.rise_steady) out.push({ title: '꾸준히 상승', desc: `${e.rank_prev}위 → ${e.rank_mid}위 → ${e.rank_now}위, 일주일 내내 올랐어요` })
+  if (e.rise_steady)
+    out.push({
+      title: '꾸준히 상승',
+      desc: e.rank_mid === e.rank_now ? `${e.rank_prev}위 → ${e.rank_mid}위로 오른 뒤 그 자리를 지키는 중이에요` : `${e.rank_prev}위 → ${e.rank_mid}위 → ${e.rank_now}위, 일주일 내내 올랐어요`,
+    })
   if (Number(e.loan_growth) >= 0.2) out.push({ title: '지난달 대출 증가', desc: `지난달 대출이 그 전 석 달 평균보다 ${Math.round(e.loan_growth * 100)}% 늘었어요` })
   if (e.regions >= 3 || e.demo_groups >= 3) {
     const parts = [e.regions >= 3 && `${e.regions}개 지역`, e.demo_groups >= 3 && `${e.demo_groups}개 연령·성별 목록`].filter(Boolean)
