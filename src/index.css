@@ -3029,3 +3029,144 @@ a.lib__info {
   color: inherit;
   font-weight: inherit;
 }
+
+/* 적중 기록: 책콕 vs 전체 평균 */
+.compare__row {
+  margin-top: 16px;
+}
+.compare__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.compare__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.compare__bar {
+  display: grid;
+  grid-template-columns: 34px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+}
+.compare__who {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.compare__track {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.compare__track i {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: #c9ced6;
+}
+.compare__track i.is-spot {
+  background: var(--accent);
+}
+.compare__bar b {
+  font-size: 15px;
+  text-align: right;
+}
+.compare .sub.small {
+  margin-top: 14px;
+}
+
+/* 책 상세: 왜 뜨나요 (근거) */
+.why {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.why__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+.why__title span {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.why__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.why__list li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.why__check {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--ginkgo-soft);
+  color: var(--ginkgo-ink);
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.why__list b {
+  display: block;
+  font-size: 14px;
+}
+.why__list small {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+/* 홈: 우리 동네에서 뜨는 책 */
+.local__region select {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.local .card__head {
+  align-items: center;
+}
+.local__lead {
+  padding: 0 20px;
+  margin: 0 0 6px;
+}
+.local__note {
+  padding: 4px 20px 0;
+  margin: 0;
+}
+.local__only {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ginkgo-soft);
+  color: var(--ginkgo-ink);
+  font-size: 11.5px;
+  font-weight: 800;
+}
+.local .state {
+  padding: 0 20px;
+}

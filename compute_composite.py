@@ -50,6 +50,10 @@ def main():
     n = supabase.rpc("refresh_book_state", {"p_date": d}).execute().data
     spotted = supabase.rpc("refresh_spotted", {}).execute().data
     print(f"[단계 계산] {d}: {n}권 · 포착 기록 누적 {spotted}권")
+    try:  # 적중률 비교 기준(전체 평균)도 하루 한 번 다시 계산
+        supabase.rpc("refresh_hit_baseline", {}).execute()
+    except Exception as e:
+        print(f"::warning::적중률 비교 기준 계산 실패: {type(e).__name__}")
 
     state = fetch_state(d)
     stages = {}

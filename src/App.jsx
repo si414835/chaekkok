@@ -532,7 +532,7 @@ function Carousel({ books }) {
   )
 }
 
-function Home({ feed, keywords, loading, error, upcoming, hitStats, unread }) {
+function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs }) {
   const top5 = feed.composite.filter((b) => !isChildBook(b)).slice(0, 5)
   const rising3 = feed.rising.filter((b) => !isChildBook(b)).slice(0, 3)
   return (
@@ -577,6 +577,7 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread }) {
                 트렌드 순위 전체 보기 {Icon.chev()}
               </a>
             </section>
+            <LocalRising libs={libs || []} />
             <Upcoming list={upcoming} />
           </>
         )}
@@ -593,6 +594,87 @@ function daysUntil(ymd) {
   const [y, m, d] = ymd.split('-').map(Number)
   const diff = Math.round((Date.UTC(y, m - 1, d) - todayUtc) / 86400000)
   return diff > 0 ? diff : null
+}
+
+// 우리 동네에서 뜨는 책: 시·도별 인기대출(전 분야 100위)의 순위 변화
+function LocalRising({ libs }) {
+  const [region, setRegion] = useStored('chaekkok.region', regionOfAddr(libs[0]?.address))
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    if (!region) return setRows(null)
+    let off = false
+    setRows(null)
+    supabase
+      .from('v_region_books')
+      .select('isbn13,rank,prev_rank,rank_diff,new_entry,region_count,region_total,snapshot_date,prev_date,title,author,cover_url,class_name,addition_symbol')
+      .eq('region', region)
+      .limit(100)
+      .then(({ data }) => !off && setRows(data || []))
+    return () => {
+      off = true
+    }
+  }, [region])
+  const name = REGION_LIST.find(([c]) => c === region)?.[1]
+  const adult = (rows || []).filter((b) => !(b.addition_symbol || '').startsWith('7'))
+  const picks = adult
+    .filter((b) => b.rank_diff > 0 || b.new_entry)
+    .sort((a, b) => (b.new_entry ? 100 - b.rank : b.rank_diff) - (a.new_entry ? 100 - a.rank : a.rank_diff))
+    .slice(0, 5)
+  const first = rows?.[0]
+  const gap = first?.prev_date ? Math.round((Date.parse(first.snapshot_date) - Date.parse(first.prev_date)) / 86400000) : null
+  return (
+    <section className="card card--list rise local" style={{ animationDelay: '0.7s' }}>
+      <div className="card__head">
+        <div className="titlegroup">
+          <Eyebrow tone="up">NEAR ME</Eyebrow>
+          <h2 className="h2 display">{name ? `${name}에서 뜨는 책` : '우리 동네에서 뜨는 책'}</h2>
+        </div>
+        <label className="local__region">
+          <span className="sr-only">지역</span>
+          <select value={region || ''} onChange={(e) => setRegion(e.target.value || null)}>
+            <option value="">지역 선택</option>
+            {REGION_LIST.map(([c, n]) => (
+              <option key={c} value={c}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {!region && <p className="sub local__lead">지역을 고르면 그 지역 공공도서관에서 요즘 순위가 오르는 책을 보여드려요.</p>}
+      {region && rows === null && <Loading />}
+      {region && rows && (
+        <>
+          <p className="sub local__lead">
+            {name} 공공도서관 인기대출 100위 · {gap ? `${gap}일 전보다 순위가 오른 책` : '순위가 오른 책'}
+          </p>
+          {picks.length === 0 && <p className="state">아직 비교할 기록이 부족해요. 며칠 뒤에 다시 보여드릴게요.</p>}
+          {picks.map((b, i) => (
+            <a key={b.isbn13} className="row rise" style={delay(i, 0.05, 0.04)} href={`/book/${encodeURIComponent(b.isbn13)}`}>
+              <span className={`row__rank num${i === 0 ? ' is-first' : ''}`}>{i + 1}</span>
+              <Cover src={b.cover_url} alt="" className="row__cover" title={b.title} />
+              <span className="row__info">
+                <span className="row__title">{shortTitle(b.title)}</span>
+                <span className="row__meta">
+                  {b.new_entry ? `${name} ${b.rank}위로 새로 진입` : `${name} ${b.prev_rank}위 → ${b.rank}위`}
+                </span>
+                {b.region_count != null && b.region_count <= 3 && (
+                  <span className="row__reason">
+                    <span className="local__only">이 지역에서 특히</span>
+                    <span>
+                      {b.region_total}곳 중 {b.region_count}곳만
+                    </span>
+                  </span>
+                )}
+              </span>
+              {b.new_entry ? <span className="row__value num row__value--accent">NEW</span> : <Delta value={String(b.rank_diff)} />}
+            </a>
+          ))}
+          {gap != null && gap < 7 && <p className="sub small local__note">지역 기록을 모은 지 얼마 안 돼서 {gap}일 전과 비교했어요. 일주일이 지나면 7일 전과 비교해요.</p>}
+        </>
+      )}
+    </section>
+  )
 }
 
 function Upcoming({ list: all }) {
@@ -631,7 +713,15 @@ function HitTeaser({ stats }) {
         <Eyebrow>TRACK RECORD</Eyebrow>
         <strong className="display">책콕 적중 기록</strong>
         <span className="sub">
-          먼저 포착한 책의 <b className="hl num">{stats.rose_rate}%</b>가 2주 안에 순위가 더 올랐어요
+          {stats.base?.spot_up20 != null ? (
+            <>
+              포착한 책이 2주 뒤 크게 오른 비율 <b className="hl num">{Math.round(stats.base.spot_up20)}%</b> · 전체 평균 {Math.round(stats.base.base_up20)}%
+            </>
+          ) : (
+            <>
+              책콕이 먼저 알아본 책 <b className="hl num">{stats.top10_hits}권</b>이 분야 TOP10에 들었어요
+            </>
+          )}
         </span>
       </div>
       <span className="hitteaser__go">{Icon.chev()}</span>
@@ -640,6 +730,53 @@ function HitTeaser({ stats }) {
 }
 
 /* ================= 적중 기록 ================= */
+
+// 책콕이 포착한 책 vs 아무 책(같은 기간 분야 100위 안): 2주 뒤 순위를 비교
+function HitCompare({ b }) {
+  const rows = [
+    { label: '2주 뒤 순위가 더 높음', spot: b.spot_up, base: b.base_up },
+    { label: '2주 뒤 20% 넘게 오름', spot: b.spot_up20, base: b.base_up20 },
+  ]
+  const times = b.base_up20 > 0 ? Math.round((b.spot_up20 / b.base_up20) * 10) / 10 : null
+  return (
+    <section className="card rise compare" style={{ animationDelay: '0.1s' }}>
+      <Eyebrow>VS AVERAGE</Eyebrow>
+      <h2 className="h2 display">아무 책이나 고를 때보다 나을까요?</h2>
+      <p className="sub">
+        같은 기간 분야 100위 안의 모든 책과, 책콕이 포착한 책의 2주 뒤 순위를 비교했어요.
+        {times && times > 1 && (
+          <>
+            {' '}크게 오른 비율이 <b className="hl">약 {times}배</b>예요.
+          </>
+        )}
+      </p>
+      {rows.map((r) => (
+        <div key={r.label} className="compare__row">
+          <span className="compare__label">{r.label}</span>
+          <div className="compare__bars">
+            <div className="compare__bar">
+              <span className="compare__who">책콕</span>
+              <span className="compare__track">
+                <i className="is-spot" style={{ width: `${Math.min(100, r.spot)}%` }} />
+              </span>
+              <b className="num">{Math.round(r.spot)}%</b>
+            </div>
+            <div className="compare__bar">
+              <span className="compare__who">전체</span>
+              <span className="compare__track">
+                <i style={{ width: `${Math.min(100, r.base)}%` }} />
+              </span>
+              <b className="num">{Math.round(r.base)}%</b>
+            </div>
+          </div>
+        </div>
+      ))}
+      <p className="sub small">
+        책콕 {b.spot_n.toLocaleString()}권 · 전체 {b.base_n.toLocaleString()}건(책×날짜) 기준 · 매일 다시 계산해요. 책콕이 고른 책은 2주 뒤 순위 밖으로 밀려난 비율도 {Math.round(b.spot_drop)}%(전체 {Math.round(b.base_drop)}%)로 더 높아서, 변동이 큰 책이 많아요.
+      </p>
+    </section>
+  )
+}
 
 function Hits({ stats, index }) {
   const [books, setBooks] = useState(null)
@@ -663,7 +800,7 @@ function Hits({ stats, index }) {
         {!s && <section className="card"><Loading /></section>}
         {s && (
           <section className="card rise">
-            <div className="hitgrid">
+            <div className="hitgrid hitgrid--3">
               <div>
                 <span>포착한 책</span>
                 <strong className="num">
@@ -672,21 +809,14 @@ function Hits({ stats, index }) {
                 </strong>
               </div>
               <div>
-                <span>2주 안에 더 오름</span>
-                <strong className="num">
-                  <span className="hl">{s.rose_rate ?? '-'}</span>
-                  <small>%</small>
-                </strong>
-              </div>
-              <div>
-                <span>분야 TOP10 진입</span>
+                <span>TOP10 진입</span>
                 <strong className="num up">
                   {s.top10_hits}
                   <small>권</small>
                 </strong>
               </div>
               <div>
-                <span>평균 먼저 안 날</span>
+                <span>먼저 안 날</span>
                 <strong className="num">
                   {s.avg_lead_days ?? '-'}
                   <small>일</small>
@@ -694,10 +824,11 @@ function Hits({ stats, index }) {
               </div>
             </div>
             <p className="sub small">
-              {fmtDate(s.since)}부터 기록 · 포착 후 2주가 지난 {s.matured_total}권 기준으로 계산했어요.
+              {fmtDate(s.since)}부터 기록 · TOP10 진입은 포착 당시 분야 10위 밖이던 책 기준이에요.
             </p>
           </section>
         )}
+        {s?.base?.spot_n > 0 && <HitCompare b={s.base} />}
 
         <section className="card card--list rise" style={{ animationDelay: '0.15s' }}>
           <div className="card__head">
@@ -1347,6 +1478,68 @@ function CopyIsbn({ isbn }) {
   )
 }
 
+// 왜 뜨는지: 신뢰도를 정하는 7가지 근거 중 이 책에 해당하는 것만 보여준다
+function useEvidence(isbn) {
+  const [ev, setEv] = useState(null)
+  useEffect(() => {
+    let off = false
+    supabase
+      .from('v_book_state_latest')
+      .select('rank_now,rank_prev,rank_mid,rank_change_ratio,new_entry,hot_diff,rise_steady,loan_growth,regions,demo_groups,librarian,yt_spike,gt_spike,cat,sources')
+      .eq('isbn13', isbn)
+      .maybeSingle()
+      .then(({ data }) => !off && setEv(data || null))
+    return () => {
+      off = true
+    }
+  }, [isbn])
+  return ev
+}
+
+function evidenceOf(e) {
+  if (!e) return []
+  const cat = e.cat || '분야'
+  const out = []
+  const rcr = Number(e.rank_change_ratio)
+  if (rcr >= 0.2 && e.rank_prev && e.rank_now)
+    out.push({ title: `순위 ${Math.round(rcr * 100)}% 상승`, desc: `${cat} ${e.rank_prev}위 → ${e.rank_now}위, 일주일 동안` })
+  if (e.new_entry) out.push({ title: '새로 진입', desc: `지난주엔 ${cat} 인기대출 목록에 없다가 ${e.rank_now}위로 들어왔어요` })
+  if (e.hot_diff > 0) out.push({ title: '전국 대출 급상승', desc: `전국 공공도서관 대출 급상승 목록 ▲${e.hot_diff}` })
+  if (e.rise_steady) out.push({ title: '꾸준히 상승', desc: `${e.rank_prev}위 → ${e.rank_mid}위 → ${e.rank_now}위, 일주일 내내 올랐어요` })
+  if (Number(e.loan_growth) >= 0.2) out.push({ title: '지난달 대출 증가', desc: `지난달 대출이 그 전 석 달 평균보다 ${Math.round(e.loan_growth * 100)}% 늘었어요` })
+  if (e.regions >= 3 || e.demo_groups >= 3) {
+    const parts = [e.regions >= 3 && `${e.regions}개 지역`, e.demo_groups >= 3 && `${e.demo_groups}개 연령·성별 목록`].filter(Boolean)
+    out.push({ title: '여러 곳에서 인기', desc: `${parts.join(' · ')}에서 인기대출 순위에 올랐어요` })
+  }
+  const ext = [e.librarian && '국립중앙도서관 사서 추천', e.yt_spike && '유튜브 언급 급증', e.gt_spike && '검색 관심 급증'].filter(Boolean)
+  if (ext.length) out.push({ title: '도서관 밖 신호', desc: ext.join(' · ') })
+  return out
+}
+
+function WhyRising({ isbn }) {
+  const ev = useEvidence(isbn)
+  const list = evidenceOf(ev)
+  if (!list.length) return null
+  return (
+    <div className="why">
+      <p className="why__title">
+        왜 뜨나요 <span>근거 {list.length}개</span>
+      </p>
+      <ul className="why__list">
+        {list.map((x) => (
+          <li key={x.title}>
+            <span className="why__check" aria-hidden="true">✓</span>
+            <span>
+              <b>{x.title}</b>
+              <small>{x.desc}</small>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, hits }) {
   const { book, usage, coCovers, loading } = useBook(isbn, index)
   useEffect(() => {
@@ -1463,6 +1656,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                   </span>
                 )}
               </p>
+              {st.stage !== '스테디' && <WhyRising isbn={book.isbn13} />}
             </div>
           )}
           <div className="statgrid rise" style={{ animationDelay: '0.3s' }}>
@@ -3144,7 +3338,8 @@ function useHome() {
     Promise.all([
       supabase.from('v_upcoming').select('*').order('publish_date', { ascending: true }).limit(20),
       supabase.from('v_hit_stats').select('*').maybeSingle(),
-    ]).then(([u, h]) => setD({ upcoming: u.data || [], hitStats: h.data || null }))
+      supabase.from('hit_baseline').select('*').maybeSingle(),
+    ]).then(([u, h, b]) => setD({ upcoming: u.data || [], hitStats: h.data ? { ...h.data, base: b.data || null } : null }))
   }, [])
   return d
 }
@@ -3262,7 +3457,7 @@ export default function App() {
     <div className={`app${navTab ? '' : ' app--detail'}`}>
       <main>
         {route.name === 'home' && (
-          <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} unread={alertState.unread} />
+          <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} unread={alertState.unread} libs={libs} />
         )}
         {route.name === 'hits' && <Hits stats={home.hitStats} index={index} />}
         {route.name === 'trend' && (
