@@ -3211,3 +3211,9 @@ a.lib__info {
 .draft__copy {
   width: 100%;
 }
+
+.draft__books {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

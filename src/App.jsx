@@ -1519,6 +1519,17 @@ function Drafts() {
             <p className="label">1. 제목</p>
             <p className="draft__title">{d.title}</p>
             <CopyBtn text={d.title} label="제목 복사" />
+            {d.book_titles?.length > 0 && (
+              <>
+                <p className="label">책 첨부할 때 검색어 (글감 → 책)</p>
+                <div className="draft__books">
+                  {d.book_titles.map((t) => (
+                    <CopyBtn key={t} text={t} label={`『${t}』 복사`} />
+                  ))}
+                </div>
+                <p className="sub small">본문의 📌 줄 자리에 책을 첨부하고, 📌 줄은 지워 주세요.</p>
+              </>
+            )}
             <p className="label">2. 본문</p>
             <pre className="draft__body">{d.body}</pre>
             <CopyBtn text={d.body} label="본문 복사" />

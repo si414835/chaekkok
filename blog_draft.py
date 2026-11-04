@@ -6,7 +6,8 @@
 
 양식(고정)
   제목  M월 D일 오늘의 책 추천!
-  본문  친근한 인사 → 책 2~3권(책 소개 → 책콕 데이터 → 책콕 링크) → 책콕 추천 → 데이터 출처
+  본문  11월 4일에 직접 다듬어 올린 글과 같은 모양 — 친근한 인사 → 책 2~3권(책 첨부 자리 → 책 소개 → 책콕 데이터)
+        → 책콕 추천(마지막 줄 링크 카드) → 데이터 출처
   태그  고정 태그 + 분야 + 책 제목
 
 책 고르는 기준
@@ -213,22 +214,34 @@ def build(day):
     md = f"{day.month}월 {day.day}일"
     title = f"{md} 오늘의 책 추천!"
 
+    # 이승환님이 직접 다듬어 올린 첫 글(11월 4일)과 같은 모양: 빈 줄 개수, 책 첨부 자리, 마지막 링크 카드까지 맞춘다
+    gap = lambda k: [""] * k  # noqa: E731  (네이버 블로그에 붙여 넣으면 빈 문단이 된다)
     lines = [
         "요즘 뭐 읽을지 고민되시는 독자분들, 안녕하세요 😊",
         f"오늘은 전국 도서관에서 요즘 부쩍 많이 빌려 가는 책 {len(picked)}권을 골라 왔어요.",
         INTROS[day.toordinal() % len(INTROS)],
-        "",
+        *gap(3),
     ]
-    tag_titles, tag_cats = [], []
+    tag_titles, tag_cats, book_titles = [], [], []
     for n, (_, _, s, b, u) in enumerate(picked):
         cat_no = (b.get("class_no") or "")[:1]
         cat = CAT[int(cat_no)] if cat_no.isdigit() else (s.get("cat") or "")
         author = clean_author(b.get("author"))
+        name = short_title(b["title"])
         meta = " · ".join(x for x in [author, (b.get("publisher") or "").strip(), cat] if x)
-        lines += ["━━━━━━━━━━━━━━", f"📖 {NUM[n]}. 『{short_title(b['title'])}』", meta, "━━━━━━━━━━━━━━", ""]
+        if n > 0:
+            lines += gap(4)
+        lines += [
+            f"📌 [책 첨부 자리] 글감 → 책에서 '{name}' 검색해서 넣고 이 줄은 지워 주세요",
+            "━━━━━━━━━━━━━━",
+            f"📖 {NUM[n]}. 『{name}』",
+            meta,
+            "━━━━━━━━━━━━━━",
+            *gap(1),
+        ]
         intro = book_intro(s["isbn13"])
         if intro:
-            lines += ["📝 어떤 책이에요?", intro, "(책 소개 출처: 도서관 정보나루)", ""]
+            lines += ["📝 어떤 책이에요?", intro, "(책 소개 출처: 도서관 정보나루)", *gap(1)]
         lines += ["📊 책콕 데이터로 보면", f"· 지금 단계: {s['stage']} (신뢰도 {s['confidence']})"]
         lines += [f"· {e}" for e in evidence(s)]
         reader = top_reader(u.get("loan_grps"))
@@ -237,19 +250,15 @@ def build(day):
         kws = keywords(u.get("keywords"), b.get("title"), author)
         if kws:
             lines.append(f"· 함께 나온 키워드 {' '.join(kws)}")
-        lines += [
-            "",
-            "👉 내 동네 도서관에 있는지, 순위가 어떻게 움직였는지 보기",
-            f"{SITE}/book/{s['isbn13']}",
-            "",
-        ]
-        tag_titles.append("#" + short_title(b["title"]).replace(" ", ""))
+        book_titles.append(name)
+        tag_titles.append("#" + name.replace(" ", ""))
         if cat:
             tag_cats.append(f"#{cat}책")
 
     lines += [
+        *gap(4),
         "━━━━━━━━━━━━━━",
-        "🍂 이런 책, 어디서 찾았냐면요",
+        "🍂 이런 책, 어디서 찾았냐면요!?",
         "━━━━━━━━━━━━━━",
         "오늘 소개한 책은 모두 '책콕'에서 골랐어요.",
         "책콕은 전국 공공도서관 대출 데이터로 '뜨기 시작한 책'을 먼저 알려 주는 무료 웹사이트예요.",
@@ -263,17 +272,21 @@ def build(day):
         )
     lines += [
         "· 우리 동네 도서관에 그 책이 있는지, 지금 빌릴 수 있는지도 바로 확인할 수 있어요",
-        f"다음에 읽을 책, 책콕에서 먼저 찾아보세요 👉 {SITE}",
-        "",
+        *gap(1),
+        "다음에 읽을 책, 책콕에서 먼저 찾아보세요 👉",
+        SITE,  # 따로 한 줄에 두면 네이버가 링크 카드로 바꿔 준다
+        *gap(1),
         f"※ 데이터 출처: 도서관 정보나루(전국 공공도서관 대출 데이터) · {int(d[5:7])}월 {int(d[8:10])}일 기준",
     ]
-    tags = ["#책추천", "#오늘의책", "#요즘읽을책", "#도서관추천도서", "#책콕", "#읽을만한책"] + list(dict.fromkeys(tag_cats)) + tag_titles
+    tags = ["#책추천", "#오늘의책", "#요즘읽을만한책", "#도서관", "#요즘읽을책", "#도서관추천도서", "#책콕", "#읽을만한책"]
+    tags += list(dict.fromkeys(tag_cats)) + tag_titles
     return {
         "day": day.isoformat(),
         "title": title,
         "body": "\n".join(lines),
         "tags": " ".join(tags),
         "isbns": [c[2]["isbn13"] for c in picked],
+        "book_titles": book_titles,
     }
 
 
