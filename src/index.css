@@ -3283,6 +3283,8 @@ a.lib__info {
 .topgrid__cover {
   position: relative;
   display: block;
+  width: 100%;
+  max-width: 210px;
   aspect-ratio: 2 / 2.9;
   border-radius: 10px;
   overflow: hidden;
@@ -3328,16 +3330,26 @@ a.lib__info {
   body {
     background: var(--bg);
   }
+  .app {
+    --nav-w: 232px;
+    --ui-zoom: 1.06;
+  }
+  .app.nav-mini {
+    --nav-w: 76px;
+  }
   .app,
   .app--detail {
     max-width: none;
-    margin: 0 0 0 232px;
-    padding: 32px 40px 56px;
+    margin: 0 0 0 var(--nav-w);
+    padding: 28px 32px 56px;
     box-shadow: none;
+    transition: margin-left 0.2s;
   }
+  /* 화면이 넓을수록 본문 글씨와 카드를 조금씩 키운다 */
   .app > main {
-    max-width: 1240px;
+    max-width: 1480px;
     margin: 0 auto;
+    zoom: var(--ui-zoom);
   }
   .tabbar {
     display: none;
@@ -3352,15 +3364,29 @@ a.lib__info {
     top: 0;
     left: 0;
     bottom: 0;
-    width: 232px;
-    padding: 28px 16px;
+    width: var(--nav-w);
+    padding: 24px 14px;
     background: var(--card);
     border-right: 1px solid var(--line);
     z-index: 30;
+    transition: width 0.2s;
+    overflow: hidden;
+  }
+  .sidenav__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 44px;
   }
   .sidenav__logo {
     padding: 0 8px;
-    font-size: 26px;
+    font-size: 28px;
+    white-space: nowrap;
+  }
+  .sidenav__toggle {
+    flex: none;
+    color: var(--ink-soft);
   }
   .sidenav__search {
     display: flex;
@@ -3371,7 +3397,8 @@ a.lib__info {
     border-radius: 12px;
     background: var(--line-2);
     color: var(--ink-soft);
-    font-size: 14px;
+    font-size: 15px;
+    white-space: nowrap;
   }
   .sidenav__menu {
     display: flex;
@@ -3382,12 +3409,13 @@ a.lib__info {
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 46px;
-    padding: 0 12px;
+    height: 50px;
+    padding: 0 14px;
     border-radius: 12px;
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 500;
     color: var(--ink-3);
+    white-space: nowrap;
     transition: background 0.2s;
   }
   .sidenav__item:hover,
@@ -3420,9 +3448,27 @@ a.lib__info {
     padding: 0 12px;
     border: 1px solid var(--line);
     border-radius: 12px;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--ink-2);
+    white-space: nowrap;
+  }
+  /* 접힌 메뉴: 아이콘만 */
+  .nav-mini .sidenav__logo,
+  .nav-mini .sidenav__item > span:not(.sidenav__icon),
+  .nav-mini .sidenav__search span,
+  .nav-mini .sidenav__alert span,
+  .nav-mini .sidenav__foot > .sub {
+    display: none;
+  }
+  .nav-mini .sidenav__head {
+    justify-content: center;
+  }
+  .nav-mini .sidenav__item,
+  .nav-mini .sidenav__search,
+  .nav-mini .sidenav__alert {
+    justify-content: center;
+    padding: 0;
   }
   .sidenav__alert.has-new span,
   .sidenav__alert.is-on span {
@@ -3604,20 +3650,20 @@ a.lib__info {
 
   /* ---------- 책 상세 · 검색 · 알림 등: 가운데 넓은 한 줄 ---------- */
   .app > main:not(.page--home):not(.page--trend):not(.page--wish):not(.page--my) {
-    max-width: 860px;
+    max-width: 900px;
     border-radius: 20px;
     overflow: clip;
   }
   .actionbar {
-    left: calc(232px + (100% - 232px) / 2);
-    max-width: 860px;
+    left: calc(var(--nav-w) + (100% - var(--nav-w)) / 2);
+    max-width: 900px;
     border-radius: 20px 20px 0 0;
   }
 
   /* 시트는 아래에서 올라오는 대신 가운데 창으로 */
   .sheet {
     align-items: center;
-    padding-left: 232px;
+    padding-left: var(--nav-w);
   }
   .sheet__panel {
     border-radius: 24px;
@@ -3626,5 +3672,17 @@ a.lib__info {
   }
   .sheet__grip {
     display: none;
+  }
+}
+
+/* 넓은 화면일수록 본문을 조금 더 키운다 */
+@media (min-width: 1400px) {
+  .app {
+    --ui-zoom: 1.14;
+  }
+}
+@media (min-width: 1700px) {
+  .app {
+    --ui-zoom: 1.22;
   }
 }

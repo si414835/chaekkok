@@ -350,14 +350,19 @@ const NAV_ITEMS = [
 ]
 
 // 넓은 화면 전용 왼쪽 메뉴 (폰에서는 CSS로 숨기고 하단 탭을 쓴다)
-function SideNav({ current, unread }) {
+function SideNav({ current, unread, mini, onToggle }) {
   return (
     <aside className="sidenav">
-      <a className="logo sidenav__logo" href="/" aria-label="책콕 홈">
-        책콕
-        <i className="logo__dot" aria-hidden="true" />
-      </a>
-      <a className="sidenav__search" href="/search">
+      <div className="sidenav__head">
+        <a className="logo sidenav__logo" href="/" aria-label="책콕 홈">
+          책콕
+          <i className="logo__dot" aria-hidden="true" />
+        </a>
+        <button type="button" className="iconbtn sidenav__toggle" onClick={onToggle} aria-expanded={!mini} aria-label={mini ? '메뉴 펼치기' : '메뉴 접기'} title={mini ? '메뉴 펼치기' : '메뉴 접기'}>
+          {Icon.menu()}
+        </button>
+      </div>
+      <a className="sidenav__search" href="/search" title="책 검색">
         {Icon.search()}
         <span>책 제목, 작가 검색</span>
       </a>
@@ -365,7 +370,7 @@ function SideNav({ current, unread }) {
         {NAV_ITEMS.map((it) => {
           const on = it.id === current
           return (
-            <a key={it.id} href={it.path} className={`sidenav__item${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined}>
+            <a key={it.id} href={it.path} className={`sidenav__item${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined} title={it.label}>
               <span className="sidenav__icon">{it.icon(on)}</span>
               <span>{it.label}</span>
             </a>
@@ -373,7 +378,7 @@ function SideNav({ current, unread }) {
         })}
       </nav>
       <div className="sidenav__foot">
-        <a className={`sidenav__alert${unread ? ' has-new' : ''}${current === 'alerts' ? ' is-on' : ''}`} href="/alerts">
+        <a className={`sidenav__alert${unread ? ' has-new' : ''}${current === 'alerts' ? ' is-on' : ''}`} href="/alerts" title="알림" aria-label={unread ? `알림 ${unread}개` : '알림'}>
           {Icon.bell(unread > 0)}
           <span>알림{unread ? ` ${unread}` : ''}</span>
         </a>
@@ -3692,6 +3697,7 @@ export default function App() {
   const [prefs, setPrefs] = useStored('chaekkok.prefs', { on: false, age: '20', gender: 'all' })
   const [interests, setInterests] = useStored('chaekkok.interests', [])
   const [wish, setWish] = useStored('chaekkok.wish', [])
+  const [navMini, setNavMini] = useStored('chaekkok.navMini', false)
   const [sheet, setSheet] = useState(false)
   const [libs, setLibs] = useStored('chaekkok.libs', [])
   const [libPicker, setLibPicker] = useState(false)
@@ -3746,8 +3752,8 @@ export default function App() {
   const navTab = route.name === 'book' ? null : route.name
   return (
     <StateCtx.Provider value={states}>
-    <div className={`app${navTab ? '' : ' app--detail'}`}>
-      <SideNav current={navTab} unread={alertState.unread} />
+    <div className={`app${navTab ? '' : ' app--detail'}${navMini ? ' nav-mini' : ''}`}>
+      <SideNav current={navTab} unread={alertState.unread} mini={navMini} onToggle={() => setNavMini(!navMini)} />
       <main className={`page page--${route.name}`}>
         {route.name === 'home' && (
           <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} unread={alertState.unread} libs={libs} />
