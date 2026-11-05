@@ -1930,16 +1930,6 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                   ))}
                 </div>
               )}
-              {wide && (
-                <div className="hero__actions">
-                  <button className="btn btn--primary" onClick={() => document.getElementById('borrow')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-                    도서관에서 빌리기
-                  </button>
-                  <button className="btn btn--soft" onClick={() => buyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-                    구매하기
-                  </button>
-                </div>
-              )}
             </div>
           </div>
           {book.external && (
@@ -1992,6 +1982,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             setLibs={setLibs}
             onClose={() => {}}
             onPick={onPickLibrary}
+            onBuy={() => buyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           />
         )}
         </DetailMain>
@@ -3302,7 +3293,7 @@ function LibraryPage({ libCode, libs, setLibs }) {
 }
 
 // 이 책이 내 도서관에 있는지, 지금 빌릴 수 있는지 (Edge Function book-exist -> 정보나루 bookExist)
-function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = false }) {
+function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = false, onBuy }) {
   const [state, setState] = useState({ loading: libs.length > 0, results: {}, error: null })
   useEffect(() => {
     if (libs.length === 0) return
@@ -3381,8 +3372,13 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = fal
         </div>
       </Fold>
       <p className="wsheet__foot">소장·대출 정보는 도서관 정보나루 기준이에요.</p>
-      <div className="sheet__actions">
+      <div className={`sheet__actions${inline ? ' wsheet__actions' : ''}`}>
         <button className="btn btn--soft" onClick={onPick}>{libs.length > 0 ? '내 도서관 관리' : '도서관 이름으로 찾기'}</button>
+        {inline && onBuy && (
+          <button className="btn btn--primary" onClick={onBuy}>
+            구매하기 {Icon.chev()}
+          </button>
+        )}
       </div>
     </Wrap>
   )

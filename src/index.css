@@ -4349,8 +4349,10 @@ a.lib__info {
   .page--book {
     border-radius: 20px;
   }
+  /* 위 막대도 카드처럼 따로 둥글게 (아래 두 칸과 모서리를 맞춤) */
   .page--book .detail__bar {
-    border-radius: 20px 20px 0 0;
+    border-radius: 20px;
+    margin-bottom: 20px;
   }
   .page--book .detail > .stack {
     display: grid;
@@ -4369,7 +4371,7 @@ a.lib__info {
     grid-column: 2;
   }
   .page--book .hero {
-    border-radius: 0 0 20px 20px;
+    border-radius: 20px;
     padding: 28px 32px 32px;
   }
   .page--book .wsheet--inline {
@@ -4439,4 +4441,15 @@ a.lib__info {
     aspect-ratio: 2 / 2.9;
     box-shadow: 0 8px 18px rgba(25, 31, 40, 0.18), 0 2px 5px rgba(25, 31, 40, 0.1);
   }
+}
+
+/* 넓은 화면 책 상세: 도서관 칸 아래 버튼 두 개 */
+.wsheet__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.wsheet__actions .btn {
+  height: 50px;
+  font-size: 15px;
 }
