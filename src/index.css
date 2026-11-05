@@ -4381,3 +4381,42 @@ a.lib__info {
     max-width: none;
   }
 }
+
+/* 넓은 화면 책 상세: 빌리기·구매하기를 제목 아래에 (아래 떠 있는 막대 대신) */
+.hero__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.hero__actions .btn {
+  height: 48px;
+  padding: 0 22px;
+  font-size: 15px;
+}
+.hero__actions .btn--primary {
+  padding: 0 28px;
+}
+
+/* 넓은 화면 책 상세: 함께 빌린 책은 옆으로 넘기지 않고 칸에 맞춰 여러 줄로 */
+@media (min-width: 1100px) {
+  .page--book .detail__side .card--bleed {
+    padding-right: 24px;
+  }
+  .page--book .detail__side .hscroll {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    gap: 24px 16px;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .page--book .detail__side .mini {
+    width: auto;
+    min-width: 0;
+  }
+  .page--book .detail__side .mini__cover {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 2 / 2.9;
+    box-shadow: 0 8px 18px rgba(25, 31, 40, 0.18), 0 2px 5px rgba(25, 31, 40, 0.1);
+  }
+}

@@ -1926,6 +1926,16 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                   ))}
                 </div>
               )}
+              {wide && (
+                <div className="hero__actions">
+                  <button className="btn btn--primary" onClick={() => setLibOpen(true)}>
+                    도서관에서 빌리기
+                  </button>
+                  <button className="btn btn--soft" onClick={() => buyRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+                    구매하기
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           {book.external && (
@@ -2031,14 +2041,14 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
         </DetailSide>
       </div>
 
-      <div className="actionbar">
+      {!wide && <div className="actionbar">
         <button className="btn btn--soft" onClick={() => buyRef.current?.scrollIntoView({ behavior: 'smooth' })}>
           구매하기
         </button>
         <button className="btn btn--primary" onClick={() => setLibOpen(true)}>
           도서관에서 빌리기
         </button>
-      </div>
+      </div>}
       {libOpen && (
         <LibraryStatusSheet
           book={book}
