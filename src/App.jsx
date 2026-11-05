@@ -1831,9 +1831,12 @@ function WhyRising({ isbn }) {
   )
 }
 
-// 넓은 화면에서는 상세 오른쪽 칸으로 묶고, 폰에서는 그대로 이어 붙인다
+// 넓은 화면에서는 상세를 왼쪽·오른쪽 칸으로 묶고, 폰에서는 그대로 이어 붙인다
 function DetailSide({ wide, children }) {
   return wide ? <div className="detail__side">{children}</div> : children
+}
+function DetailMain({ wide, children }) {
+  return wide ? <div className="detail__main">{children}</div> : children
 }
 
 function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, hits }) {
@@ -1897,6 +1900,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
         </button>
       </header>
       <div className="stack">
+        <DetailMain wide={wide}>
         <section className="card hero">
           <div className="hero__top">
             <span className="hero__coverwrap tilt" key={'c' + isbn}>
@@ -1928,10 +1932,10 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               )}
               {wide && (
                 <div className="hero__actions">
-                  <button className="btn btn--primary" onClick={() => setLibOpen(true)}>
+                  <button className="btn btn--primary" onClick={() => document.getElementById('borrow')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
                     도서관에서 빌리기
                   </button>
-                  <button className="btn btn--soft" onClick={() => buyRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+                  <button className="btn btn--soft" onClick={() => buyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
                     구매하기
                   </button>
                 </div>
@@ -1980,6 +1984,17 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
           <RankChart isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} embedded />
         </section>
 
+        {wide && (
+          <LibraryStatusSheet
+            inline
+            book={book}
+            libs={libs}
+            setLibs={setLibs}
+            onClose={() => {}}
+            onPick={onPickLibrary}
+          />
+        )}
+        </DetailMain>
         <DetailSide wide={wide}>
         <LoanChart history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
         <Groups groups={usage?.loan_grps} />
@@ -3287,7 +3302,7 @@ function LibraryPage({ libCode, libs, setLibs }) {
 }
 
 // 이 책이 내 도서관에 있는지, 지금 빌릴 수 있는지 (Edge Function book-exist -> 정보나루 bookExist)
-function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick }) {
+function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = false }) {
   const [state, setState] = useState({ loading: libs.length > 0, results: {}, error: null })
   useEffect(() => {
     if (libs.length === 0) return
@@ -3312,8 +3327,9 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick }) {
   }
 
   const [altOpen, setAltOpen] = useState(false)
+  const Wrap = inline ? InlineCard : Sheet
   return (
-    <Sheet label="어디서 빌릴까요" onClose={onClose} className="wsheet">
+    <Wrap label="어디서 빌릴까요" onClose={onClose} className="wsheet">
       <div className="wsheet__head">
         <h2 className="wsheet__title">어디서 빌릴까요?</h2>
         <p className="wsheet__book">
@@ -3368,7 +3384,16 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick }) {
       <div className="sheet__actions">
         <button className="btn btn--soft" onClick={onPick}>{libs.length > 0 ? '내 도서관 관리' : '도서관 이름으로 찾기'}</button>
       </div>
-    </Sheet>
+    </Wrap>
+  )
+}
+
+// 넓은 화면 책 상세: 시트 대신 화면 안에 펼쳐 두는 칸
+function InlineCard({ label, className = '', children }) {
+  return (
+    <section className={`card ${className} wsheet--inline`} id="borrow" aria-label={label}>
+      {children}
+    </section>
   )
 }
 

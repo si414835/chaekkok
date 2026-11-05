@@ -4358,9 +4358,29 @@ a.lib__info {
     gap: 20px;
     align-items: start;
   }
-  .page--book .detail > .stack > .hero {
+  .page--book .detail > .stack > .detail__main {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+  .page--book .detail > .stack > .detail__side {
+    grid-column: 2;
+  }
+  .page--book .hero {
     border-radius: 0 0 20px 20px;
     padding: 28px 32px 32px;
+  }
+  .page--book .wsheet--inline {
+    padding: 28px 32px;
+    scroll-margin-top: 24px;
+  }
+  .page--book .wsheet--inline .sheet__actions {
+    margin-top: 12px;
+  }
+  .page--book #buy {
+    scroll-margin-top: 24px;
   }
   .page--book .detail__side {
     display: flex;
