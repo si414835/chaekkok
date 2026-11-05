@@ -3255,3 +3255,376 @@ a.lib__info {
   flex-direction: column;
   gap: 6px;
 }
+
+/* =========================================================
+   넓은 화면(PC·노트북, 1100px 이상): 왼쪽 메뉴 + 탭별 넓은 배치
+   폰 화면은 위의 규칙 그대로 쓰고, 여기서는 덮어쓰기만 한다
+   ========================================================= */
+.sidenav {
+  display: none;
+}
+.home__pair {
+  display: contents;
+}
+
+/* 오늘의 콕 TOP 5 (넓은 화면에서만 그려짐) */
+.topgrid__list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 16px;
+}
+.topgrid__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.topgrid__cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 2 / 2.9;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 6px 16px rgba(25, 31, 40, 0.12);
+  transition: transform 0.2s;
+}
+.topgrid__item:hover .topgrid__cover {
+  transform: translateY(-4px);
+}
+.topgrid__cover .cover {
+  width: 100%;
+  height: 100%;
+}
+.topgrid__rank {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.topgrid__title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin-top: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.topgrid .row__reason {
+  flex-wrap: wrap;
+}
+
+@media (min-width: 1100px) {
+  body {
+    background: var(--bg);
+  }
+  .app,
+  .app--detail {
+    max-width: none;
+    margin: 0 0 0 232px;
+    padding: 32px 40px 56px;
+    box-shadow: none;
+  }
+  .app > main {
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+  .tabbar {
+    display: none;
+  }
+
+  /* 왼쪽 메뉴 */
+  .sidenav {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 232px;
+    padding: 28px 16px;
+    background: var(--card);
+    border-right: 1px solid var(--line);
+    z-index: 30;
+  }
+  .sidenav__logo {
+    padding: 0 8px;
+    font-size: 26px;
+  }
+  .sidenav__search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 12px;
+    border-radius: 12px;
+    background: var(--line-2);
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+  .sidenav__menu {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sidenav__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    padding: 0 12px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink-3);
+    transition: background 0.2s;
+  }
+  .sidenav__item:hover,
+  .sidenav__alert:hover,
+  .sidenav__search:hover {
+    background: var(--line-2);
+  }
+  .sidenav__item.is-on {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 800;
+  }
+  .sidenav__icon {
+    display: inline-flex;
+  }
+  .sidenav__foot {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sidenav__foot > .sub {
+    padding: 0 8px;
+  }
+  .sidenav__alert {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink-2);
+  }
+  .sidenav__alert.has-new span,
+  .sidenav__alert.is-on span {
+    color: var(--accent);
+  }
+
+  /* 공통: 카드는 둥글게, 사이 간격은 넓게 */
+  .card {
+    border-radius: 20px;
+  }
+  .stack {
+    gap: 20px;
+  }
+  .row:hover {
+    background: var(--line-2);
+  }
+
+  /* ---------- 홈 ---------- */
+  .page--home > .topbar {
+    display: none;
+  }
+  .home {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .home > * {
+    grid-column: 1 / -1;
+  }
+  .home > .home__pair > * {
+    grid-column: auto;
+  }
+  .kwgroup {
+    flex-direction: row;
+    align-items: stretch;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .kwgroup .kw {
+    flex: 1;
+    min-width: 0;
+    padding: 32px;
+  }
+  .kwgroup .hitteaser {
+    width: 360px;
+    flex: none;
+    padding: 32px 28px;
+    border-left: 1px solid var(--line-2);
+    border-radius: 0;
+  }
+  .topgrid {
+    padding: 24px 28px 28px;
+  }
+
+  /* ---------- 트렌드 · 콕 · 마이: 본문 + 오른쪽 칸 ---------- */
+  .split {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+  }
+  .split__main {
+    flex: 1;
+    min-width: 0;
+  }
+  .side {
+    width: 340px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: 32px;
+  }
+  .side .card {
+    padding: 22px;
+  }
+  .side .h3 {
+    margin-bottom: 6px;
+  }
+  .side__chips {
+    margin-top: 14px;
+  }
+  .side__btn {
+    margin-top: 14px;
+  }
+  .side__stages {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .side__stages li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+  }
+  .side .setlist {
+    margin-top: 6px;
+  }
+  .page--trend .menubtn,
+  .page--my .menubtn {
+    display: none;
+  }
+
+  /* 트렌드: 목록 전체를 흰 판 하나로 */
+  .page--trend .split__main {
+    background: var(--card);
+    border-radius: 20px;
+    overflow: clip;
+  }
+  .page--trend .pagehead {
+    padding: 28px 28px 8px;
+  }
+  .page--trend .split__main .chips {
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+  .page--trend .listdesc {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+  .page--trend .row {
+    padding: 12px 28px;
+  }
+  .page--trend .list {
+    min-height: 0;
+  }
+
+  /* 마이: 프로필 카드가 머리말 역할을 해서 위 제목 줄은 숨긴다 */
+  .page--my > .pagehead {
+    display: none;
+  }
+  /* 순위 그래프가 넓은 폭에서 글자까지 커지지 않게 */
+  .rankchart {
+    max-width: 560px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* 콕 · 마이 머리말 */
+  .page--wish .pagehead,
+  .page--my .pagehead {
+    border-radius: 20px;
+    padding: 26px 28px;
+    margin-bottom: 20px;
+  }
+
+  /* 콕: 콕한 책을 두 줄 카드로 */
+  .wishlist {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 20px;
+  }
+  .wishlist .row--wish {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 8px 14px 14px;
+  }
+  .wishlist .empty {
+    grid-column: 1 / -1;
+  }
+
+  /* 마이: 두 칸 */
+  .my {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .my > .profile,
+  .my > .foot,
+  .my > section:last-of-type {
+    grid-column: 1 / -1;
+  }
+
+  /* ---------- 책 상세 · 검색 · 알림 등: 가운데 넓은 한 줄 ---------- */
+  .app > main:not(.page--home):not(.page--trend):not(.page--wish):not(.page--my) {
+    max-width: 860px;
+    border-radius: 20px;
+    overflow: clip;
+  }
+  .actionbar {
+    left: calc(232px + (100% - 232px) / 2);
+    max-width: 860px;
+    border-radius: 20px 20px 0 0;
+  }
+
+  /* 시트는 아래에서 올라오는 대신 가운데 창으로 */
+  .sheet {
+    align-items: center;
+    padding-left: 232px;
+  }
+  .sheet__panel {
+    border-radius: 24px;
+    max-height: 80vh;
+    padding-bottom: 24px;
+  }
+  .sheet__grip {
+    display: none;
+  }
+}

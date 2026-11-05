@@ -183,6 +183,21 @@ function useRoute() {
 /* ================= 모션 도우미 ================= */
 
 // '동작 줄이기'를 켠 기기에서는 애니메이션 없이 바로 최종 값을 보여준다
+// PC·노트북처럼 넓은 화면인지 (이 폭부터 왼쪽 메뉴 레이아웃)
+const WIDE_Q = '(min-width: 1100px)'
+function useWide() {
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(WIDE_Q).matches)
+  useEffect(() => {
+    const m = window.matchMedia?.(WIDE_Q)
+    if (!m) return
+    const f = () => setWide(m.matches)
+    f()
+    m.addEventListener?.('change', f)
+    return () => m.removeEventListener?.('change', f)
+  }, [])
+  return wide
+}
+
 const reduceMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 // 숫자가 0부터 올라가는 카운트업 (key가 바뀌면 다시 시작)
@@ -327,13 +342,49 @@ function Cover({ src, alt, className = '', title }) {
   )
 }
 
+const NAV_ITEMS = [
+  { id: 'home', label: '홈', icon: Icon.home, path: '/' },
+  { id: 'trend', label: '트렌드', icon: Icon.trend, path: '/trend' },
+  { id: 'wish', label: '콕', icon: Icon.ginkgo, path: '/wish' },
+  { id: 'my', label: '마이', icon: Icon.user, path: '/my' },
+]
+
+// 넓은 화면 전용 왼쪽 메뉴 (폰에서는 CSS로 숨기고 하단 탭을 쓴다)
+function SideNav({ current, unread }) {
+  return (
+    <aside className="sidenav">
+      <a className="logo sidenav__logo" href="/" aria-label="책콕 홈">
+        책콕
+        <i className="logo__dot" aria-hidden="true" />
+      </a>
+      <a className="sidenav__search" href="/search">
+        {Icon.search()}
+        <span>책 제목, 작가 검색</span>
+      </a>
+      <nav className="sidenav__menu" aria-label="주요 메뉴">
+        {NAV_ITEMS.map((it) => {
+          const on = it.id === current
+          return (
+            <a key={it.id} href={it.path} className={`sidenav__item${on ? ' is-on' : ''}`} aria-current={on ? 'page' : undefined}>
+              <span className="sidenav__icon">{it.icon(on)}</span>
+              <span>{it.label}</span>
+            </a>
+          )
+        })}
+      </nav>
+      <div className="sidenav__foot">
+        <a className={`sidenav__alert${unread ? ' has-new' : ''}${current === 'alerts' ? ' is-on' : ''}`} href="/alerts">
+          {Icon.bell(unread > 0)}
+          <span>알림{unread ? ` ${unread}` : ''}</span>
+        </a>
+        <span className="sub small">{DATE_LABEL} 데이터</span>
+      </div>
+    </aside>
+  )
+}
+
 function BottomNav({ current }) {
-  const items = [
-    { id: 'home', label: '홈', icon: Icon.home, path: '/' },
-    { id: 'trend', label: '트렌드', icon: Icon.trend, path: '/trend' },
-    { id: 'wish', label: '콕', icon: Icon.ginkgo, path: '/wish' },
-    { id: 'my', label: '마이', icon: Icon.user, path: '/my' },
-  ]
+  const items = NAV_ITEMS
   return (
     <nav className="tabbar" aria-label="주요 메뉴">
       {items.map((it) => {
@@ -532,7 +583,61 @@ function Carousel({ books }) {
   )
 }
 
+// 넓은 화면 홈: 오늘의 콕 TOP 5를 한 줄에 펼쳐 보여준다
+function TopGridItem({ book, i }) {
+  const st = useBookState(book.isbn13)
+  return (
+    <a className="topgrid__item rise" style={delay(i, 0.06, 0.1)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
+      <span className="topgrid__cover">
+        <Cover src={book.cover_url} alt="" title={book.title} />
+        <span className="topgrid__rank num">{i + 1}</span>
+      </span>
+      <span className="topgrid__title">{shortTitle(book.title)}</span>
+      <span className="sub">
+        {cleanAuthor(book.author)}
+        {book.score != null && (
+          <>
+            {' · '}
+            <b className="accent">{book.score}점</b>
+          </>
+        )}
+      </span>
+      {st?.reason && (
+        <span className="row__reason">
+          <StageBadge stage={st.stage} />
+          <span>{st.reason}</span>
+        </span>
+      )}
+    </a>
+  )
+}
+
+function TopGrid({ books }) {
+  if (!books.length) return null
+  return (
+    <section className="card topgrid">
+      <div className="card__head">
+        <div className="titlegroup">
+          <Eyebrow>TODAY&apos;S KOK</Eyebrow>
+          <h2 className="h2 display">
+            오늘의 콕 <em>TOP {books.length}</em>
+          </h2>
+        </div>
+        <a className="sub" href="/trend">
+          트렌드에서 더 보기 →
+        </a>
+      </div>
+      <div className="topgrid__list">
+        {books.map((b, i) => (
+          <TopGridItem key={b.isbn13} book={b} i={i} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs }) {
+  const wide = useWide()
   const top5 = feed.composite.filter((b) => !isChildBook(b)).slice(0, 5)
   const rising3 = feed.rising.filter((b) => !isChildBook(b)).slice(0, 3)
   return (
@@ -552,7 +657,7 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
           </a>
         </span>
       </header>
-      <div className="stack">
+      <div className="stack home">
         <div className="kwgroup">
           <KeywordHero keywords={keywords} />
           <HitTeaser stats={hitStats} />
@@ -561,7 +666,8 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
         {error && <section className="card"><p className="state state--error">데이터를 불러오지 못했어요: {error}</p></section>}
         {!loading && !error && (
           <>
-            <Carousel books={top5} />
+            {wide ? <TopGrid books={top5} /> : <Carousel books={top5} />}
+            <div className="home__pair">
             <section className="card card--list rise" style={{ animationDelay: '0.65s' }}>
               <div className="card__head">
                 <div className="titlegroup">
@@ -578,6 +684,7 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
               </a>
             </section>
             <LocalRising libs={libs || []} />
+            </div>
             <Upcoming list={upcoming} />
           </>
         )}
@@ -919,7 +1026,46 @@ function PrefsSheet({ prefs, interests, setInterests, onOpenFilter, onClose }) {
   )
 }
 
+// 넓은 화면 트렌드 오른쪽: 내 취향·연령·성별을 늘 펼쳐 둔다
+function TrendSide({ prefs, interests, setInterests, onOpenFilter }) {
+  const toggle = (c) => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])
+  return (
+    <aside className="side">
+      <section className="card">
+        <h2 className="h3">내 취향</h2>
+        <p className="sub">관심 분야는 분야 버튼 앞쪽에 먼저 보이고, 새로 포착된 책 알림에도 쓰여요.</p>
+        <div className="chips chips--wrap side__chips">
+          {CATEGORIES.filter((c) => c !== '전체').map((c) => (
+            <button key={c} className={`chip${interests.includes(c) ? ' is-picked' : ''}`} aria-pressed={interests.includes(c)} onClick={() => toggle(c)}>
+              {c === '어린이' ? '어린이 책' : c}
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="card">
+        <h2 className="h3">연령·성별로 보기</h2>
+        <p className="sub">꾸준한 인기 탭에서 이 사람들이 많이 빌린 순서로 보여줘요.</p>
+        <button className="btn btn--soft btn--full side__btn" onClick={onOpenFilter}>
+          {prefs.on ? demoLabel(prefs) : '연령대·성별 고르기'} {Icon.chev()}
+        </button>
+      </section>
+      <section className="card side__guide">
+        <h2 className="h3">단계, 이렇게 읽어요</h2>
+        <ol className="side__stages">
+          {STAGE_GUIDE.map((g) => (
+            <li key={g.stage}>
+              <StageBadge stage={g.stage} />
+              <span>{g.title}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </aside>
+  )
+}
+
 function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOpenFilter, demo }) {
+  const wide = useWide()
   const [cat, setCat] = useState('전체')
   const [menu, setMenu] = useState(false)
   const demoActive = tab === 'popular' && prefs.on
@@ -947,7 +1093,8 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
   const waiting = loading || (demoActive && demo.loading)
 
   return (
-    <>
+    <div className="split">
+      <div className="split__main">
       <header className="pagehead pagehead--withmenu">
         <Eyebrow>TREND</Eyebrow>
         <h1 className="h1 display">트렌드</h1>
@@ -991,7 +1138,9 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
             return <BookRow key={tab + cat + b.isbn13 + i} rank={i + 1} order={i} book={b} value={v} valueTone={tone} />
           })}
       </div>
-    </>
+      </div>
+      {wide && <TrendSide prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={onOpenFilter} />}
+    </div>
   )
 }
 
@@ -2305,6 +2454,21 @@ function Alerts({ alerts, markRead, clear }) {
 
 // 알림 설정: 마이 탭 오른쪽 위 톱니바퀴 → 항목 목록 → 항목을 누르면 설명과 켜기/끄기
 function AlertSettingsSheet({ alertState, push, onClose }) {
+  return (
+    <Sheet label="알림 설정" onClose={onClose}>
+      <div className="sheet__head">
+        <div>
+          <h2 className="h2">알림 설정</h2>
+          <p className="sub">스위치를 밀어 켜고 끌 수 있어요</p>
+        </div>
+      </div>
+      <AlertToggles alertState={alertState} push={push} />
+    </Sheet>
+  )
+}
+
+// 알림 스위치 목록 (시트와 넓은 화면 옆 칸에서 같이 쓴다)
+function AlertToggles({ alertState, push }) {
   const { prefs, setPrefs } = alertState
   const pushDesc =
     push.support === 'ios-home'
@@ -2317,13 +2481,7 @@ function AlertSettingsSheet({ alertState, push, onClose }) {
     { id: 'push', label: '휴대폰 알림', desc: pushDesc, on: push.on, toggle: push.on ? push.disable : push.enable, disabled: push.support !== 'ok' || push.busy, busy: push.busy },
   ]
   return (
-    <Sheet label="알림 설정" onClose={onClose}>
-      <div className="sheet__head">
-        <div>
-          <h2 className="h2">알림 설정</h2>
-          <p className="sub">스위치를 밀어 켜고 끌 수 있어요</p>
-        </div>
-      </div>
+    <>
       <div className="setlist">
         {items.map((it) => (
           <div key={it.id} className="setrow">
@@ -2347,7 +2505,7 @@ function AlertSettingsSheet({ alertState, push, onClose }) {
         ))}
       </div>
       {push.msg && <p className="sub small pushbox__msg">{push.msg}</p>}
-    </Sheet>
+    </>
   )
 }
 
@@ -3040,10 +3198,12 @@ function LibraryPicker({ libs, setLibs, onClose }) {
 
 /* ================= 콕한 책 ================= */
 
-function Wish({ wish, index, toggleWish, hits }) {
+function Wish({ wish, index, toggleWish, hits, alertState, push }) {
+  const wide = useWide()
   const items = wish.map((w) => ({ ...w, live: index.get(w.isbn13), hit: hits.get(w.isbn13) }))
   return (
-    <>
+    <div className="split">
+      <div className="split__main">
       <header className="pagehead">
         <Eyebrow>MY BOOKS</Eyebrow>
         <h1 className="h1 display">콕한 책</h1>
@@ -3066,7 +3226,7 @@ function Wish({ wish, index, toggleWish, hits }) {
             </div>
           </div>
         </section>
-        <section className="card card--list">
+        <section className="card card--list wishlist">
           {items.length === 0 && (
             <div className="empty">
               <p>아직 콕한 책이 없어요.</p>
@@ -3107,13 +3267,29 @@ function Wish({ wish, index, toggleWish, hits }) {
             </div>
           ))}
         </section>
-        <section className="card">
-          <h2 className="h2">콕한 책 소식 받기</h2>
-          <p className="sub">콕한 책이 떠오름·확산·스테디 단계로 올라가면 알림으로 알려드려요.</p>
-          <a className="btn btn--soft btn--block" href="/my">알림 설정 {Icon.chev()}</a>
-        </section>
+        {!wide && (
+          <section className="card">
+            <h2 className="h2">콕한 책 소식 받기</h2>
+            <p className="sub">콕한 책이 떠오름·확산·스테디 단계로 올라가면 알림으로 알려드려요.</p>
+            <a className="btn btn--soft btn--block" href="/my">알림 설정 {Icon.chev()}</a>
+          </section>
+        )}
       </div>
-    </>
+      </div>
+      {wide && (
+        <aside className="side">
+          <section className="card">
+            <h2 className="h3">콕한 책 소식 받기</h2>
+            <p className="sub">콕한 책이 떠오름·확산·스테디 단계로 올라가면 알려드려요.</p>
+            <AlertToggles alertState={alertState} push={push} />
+          </section>
+          <section className="card">
+            <h2 className="h3">적중은 어떻게 세나요</h2>
+            <p className="sub">콕할 때 분야 10위 밖이던 책이 그 뒤 분야 TOP10에 들면 적중이에요. 콕한 날 이후 기록만 세요.</p>
+          </section>
+        </aside>
+      )}
+    </div>
   )
 }
 
@@ -3199,6 +3375,7 @@ function MyHits({ wish, hits }) {
 }
 
 function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPickLibrary, alertState, push, wish, hits }) {
+  const wide = useWide()
   const [openInfo, setOpenInfo] = useState(null)
   const [settings, setSettings] = useState(false)
   const infos = [
@@ -3245,8 +3422,9 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
           {Icon.gear()}
         </button>
       </header>
-      {settings && <SettingsPanel alertState={alertState} push={push} onClose={() => setSettings(false)} />}
-      <div className="stack">
+      {settings && !wide && <SettingsPanel alertState={alertState} push={push} onClose={() => setSettings(false)} />}
+      <div className="split">
+      <div className="stack my split__main">
         <section className="card profile">
           <span className="profile__avatar">{Icon.user(false)}</span>
           <div>
@@ -3302,6 +3480,23 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
             </>
           )}
         </p>
+      </div>
+      {wide && (
+        <aside className="side">
+          <section className="card">
+            <h2 className="h3">알림</h2>
+            <AlertToggles alertState={alertState} push={push} />
+            <a className="line" href="/alerts">
+              <span className="line__label">받은 알림 보기</span>
+              <span className="line__chev">{Icon.chev()}</span>
+            </a>
+          </section>
+          <section className="card">
+            <h2 className="h3">저장</h2>
+            <p className="sub">콕한 책, 취향, 내 도서관은 로그인 없이 이 기기(브라우저)에만 저장돼요. 브라우저 기록을 지우면 함께 지워져요.</p>
+          </section>
+        </aside>
+      )}
       </div>
     </>
   )
@@ -3552,7 +3747,8 @@ export default function App() {
   return (
     <StateCtx.Provider value={states}>
     <div className={`app${navTab ? '' : ' app--detail'}`}>
-      <main>
+      <SideNav current={navTab} unread={alertState.unread} />
+      <main className={`page page--${route.name}`}>
         {route.name === 'home' && (
           <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} unread={alertState.unread} libs={libs} />
         )}
@@ -3563,7 +3759,7 @@ export default function App() {
         )}
         {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} hits={hits} />}
         {route.name === 'library' && route.param && <LibraryPage libCode={route.param} libs={libs} setLibs={setLibs} />}
-        {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} hits={hits} />}
+        {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} hits={hits} alertState={alertState} push={push} />}
         {route.name === 'search' && <Search />}
         {route.name === 'keyword' && route.param && <KeywordPage word={route.param} index={index} />}
         {route.name === 'alerts' && <Alerts alerts={alertState.alerts} markRead={alertState.markRead} clear={alertState.clear} />}
