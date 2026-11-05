@@ -1034,41 +1034,47 @@ function PrefsSheet({ prefs, interests, setInterests, onOpenFilter, onClose }) {
   )
 }
 
-// 넓은 화면 트렌드 오른쪽: 내 취향·연령·성별을 늘 펼쳐 둔다
-function TrendSide({ prefs, interests, setInterests, onOpenFilter }) {
-  const toggle = (c) => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])
+// 넓은 화면 트렌드: 1~3위는 큰 카드, 4위부터는 표지 진열
+function TrendTopCard({ book, rank, value }) {
+  const st = useBookState(book.isbn13)
   return (
-    <aside className="side">
-      <section className="card">
-        <h2 className="h3">내 취향</h2>
-        <p className="sub">관심 분야는 분야 버튼 앞쪽에 먼저 보이고, 새로 포착된 책 알림에도 쓰여요.</p>
-        <div className="chips chips--wrap side__chips">
-          {CATEGORIES.filter((c) => c !== '전체').map((c) => (
-            <button key={c} className={`chip${interests.includes(c) ? ' is-picked' : ''}`} aria-pressed={interests.includes(c)} onClick={() => toggle(c)}>
-              {c === '어린이' ? '어린이 책' : c}
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className="card">
-        <h2 className="h3">연령·성별로 보기</h2>
-        <p className="sub">꾸준한 인기 탭에서 이 사람들이 많이 빌린 순서로 보여줘요.</p>
-        <button className="btn btn--soft btn--full side__btn" onClick={onOpenFilter}>
-          {prefs.on ? demoLabel(prefs) : '연령대·성별 고르기'} {Icon.chev()}
-        </button>
-      </section>
-      <section className="card side__guide">
-        <h2 className="h3">단계, 이렇게 읽어요</h2>
-        <ol className="side__stages">
-          {STAGE_GUIDE.map((g) => (
-            <li key={g.stage}>
-              <StageBadge stage={g.stage} />
-              <span>{g.title}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-    </aside>
+    <a className="ttop rise" style={delay(rank, 0.06, 0)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
+      <span className="ttop__cover">
+        <Cover src={book.cover_url} alt="" title={book.title} />
+        <span className="ttop__rank num">{rank}</span>
+      </span>
+      <span className="ttop__info">
+        {st?.stage && (
+          <span className="ttop__badge">
+            <StageBadge stage={st.stage} />
+            {st.confidence && <span className="ttop__conf">신뢰도 {st.confidence}</span>}
+          </span>
+        )}
+        <span className="ttop__title">{shortTitle(book.title)}</span>
+        <span className="sub">
+          {book.categoryLabel} · {cleanAuthor(book.author)}
+        </span>
+        <span className={`ttop__value num${value[1] ? ' ' + value[1] : ''}`}>{value[0]}</span>
+      </span>
+    </a>
+  )
+}
+
+function TrendTile({ book, rank, value }) {
+  const st = useBookState(book.isbn13)
+  return (
+    <a className="ttile rise" style={delay(rank, 0.03, 0.1)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
+      <span className="ttile__cover">
+        <Cover src={book.cover_url} alt="" title={book.title} />
+        <span className="ttile__rank num">{rank}</span>
+      </span>
+      <span className="ttile__title">{shortTitle(book.title)}</span>
+      <span className="ttile__row">
+        {st?.stage && <StageBadge stage={st.stage} />}
+        <b className={`num${value[1] ? ' ' + value[1] : ''}`}>{value[0]}</b>
+      </span>
+      {st?.reason && <span className="ttile__reason">{st.reason.replace(/, \d+일간$/, '')}</span>}
+    </a>
   )
 }
 
@@ -1099,6 +1105,76 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
   }
   const desc = demoActive ? `${demoLabel(prefs)}이 최근 30일 많이 빌린 순이에요` : TABS.find((t) => t.id === tab).desc
   const waiting = loading || (demoActive && demo.loading)
+
+  if (wide) {
+    const tone = (b) => {
+      const [v, t] = value(b)
+      return [v, t === 'up' ? 'up' : t === 'accent' ? 'accent' : '']
+    }
+    return (
+      <div className="twide">
+        <section className="card twide__head">
+          <div className="twide__bar">
+            <div className="titlegroup">
+              <Eyebrow>TREND</Eyebrow>
+              <h1 className="h1 display">트렌드</h1>
+              <span className="sub">
+                {DATE_LABEL} · {desc}
+              </span>
+            </div>
+            <div className="twide__tabs" role="tablist">
+              {TABS.map((t) => (
+                <a key={t.id} role="tab" aria-selected={tab === t.id} className={`twide__tab${tab === t.id ? ' is-on' : ''}`} href={`/trend/${t.id}`}>
+                  {t.label}
+                </a>
+              ))}
+            </div>
+            <button className={`btn btn--soft twide__prefs${prefs.on || interests.length ? ' has-set' : ''}`} onClick={() => setMenu(true)}>
+              내 취향 · 연령·성별
+            </button>
+          </div>
+          {tab !== 'recommended' && tab !== 'rising' && (
+            <div className="chips chips--wrap twide__chips">
+              {tab === 'popular' && (
+                <button className={`chip chip--filter${prefs.on ? ' is-on' : ''}`} onClick={onOpenFilter}>
+                  {Icon.filter()} {prefs.on ? demoLabel(prefs) : '연령·성별'}
+                </button>
+              )}
+              {cats.map((c) => (
+                <button key={c} className={`chip${cat === c ? ' is-on' : ''}`} aria-pressed={cat === c} onClick={() => setCat(c)}>
+                  {c === '전체' ? '전체 분야' : c === '어린이' ? '어린이 책' : c}
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+        {menu && <PrefsSheet prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={onOpenFilter} onClose={() => setMenu(false)} />}
+        {waiting && <section className="card"><Loading /></section>}
+        {error && <section className="card"><p className="state state--error">데이터를 불러오지 못했어요: {error}</p></section>}
+        {!waiting && !error && list.length === 0 && (
+          <section className="card">
+            <p className="state">{demoActive ? '이 조건의 데이터가 아직 없어요. 다음 수집 후 채워져요.' : '이 분야는 아직 데이터가 없어요.'}</p>
+          </section>
+        )}
+        {!waiting && !error && list.length > 0 && (
+          <>
+            <div className="twide__top">
+              {list.slice(0, 3).map((b, i) => (
+                <TrendTopCard key={tab + cat + b.isbn13} book={b} rank={i + 1} value={tone(b)} />
+              ))}
+            </div>
+            {list.length > 3 && (
+              <section className="card twide__grid">
+                {list.slice(3).map((b, i) => (
+                  <TrendTile key={tab + cat + b.isbn13} book={b} rank={i + 4} value={tone(b)} />
+                ))}
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="split">
@@ -1147,7 +1223,6 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
           })}
       </div>
       </div>
-      {wide && <TrendSide prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={onOpenFilter} />}
     </div>
   )
 }
