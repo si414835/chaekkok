@@ -1039,50 +1039,37 @@ function PrefsSheet({ prefs, interests, setInterests, onOpenFilter, onClose }) {
   )
 }
 
-// 넓은 화면 트렌드: 1~3위는 큰 카드, 4위부터는 표지 진열
-function TrendTopCard({ book, rank, value }) {
+// 넓은 화면 트렌드: 갤러리형 (순위는 표지 왼쪽, 표지는 그림자만)
+function GalleryItem({ book, rank, value }) {
   const st = useBookState(book.isbn13)
+  const m = /(\d+)위 → (\d+)위/.exec(st?.reason || '')
+  const from = m ? Number(m[1]) : null
+  const to = m ? Number(m[2]) : null
+  const up = from != null ? from - to : book.rank_diff || null
   return (
-    <a className="ttop rise" style={delay(rank, 0.06, 0)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
-      <span className="ttop__cover">
-        <Cover src={book.cover_url} alt="" title={book.title} />
-        <span className="ttop__rank num">{rank}</span>
+    <a className="gitem rise" style={delay(rank, 0.03, 0)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
+      <span className={`gitem__rank${rank <= 3 ? ' is-top' : ''}`}>
+        <b className="num">{rank}</b>
+        <i aria-hidden="true" />
+        {up > 0 && <span className="num">▲{up}</span>}
       </span>
-      <span className="ttop__info">
-        {st?.stage && (
-          <span className="ttop__badge">
-            <StageBadge stage={st.stage} />
-            {st.confidence && <span className="ttop__conf">신뢰도 {st.confidence}</span>}
+      <span className="gitem__body">
+        <Cover src={book.cover_url} alt="" className="gitem__cover" title={book.title} />
+        <span className="gitem__title">{shortTitle(book.title)}</span>
+        <span className="gitem__meta">
+          {book.categoryLabel} · {cleanAuthor(book.author)}
+        </span>
+        {from != null && (
+          <span className="gitem__move">
+            <s>{from}위</s>
+            <span aria-hidden="true">→</span>
+            <b className="num">{to}위</b>
           </span>
         )}
-        <span className="ttop__title">{shortTitle(book.title)}</span>
-        <span className="sub">
-          {book.categoryLabel} · {cleanAuthor(book.author)}
+        <span className={`gitem__stage gitem__stage--${STAGE_TONE[st?.stage] || 'none'}`}>
+          {st?.stage ? `${st.stage} · ` : ''}
+          {value[0]}
         </span>
-        <span className={`ttop__value num${value[1] ? ' ' + value[1] : ''}`}>{value[0]}</span>
-      </span>
-    </a>
-  )
-}
-
-function TrendTile({ book, rank, value }) {
-  const st = useBookState(book.isbn13)
-  return (
-    <a className="ttile rise" style={delay(rank, 0.03, 0.1)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
-      <span className="ttile__cover">
-        <Cover src={book.cover_url} alt="" title={book.title} />
-        <span className="ttile__rank num">{rank}</span>
-      </span>
-      <span className="ttile__info">
-        <span className="ttile__title">{shortTitle(book.title)}</span>
-        <span className="sub ttile__meta">
-          {book.categoryLabel} · {cleanAuthor(book.author)}
-        </span>
-        <span className="ttile__row">
-          {st?.stage && <StageBadge stage={st.stage} />}
-          <b className={`num${value[1] ? ' ' + value[1] : ''}`}>{value[0]}</b>
-        </span>
-        {st?.reason && <span className="ttile__reason">{st.reason.replace(/, \d+일간$/, '')}</span>}
       </span>
     </a>
   )
@@ -1091,6 +1078,8 @@ function TrendTile({ book, rank, value }) {
 function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOpenFilter, demo }) {
   const wide = useWide()
   const [cat, setCat] = useState('전체')
+  const [more, setMore] = useState(false)
+  useEffect(() => setMore(false), [tab, cat])
   const [menu, setMenu] = useState(false)
   const demoActive = tab === 'popular' && prefs.on
 
@@ -1117,72 +1106,63 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
   const waiting = loading || (demoActive && demo.loading)
 
   if (wide) {
-    const tone = (b) => {
-      const [v, t] = value(b)
-      return [v, t === 'up' ? 'up' : t === 'accent' ? 'accent' : '']
-    }
+    const shown = list.slice(0, more ? LIST_SIZE : 12)
     return (
-      <div className="twide">
-        <section className="card twide__head">
-          <div className="twide__bar">
-            <div className="titlegroup">
-              <Eyebrow>TREND</Eyebrow>
-              <h1 className="h1 display">트렌드</h1>
-              <span className="sub">
-                {DATE_LABEL} · {desc}
-              </span>
-            </div>
-            <div className="twide__tabs" role="tablist">
-              {TABS.map((t) => (
-                <a key={t.id} role="tab" aria-selected={tab === t.id} className={`twide__tab${tab === t.id ? ' is-on' : ''}`} href={`/trend/${t.id}`}>
-                  {t.label}
-                </a>
-              ))}
-            </div>
-            <button className={`btn btn--soft twide__prefs${prefs.on || interests.length ? ' has-set' : ''}`} onClick={() => setMenu(true)}>
-              내 취향 · 연령·성별
-            </button>
+      <section className="card gal">
+        <i className="gal__line" aria-hidden="true" />
+        <div className="gal__bar">
+          <div>
+            <h1 className="gal__title">요즘 뜨는 책</h1>
+            <p className="sub gal__desc">
+              {DATE_LABEL} · {desc}
+            </p>
           </div>
+          <div className="gal__tabs" role="tablist">
+            {TABS.map((t) => (
+              <a key={t.id} role="tab" aria-selected={tab === t.id} className={`gal__tab${tab === t.id ? ' is-on' : ''}`} href={`/trend/${t.id}`}>
+                {t.label}
+              </a>
+            ))}
+          </div>
+        </div>
+        <div className="gal__cats">
           {tab !== 'recommended' && tab !== 'rising' && (
-            <div className="chips chips--wrap twide__chips">
+            <>
               {tab === 'popular' && (
-                <button className={`chip chip--filter${prefs.on ? ' is-on' : ''}`} onClick={onOpenFilter}>
-                  {Icon.filter()} {prefs.on ? demoLabel(prefs) : '연령·성별'}
+                <button className={`gal__cat${prefs.on ? ' is-on' : ''}`} onClick={onOpenFilter}>
+                  {prefs.on ? demoLabel(prefs) : '연령·성별'}
                 </button>
               )}
               {cats.map((c) => (
-                <button key={c} className={`chip${cat === c ? ' is-on' : ''}`} aria-pressed={cat === c} onClick={() => setCat(c)}>
+                <button key={c} className={`gal__cat${cat === c ? ' is-on' : ''}`} aria-pressed={cat === c} onClick={() => setCat(c)}>
                   {c === '전체' ? '전체 분야' : c === '어린이' ? '어린이 책' : c}
                 </button>
               ))}
-            </div>
+            </>
           )}
-        </section>
+          <button className={`gal__prefs${prefs.on || interests.length ? ' has-set' : ''}`} onClick={() => setMenu(true)}>
+            내 취향 설정
+          </button>
+        </div>
         {menu && <PrefsSheet prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={onOpenFilter} onClose={() => setMenu(false)} />}
-        {waiting && <section className="card"><Loading /></section>}
-        {error && <section className="card"><p className="state state--error">데이터를 불러오지 못했어요: {error}</p></section>}
+        {waiting && <Loading />}
+        {error && <p className="state state--error">데이터를 불러오지 못했어요: {error}</p>}
         {!waiting && !error && list.length === 0 && (
-          <section className="card">
-            <p className="state">{demoActive ? '이 조건의 데이터가 아직 없어요. 다음 수집 후 채워져요.' : '이 분야는 아직 데이터가 없어요.'}</p>
-          </section>
+          <p className="state">{demoActive ? '이 조건의 데이터가 아직 없어요. 다음 수집 후 채워져요.' : '이 분야는 아직 데이터가 없어요.'}</p>
         )}
         {!waiting && !error && list.length > 0 && (
-          <>
-            <div className="twide__top">
-              {list.slice(0, 3).map((b, i) => (
-                <TrendTopCard key={tab + cat + b.isbn13} book={b} rank={i + 1} value={tone(b)} />
-              ))}
-            </div>
-            {list.length > 3 && (
-              <section className="card twide__grid">
-                {list.slice(3).map((b, i) => (
-                  <TrendTile key={tab + cat + b.isbn13} book={b} rank={i + 4} value={tone(b)} />
-                ))}
-              </section>
-            )}
-          </>
+          <div className="gal__grid">
+            {shown.map((b, i) => (
+              <GalleryItem key={tab + cat + b.isbn13} book={b} rank={i + 1} value={value(b)} />
+            ))}
+          </div>
         )}
-      </div>
+        {!waiting && !error && !more && list.length > 12 && (
+          <button className="gal__more" onClick={() => setMore(true)}>
+            More +
+          </button>
+        )}
+      </section>
     )
   }
 
