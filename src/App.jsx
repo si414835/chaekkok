@@ -591,35 +591,6 @@ function Carousel({ books }) {
   )
 }
 
-// 넓은 화면 홈: 오늘의 콕 TOP 5를 한 줄에 펼쳐 보여준다
-function TopGridItem({ book, i }) {
-  const st = useBookState(book.isbn13)
-  return (
-    <a className="topgrid__item rise" style={delay(i, 0.06, 0.1)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
-      <span className="topgrid__cover">
-        <Cover src={book.cover_url} alt="" title={book.title} />
-        <span className="topgrid__rank num">{i + 1}</span>
-      </span>
-      <span className="topgrid__title">{shortTitle(book.title)}</span>
-      <span className="sub">
-        {cleanAuthor(book.author)}
-        {book.score != null && (
-          <>
-            {' · '}
-            <b className="accent">{book.score}점</b>
-          </>
-        )}
-      </span>
-      {st?.reason && (
-        <span className="row__reason">
-          <StageBadge stage={st.stage} />
-          <span>{st.reason}</span>
-        </span>
-      )}
-    </a>
-  )
-}
-
 function TopGrid({ books }) {
   if (!books.length) return null
   return (
@@ -630,14 +601,15 @@ function TopGrid({ books }) {
           <h2 className="h2 display">
             오늘의 콕 <em>TOP {books.length}</em>
           </h2>
+          <span className="sub">여러 신호를 합쳐 지금 가장 빠르게 뜨는 책이에요</span>
         </div>
         <a className="sub" href="/trend">
-          트렌드에서 더 보기 →
+          트렌드 전체 보기 →
         </a>
       </div>
       <div className="topgrid__list">
         {books.map((b, i) => (
-          <TopGridItem key={b.isbn13} book={b} i={i} />
+          <GalleryItem key={b.isbn13} book={b} rank={i + 1} value={[b.score != null ? `${b.score}점` : '']} />
         ))}
       </div>
     </section>

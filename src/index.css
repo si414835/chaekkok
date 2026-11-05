@@ -3276,8 +3276,8 @@ a.lib__info {
 .topgrid__list {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 20px;
-  margin-top: 16px;
+  gap: 40px 24px;
+  margin-top: 32px;
 }
 .topgrid__item {
   display: flex;
@@ -4094,4 +4094,127 @@ a.lib__info {
 .topgrid__item:nth-child(-n + 3) .topgrid__rank {
   background: var(--ginkgo);
   color: var(--ink);
+}
+
+/* 넓은 화면 홈: 트렌드와 같은 갤러리 느낌 (흰 판 하나, 넓은 여백, 섹션마다 노란 짧은 선) */
+@media (min-width: 1100px) {
+  .page--home .home {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 56px 64px 48px;
+    row-gap: 0;
+    column-gap: 64px;
+  }
+  .page--home .home > *,
+  .page--home .home > .home__pair > * {
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .page--home .home > * + *,
+  .page--home .home > .home__pair > * {
+    border-top: 1px solid var(--line);
+    padding-top: 44px;
+    margin-top: 44px;
+  }
+  .page--home .home > .home__pair > * {
+    padding-bottom: 0;
+  }
+  /* 섹션 머리: 영문 작은 글자 대신 노란 선 + 굵은 제목 */
+  .page--home .eyebrow {
+    display: none;
+  }
+  .page--home .titlegroup::before {
+    content: '';
+    display: block;
+    width: 28px;
+    height: 2px;
+    background: var(--ginkgo);
+    margin-bottom: 14px;
+  }
+  .page--home .card__head .h2 {
+    font-size: 28px;
+    letter-spacing: -0.5px;
+  }
+  .page--home .card__head {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .page--home .card--list .row {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .page--home .card--list .btn--block {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+  }
+
+  /* 키워드: 아주 크게, 해시태그는 글자 링크, 적중 기록은 선으로만 구분 */
+  .page--home .kwgroup {
+    background: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+  .page--home .kwgroup .kw {
+    padding: 0;
+    background: none;
+  }
+  .page--home .kwgroup .kw__main {
+    font-size: 112px;
+    letter-spacing: -4px;
+  }
+  .page--home .kwgroup .kw__label {
+    background: none;
+    padding: 0;
+    color: var(--ink-soft);
+    font-weight: 500;
+    font-size: 14px;
+  }
+  .page--home .kwgroup .kw__label i {
+    display: none;
+  }
+  .page--home .kwgroup .kw__label::before {
+    content: '';
+    display: block;
+    width: 28px;
+    height: 2px;
+    background: var(--ginkgo);
+    margin: 0 10px 0 0;
+  }
+  .page--home .kwgroup .kw__tags {
+    gap: 6px 18px;
+  }
+  .page--home .kwgroup .tag {
+    background: none;
+    padding: 4px 0;
+    font-size: 16px;
+    border-radius: 0;
+  }
+  .page--home .kwgroup .tag:hover {
+    color: var(--accent);
+  }
+  .page--home .kwgroup .hitteaser {
+    background: none;
+    padding: 0 0 0 32px;
+    border-left: 1px solid var(--line);
+    width: 300px;
+  }
+  .page--home .kwgroup .hitteaser .titlegroup::before {
+    display: none;
+  }
+
+  /* 곧 나올 책 */
+  .page--home .upcoming {
+    padding-bottom: 0;
+  }
+}
+@media (min-width: 1100px) {
+  .page--home .local .state,
+  .page--home .local .sub {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
