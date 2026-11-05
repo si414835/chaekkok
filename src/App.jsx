@@ -362,10 +362,13 @@ function SideNav({ current, unread, mini, onToggle }) {
           {Icon.menu()}
         </button>
       </div>
-      <a className="sidenav__search" href="/search" title="책 검색">
-        {Icon.search()}
-        <span>책 제목, 작가 검색</span>
-      </a>
+      {mini ? (
+        <a className="sidenav__search" href="/search" title="책 검색" aria-label="책 검색">
+          {Icon.search()}
+        </a>
+      ) : (
+        <SideSearch />
+      )}
       <nav className="sidenav__menu" aria-label="주요 메뉴">
         {NAV_ITEMS.map((it) => {
           const on = it.id === current
@@ -2009,12 +2012,12 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
 
 /* ================= 검색 ================= */
 
-function Search() {
-  const [q, setQ] = useState('')
+// 책콕이 모은 책에서 제목·저자로 찾기 (검색 화면과 PC 사이드바 검색칸이 같이 쓴다)
+function useBookSearch(q, { min = 2, limit = 40, wait = 300 } = {}) {
   const [res, setRes] = useState({ list: [], loading: false, done: false })
   useEffect(() => {
     const term = q.replace(/[%,()*]/g, ' ').trim()
-    if (term.length < 2) return setRes({ list: [], loading: false, done: false })
+    if (term.length < min) return setRes({ list: [], loading: false, done: false })
     let off = false
     setRes((r) => ({ ...r, loading: true }))
     const t = setTimeout(async () => {
@@ -2022,24 +2025,158 @@ function Search() {
         .from('books')
         .select('isbn13,title,author,class_name,cover_url,addition_symbol')
         .or(`title.ilike.%${term}%,author.ilike.%${term}%`)
-        .limit(40)
+        .limit(limit)
       if (off) return
-      const list = (data || []).map((r) => ({
-        isbn13: r.isbn13,
-        title: r.title,
-        author: r.author,
-        classNameFull: r.class_name,
-        additionSymbol: r.addition_symbol,
-        categoryLabel: isChildBook({ additionSymbol: r.addition_symbol }) ? '어린이 책' : categoryLabel(r.class_name),
-        cover_url: r.cover_url,
-      }))
+      const low = term.toLowerCase()
+      const list = (data || [])
+        .map((r) => ({
+          isbn13: r.isbn13,
+          title: r.title,
+          author: r.author,
+          classNameFull: r.class_name,
+          additionSymbol: r.addition_symbol,
+          categoryLabel: isChildBook({ additionSymbol: r.addition_symbol }) ? '어린이 책' : categoryLabel(r.class_name),
+          cover_url: r.cover_url,
+        }))
+        // 제목이 검색어로 시작하는 책 → 제목에 들어간 책 → 저자만 맞는 책 순서
+        .map((b, i) => {
+          const t = shortTitle(b.title).toLowerCase()
+          return { b, k: t.startsWith(low) ? 0 : t.includes(low) ? 1 : 2, i }
+        })
+        .sort((a, b) => a.k - b.k || a.i - b.i)
+        .map((x) => x.b)
       setRes({ list, loading: false, done: true })
-    }, 300)
+    }, wait)
     return () => {
       off = true
       clearTimeout(t)
     }
-  }, [q])
+  }, [q, min, limit, wait])
+  return res
+}
+
+// 검색어와 같은 부분을 형광펜으로
+function Mark({ text, term }) {
+  const t = term.trim()
+  const i = t ? text.toLowerCase().indexOf(t.toLowerCase()) : -1
+  if (i < 0) return text
+  return (
+    <>
+      {text.slice(0, i)}
+      <mark className="hlmark">{text.slice(i, i + t.length)}</mark>
+      {text.slice(i + t.length)}
+    </>
+  )
+}
+
+// PC 사이드바 검색칸: 누르면 바로 입력, 쓰는 동안 아래에 관련 책을 띄운다
+function SideSearch() {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const [sel, setSel] = useState(-1)
+  const res = useBookSearch(q, { min: 1, limit: 30, wait: 180 })
+  const items = res.list.slice(0, 7)
+  const term = q.trim()
+  const showAll = term.length >= 1
+  const total = items.length + (showAll ? 1 : 0)
+  useEffect(() => setSel(-1), [q])
+  const pick = (i) => {
+    if (i >= 0 && i < items.length) go(`/book/${encodeURIComponent(items[i].isbn13)}`)
+    else if (term) go(`/search?q=${encodeURIComponent(term)}`)
+    else return
+    setOpen(false)
+    setQ('')
+  }
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setOpen(true)
+      setSel((v) => (total ? (v + 1) % total : -1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSel((v) => (total ? (v - 1 + total) % total : -1))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      pick(sel >= 0 ? sel : items.length)
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+      e.currentTarget.blur()
+    }
+  }
+  const shown = open && term.length >= 1
+  return (
+    <div className="sidesearch">
+      <label className="sidenav__search">
+        {Icon.search()}
+        <span className="sr-only">책 제목, 작가 검색</span>
+        <input
+          type="search"
+          value={q}
+          placeholder="책 제목, 작가 검색"
+          onChange={(e) => {
+            setQ(e.target.value)
+            setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={onKey}
+          role="combobox"
+          aria-expanded={shown}
+          aria-controls="sidesearch-list"
+          aria-autocomplete="list"
+          aria-activedescendant={sel >= 0 ? `sidesearch-${sel}` : undefined}
+        />
+      </label>
+      {shown && (
+        <div className="sidesearch__pop" id="sidesearch-list" role="listbox">
+          {res.loading && items.length === 0 && <p className="sidesearch__state">찾는 중이에요…</p>}
+          {!res.loading && res.done && items.length === 0 && <p className="sidesearch__state">책콕에 없는 책이에요. 다른 단어로 찾아보세요.</p>}
+          {items.map((b, i) => (
+            <button
+              key={b.isbn13}
+              id={`sidesearch-${i}`}
+              type="button"
+              role="option"
+              aria-selected={sel === i}
+              className={`sidesearch__item${sel === i ? ' is-sel' : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setSel(i)}
+              onClick={() => pick(i)}
+            >
+              <Cover src={b.cover_url} alt="" className="sidesearch__cover" title={b.title} />
+              <span className="sidesearch__text">
+                <span className="sidesearch__title">
+                  <Mark text={shortTitle(b.title)} term={term} />
+                </span>
+                <span className="sidesearch__meta">
+                  <Mark text={cleanAuthor(b.author)} term={term} /> · {b.categoryLabel}
+                </span>
+              </span>
+            </button>
+          ))}
+          {showAll && (
+            <button
+              type="button"
+              id={`sidesearch-${items.length}`}
+              role="option"
+              aria-selected={sel === items.length}
+              className={`sidesearch__all${sel === items.length ? ' is-sel' : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setSel(items.length)}
+              onClick={() => pick(items.length)}
+            >
+              ‘{term}’ 검색 결과 모두 보기 {Icon.chev()}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Search() {
+  const [q, setQ] = useState(() => new URLSearchParams(window.location.search).get('q') || '')
+  const res = useBookSearch(q, { min: 1 })
   return (
     <>
       <header className="searchbar">
@@ -2052,7 +2189,7 @@ function Search() {
         </label>
       </header>
       <div className="list">
-        {q.trim().length < 2 && <p className="state">두 글자 이상 입력해 주세요. 책콕이 모은 책 중에서 찾아요.</p>}
+        {q.trim().length < 1 && <p className="state">책 제목이나 저자를 입력해 주세요. 책콕이 모은 책 중에서 찾아요.</p>}
         {res.loading && <Loading />}
         {!res.loading && res.done && res.list.length === 0 && <p className="state">찾는 책이 없어요. 다른 단어로 검색해 보세요.</p>}
         {!res.loading && res.list.map((b) => <BookRow key={b.isbn13} rank={null} book={b} value="" />)}
@@ -3766,7 +3903,7 @@ export default function App() {
         {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} hits={hits} />}
         {route.name === 'library' && route.param && <LibraryPage libCode={route.param} libs={libs} setLibs={setLibs} />}
         {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} hits={hits} alertState={alertState} push={push} />}
-        {route.name === 'search' && <Search />}
+        {route.name === 'search' && <Search key={window.location.search} />}
         {route.name === 'keyword' && route.param && <KeywordPage word={route.param} index={index} />}
         {route.name === 'alerts' && <Alerts alerts={alertState.alerts} markRead={alertState.markRead} clear={alertState.clear} />}
         {route.name === 'my' && <My prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={() => setSheet(true)} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} alertState={alertState} push={push} wish={wish} hits={hits} />}
