@@ -3085,11 +3085,49 @@ a.lib__info {
   padding-top: 12px;
   border-top: 1px dashed var(--line);
 }
+.why__head {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.why__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .why__title {
-  margin: 0 0 8px;
+  display: block;
   font-size: 14px;
   font-weight: 800;
 }
+.why__peek {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.why__chev {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  transform: rotate(90deg);
+  transition: transform 0.25s;
+}
+.why.is-open .why__chev { transform: rotate(-90deg); }
+.why.is-open .why__list { margin-top: 8px; }
 .why__title span {
   margin-left: 6px;
   font-size: 12px;

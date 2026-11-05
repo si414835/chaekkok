@@ -1607,13 +1607,22 @@ function evidenceOf(e) {
 function WhyRising({ isbn }) {
   const ev = useEvidence(isbn)
   const list = evidenceOf(ev)
+  const [open, setOpen] = useState(false)
+  useEffect(() => setOpen(false), [isbn])
   if (!list.length) return null
+  const peek = list.slice(0, 2).map((x) => x.title).join(' · ') + (list.length > 2 ? ` 외 ${list.length - 2}개` : '')
   return (
-    <div className="why">
-      <p className="why__title">
-        왜 뜨나요 <span>근거 {list.length}개</span>
-      </p>
-      <ul className="why__list">
+    <div className={`why${open ? ' is-open' : ''}`}>
+      <button type="button" className="why__head" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="why__text">
+          <span className="why__title">
+            왜 뜨나요 <span>근거 {list.length}개</span>
+          </span>
+          {!open && <span className="why__peek">{peek}</span>}
+        </span>
+        <span className="why__chev" aria-hidden="true">{Icon.chev()}</span>
+      </button>
+      {open && <ul className="why__list">
         {list.map((x) => (
           <li key={x.title}>
             <span className="why__check" aria-hidden="true">✓</span>
@@ -1623,7 +1632,7 @@ function WhyRising({ isbn }) {
             </span>
           </li>
         ))}
-      </ul>
+      </ul>}
     </div>
   )
 }
