@@ -1068,12 +1068,17 @@ function TrendTile({ book, rank, value }) {
         <Cover src={book.cover_url} alt="" title={book.title} />
         <span className="ttile__rank num">{rank}</span>
       </span>
-      <span className="ttile__title">{shortTitle(book.title)}</span>
-      <span className="ttile__row">
-        {st?.stage && <StageBadge stage={st.stage} />}
-        <b className={`num${value[1] ? ' ' + value[1] : ''}`}>{value[0]}</b>
+      <span className="ttile__info">
+        <span className="ttile__title">{shortTitle(book.title)}</span>
+        <span className="sub ttile__meta">
+          {book.categoryLabel} · {cleanAuthor(book.author)}
+        </span>
+        <span className="ttile__row">
+          {st?.stage && <StageBadge stage={st.stage} />}
+          <b className={`num${value[1] ? ' ' + value[1] : ''}`}>{value[0]}</b>
+        </span>
+        {st?.reason && <span className="ttile__reason">{st.reason.replace(/, \d+일간$/, '')}</span>}
       </span>
-      {st?.reason && <span className="ttile__reason">{st.reason.replace(/, \d+일간$/, '')}</span>}
     </a>
   )
 }
