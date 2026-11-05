@@ -4103,3 +4103,18 @@ a.lib__info {
   text-overflow: ellipsis;
 }
 
+
+/* 순위 동그라미: 어두운 표지 위에서도 잘 보이게 (1~3위 은행 노랑, 그 뒤 인디고, 흰 테두리) */
+.ttop__rank,
+.ttile__rank,
+.topgrid__rank {
+  background: var(--accent);
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(25, 31, 40, 0.3);
+}
+.ttop__rank,
+.topgrid__item:nth-child(-n + 3) .topgrid__rank {
+  background: var(--ginkgo);
+  color: var(--ink);
+}
