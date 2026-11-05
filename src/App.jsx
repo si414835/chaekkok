@@ -412,7 +412,7 @@ function BookRow({ rank, book, value, valueTone, order = 0 }) {
   const st = useBookState(book.isbn13)
   return (
     <a className="row rise" style={delay(order, 0.05, 0.04)} href={`/book/${encodeURIComponent(book.isbn13)}`}>
-      {rank != null && <span className={`row__rank num${rank === 1 ? ' is-first' : ''}`}>{rank}</span>}
+      {rank != null && <span className={`row__rank num${rank === 1 ? ' is-first' : ''}${rank <= 3 ? ' is-top' : ''}`}>{rank}</span>}
       <Cover src={book.cover_url} alt="" className="row__cover" title={book.title} />
       <span className="row__info">
         <span className="row__title">{shortTitle(book.title)}</span>
@@ -739,7 +739,7 @@ function LocalRising({ libs }) {
           {picks.length === 0 && <p className="state">아직 비교할 기록이 부족해요. 며칠 뒤에 다시 보여드릴게요.</p>}
           {picks.map((b, i) => (
             <a key={b.isbn13} className="row rise" style={delay(i, 0.05, 0.04)} href={`/book/${encodeURIComponent(b.isbn13)}`}>
-              <span className={`row__rank num${i === 0 ? ' is-first' : ''}`}>{i + 1}</span>
+              <span className={`row__rank num${i === 0 ? ' is-first' : ''}${i < 3 ? ' is-top' : ''}`}>{i + 1}</span>
               <Cover src={b.cover_url} alt="" className="row__cover" title={b.title} />
               <span className="row__info">
                 <span className="row__title">{shortTitle(b.title)}</span>

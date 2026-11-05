@@ -4218,3 +4218,69 @@ a.lib__info {
     padding-right: 0;
   }
 }
+
+/* 넓은 화면 홈: 지금 뜨는 책 · 우리 동네 목록을 표지 크게, 순위는 갤러리와 같은 숫자 */
+@media (min-width: 1100px) {
+  .page--home .card--list .row {
+    gap: 20px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    border-radius: 12px;
+  }
+  .page--home .card--list .row:hover {
+    background: none;
+  }
+  .page--home .card--list .row:hover .row__cover {
+    transform: translateY(-3px);
+  }
+  .page--home .row__cover {
+    width: 72px;
+    height: 104px;
+    border-radius: 0;
+    box-shadow: 0 10px 20px rgba(25, 31, 40, 0.2), 0 2px 5px rgba(25, 31, 40, 0.1);
+    transition: transform 0.2s;
+  }
+  .page--home .row__rank {
+    width: 34px;
+    font-size: 30px;
+    font-style: normal;
+    font-weight: 900;
+    letter-spacing: -1px;
+    color: var(--accent);
+    text-align: left;
+  }
+  .page--home .row__rank.is-top {
+    color: var(--ginkgo-ink);
+  }
+  .page--home .row__title {
+    font-size: 17px;
+  }
+  .page--home .row__meta {
+    font-size: 14px;
+  }
+
+  /* 지역 고르는 칸 */
+  .page--home .local__region select {
+    height: 44px;
+    min-width: 132px;
+    padding: 0 40px 0 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234e5968' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center;
+    appearance: none;
+    -webkit-appearance: none;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .page--home .local__region select:hover {
+    border-color: var(--ink-soft);
+  }
+  .page--home .local__region select:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+}
