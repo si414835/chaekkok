@@ -1012,6 +1012,11 @@ p {
   font-size: 12px;
   color: var(--ink-soft);
 }
+.mini__text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .notice {
   font-size: 12px;
   color: #b4510b;
@@ -3669,6 +3674,61 @@ a.lib__info {
   }
   .topgrid {
     padding: 24px 28px 28px;
+  }
+  /* 곧 나올 책: 제목은 왼쪽, 책은 표지+정보 가로 카드로 */
+  .upcoming {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    column-gap: 28px;
+    align-items: center;
+    padding: 22px 28px;
+  }
+  .upcoming .hscroll {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+    overflow: visible;
+    padding: 0;
+  }
+  .upcoming .mini {
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--line-2);
+  }
+  .upcoming .mini:hover {
+    background: var(--ginkgo-soft);
+  }
+  .upcoming .mini__coverwrap {
+    flex: none;
+  }
+  .upcoming .mini__cover {
+    width: 60px;
+    height: 86px;
+  }
+  .upcoming .mini__cover .cover__title {
+    font-size: 10px;
+  }
+  .upcoming .mini__date {
+    left: 4px;
+    bottom: 4px;
+    font-size: 10px;
+    padding: 1px 5px;
+  }
+  .upcoming .mini__text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .upcoming .mini__title {
+    font-size: 15px;
+  }
+  .upcoming .mini__author {
+    font-size: 13px;
   }
 
   /* ---------- 트렌드 · 콕 · 마이: 본문 + 오른쪽 칸 ---------- */

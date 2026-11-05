@@ -799,10 +799,12 @@ function Upcoming({ list: all }) {
   // 3권보다 적으면 칸만 덩그러니 남아서 숨긴다
   if (list.length < 3) return null
   return (
-    <section className="card card--bleed rise" style={{ animationDelay: '0.8s' }}>
-      <Eyebrow tone="spot">COMING SOON</Eyebrow>
-      <h2 className="h2 display">곧 나올 책</h2>
-      <p className="sub">요즘 뜨는 작가의 신작 · 출간 전 예약 판매도 해요</p>
+    <section className="card card--bleed rise upcoming" style={{ animationDelay: '0.8s' }}>
+      <div className="upcoming__head">
+        <Eyebrow tone="spot">COMING SOON</Eyebrow>
+        <h2 className="h2 display">곧 나올 책</h2>
+        <p className="sub">요즘 뜨는 작가의 신작 · 출간 전 예약 판매도 해요</p>
+      </div>
       <div className="hscroll">
         {list.slice(0, 10).map((b) => (
           <a key={b.isbn13} className="mini" href={`/book/${encodeURIComponent(b.isbn13)}`}>
@@ -810,9 +812,11 @@ function Upcoming({ list: all }) {
               <Cover src={b.cover_url} alt="" className="mini__cover" title={b.title} />
               <span className="mini__date num">D-{daysUntil(b.publish_date)}</span>
             </span>
-            <span className="mini__title">{shortTitle(b.title)}</span>
-            <span className="mini__author">
-              {b.matched_author || cleanAuthor(b.author)} · {fmtDate(b.publish_date)} 출간 예정
+            <span className="mini__text">
+              <span className="mini__title">{shortTitle(b.title)}</span>
+              <span className="mini__author">
+                {b.matched_author || cleanAuthor(b.author)} · {fmtDate(b.publish_date)} 출간 예정
+              </span>
             </span>
           </a>
         ))}
