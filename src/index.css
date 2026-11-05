@@ -3613,10 +3613,52 @@ a.lib__info {
     border-radius: 20px;
     overflow: hidden;
   }
+  /* 키워드: 왼쪽에 크게, 설명·해시태그는 오른쪽 */
   .kwgroup .kw {
     flex: 1;
     min-width: 0;
-    padding: 32px;
+    padding: 32px 40px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 56px;
+    row-gap: 6px;
+    align-items: center;
+    text-align: left;
+  }
+  .kwgroup .kw__label {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+  .kwgroup .kw__heading {
+    grid-column: 1;
+    grid-row: 2 / 4;
+    justify-self: start;
+    align-self: start;
+  }
+  .kwgroup .kw__main {
+    font-size: 104px;
+    letter-spacing: -3px;
+    padding: 0 8px;
+  }
+  .kwgroup .kw__mark {
+    bottom: 12px;
+    height: 34px;
+    border-radius: 8px;
+  }
+  .kwgroup .kw__desc {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: end;
+    font-size: 16px;
+  }
+  .kwgroup .kw__tags {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: start;
+    justify-content: flex-start;
+    margin-top: 10px;
   }
   .kwgroup .hitteaser {
     width: 360px;
