@@ -647,7 +647,8 @@ function TopGrid({ books }) {
 function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs }) {
   const wide = useWide()
   const top5 = feed.composite.filter((b) => !isChildBook(b)).slice(0, 5)
-  const rising3 = feed.rising.filter((b) => !isChildBook(b)).slice(0, 3)
+  // 넓은 화면은 옆 칸(우리 동네)과 높이를 맞추려고 5권, 폰은 3권
+  const rising3 = feed.rising.filter((b) => !isChildBook(b)).slice(0, wide ? 5 : 3)
   return (
     <>
       <header className="topbar">
