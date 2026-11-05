@@ -3863,10 +3863,23 @@ a.lib__info {
     border-radius: 20px;
     overflow: clip;
   }
+  /* 구매하기·빌리기: 화면 아래 고정 대신 본문 칸 안에서 따라 내려오는 둥근 막대 */
   .actionbar {
-    left: calc(var(--nav-w) + (100% - var(--nav-w)) / 2);
-    max-width: 900px;
-    border-radius: 20px 20px 0 0;
+    position: sticky;
+    bottom: 20px;
+    left: auto;
+    transform: none;
+    width: auto;
+    max-width: none;
+    margin: 20px 20px 20px;
+    padding: 12px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: saturate(1.4) blur(10px);
+    box-shadow: 0 10px 30px rgba(25, 31, 40, 0.14), 0 0 0 1px var(--line);
+  }
+  .app--detail {
+    padding-bottom: 40px;
   }
 
   /* 시트는 아래에서 올라오는 대신 가운데 창으로 */
