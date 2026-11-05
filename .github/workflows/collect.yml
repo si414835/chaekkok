@@ -2,8 +2,8 @@ name: 책콕 데이터 수집
 
 on:
   schedule:
-    # 정각은 GitHub 예약 실행이 몰려 몇 시간씩 늦어지거나 빠질 수 있어서(공식 문서) 정각을 피한다. 21:23 UTC = 06:23 KST
-    - cron: '23 21 * * *'
+    # 정각은 GitHub 예약 실행이 몰려 몇 시간씩 늦어지거나 빠질 수 있어서(공식 문서) 정각을 피한다. 19:07 UTC = 04:07 KST (늦어져도 아침 전에 끝나도록 새벽에 시작)
+    - cron: '7 19 * * *'
   workflow_dispatch:
 
 concurrency:
