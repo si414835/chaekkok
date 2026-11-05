@@ -2238,6 +2238,8 @@ function Search() {
 /* ================= 키워드 ================= */
 
 function KeywordPage({ word, index }) {
+  const wide = useWide()
+  const [kwMore, setKwMore] = useState(false)
   const [res, setRes] = useState({ loading: true, list: [], related: [], error: null })
   useEffect(() => setPageMeta(`#${word} 관련 요즘 책 | 책콕`, `/keyword/${encodeURIComponent(word)}`), [word])
   const ready = index.size > 0
@@ -2306,6 +2308,59 @@ function KeywordPage({ word, index }) {
   }, [word, ready]) // eslint-disable-line react-hooks/exhaustive-deps
   const back = () => (window.history.length > 1 ? window.history.back() : go('/'))
   const tagged = res.list.filter((b) => !b.byTitle).length
+  // 넓은 화면: 트렌드와 같은 갤러리형
+  if (wide) {
+    const n = res.list.length
+    return (
+      <section className="card gal kwgal">
+        <button className="iconbtn kwgal__back" onClick={back} aria-label="뒤로">
+          {Icon.back()}
+        </button>
+        <i className="gal__line" aria-hidden="true" />
+        <div className="gal__bar">
+          <div>
+            <p className="kwgal__label">이 단어가 들어간 요즘 책</p>
+            <h1 className="gal__title kwgal__title">
+              <span className="kwgal__hash">#</span>
+              <span className="kwgal__word">{word}</span>
+            </h1>
+            <p className="sub gal__desc">{res.loading ? '관련 책을 모으는 중이에요' : n ? `관련 책 ${n}권 · 요즘 뜨는 순서` : '아직 관련 책이 없어요'}</p>
+          </div>
+        </div>
+        {res.related.length > 0 && (
+          <div className="gal__cats kwgal__related">
+            <span className="kwgal__rlabel">함께 나온 키워드</span>
+            {res.related.map((w) => (
+              <a key={w} className="gal__cat" href={keywordHref(w)}>
+                #{w}
+              </a>
+            ))}
+          </div>
+        )}
+        {res.loading && <Loading />}
+        {res.error && <p className="state state--error">책을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</p>}
+        {!res.loading && !res.error && n === 0 && (
+          <div className="empty">
+            <p>이 키워드로 모인 책이 아직 없어요.</p>
+            <p className="sub">키워드는 매일 아침 새 데이터로 다시 모여요.</p>
+            <a className="btn btn--soft" href="/trend">트렌드 보러 가기</a>
+          </div>
+        )}
+        {!res.loading && n > 0 && (
+          <div className="gal__grid">
+            {res.list.slice(0, kwMore ? n : 15).map((b, i) => (
+              <GalleryItem key={b.isbn13} book={b} rank={i + 1} value={[b.momentum != null ? `${Math.round(b.momentum)}점` : '']} />
+            ))}
+          </div>
+        )}
+        {!res.loading && !kwMore && n > 15 && (
+          <button className="gal__more" onClick={() => setKwMore(true)}>
+            More +
+          </button>
+        )}
+      </section>
+    )
+  }
   return (
     <>
       <header className="detail__bar">

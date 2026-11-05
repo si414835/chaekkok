@@ -3858,7 +3858,7 @@ a.lib__info {
   }
 
   /* ---------- 책 상세 · 검색 · 알림 등: 가운데 넓은 한 줄 ---------- */
-  .app > main:not(.page--home):not(.page--trend):not(.page--wish):not(.page--my) {
+  .app > main:not(.page--home):not(.page--trend):not(.page--wish):not(.page--my):not(.page--keyword) {
     max-width: 900px;
     border-radius: 20px;
     overflow: clip;
@@ -4283,4 +4283,50 @@ a.lib__info {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
+}
+
+/* 넓은 화면 키워드 화면: 갤러리형 */
+.kwgal {
+  position: relative;
+}
+.kwgal__back {
+  align-self: flex-start;
+  margin: -32px 0 20px -14px;
+}
+.kwgal__label {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.kwgal__title {
+  font-size: 72px;
+  font-weight: 900;
+  letter-spacing: -2.5px;
+  line-height: 1.1;
+  margin-top: 4px;
+}
+.kwgal__hash {
+  color: var(--accent);
+  margin-right: 4px;
+}
+.kwgal__word {
+  background: linear-gradient(transparent 62%, var(--ginkgo-mark) 62%);
+  padding: 0 6px;
+}
+.kwgal__related {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.kwgal__rlabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-3);
+  margin-right: 4px;
+}
+.kwgal .gal__cat {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.kwgal .gal__cat:hover {
+  color: var(--accent);
 }
