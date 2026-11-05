@@ -1831,7 +1831,13 @@ function WhyRising({ isbn }) {
   )
 }
 
+// 넓은 화면에서는 상세 오른쪽 칸으로 묶고, 폰에서는 그대로 이어 붙인다
+function DetailSide({ wide, children }) {
+  return wide ? <div className="detail__side">{children}</div> : children
+}
+
 function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, hits }) {
+  const wide = useWide()
   const { book, usage, coCovers, loading } = useBook(isbn, index)
   useEffect(() => {
     if (book) setPageMeta(`${shortTitle(book.title)}${cleanAuthor(book.author) ? ' — ' + cleanAuthor(book.author) : ''} | 책콕`, `/book/${book.isbn13}`)
@@ -1964,6 +1970,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
           <RankChart isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} embedded />
         </section>
 
+        <DetailSide wide={wide}>
         <LoanChart history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
         <Groups groups={usage?.loan_grps} />
 
@@ -2021,6 +2028,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
           )}
           {COUPANG_AFFILIATE && <p className="notice notice--below">{AFFILIATE_NOTICE}</p>}
         </section>
+        </DetailSide>
       </div>
 
       <div className="actionbar">
