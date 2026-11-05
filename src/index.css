@@ -4025,7 +4025,7 @@ a.lib__info {
   padding: 28px 32px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 32px 40px;
+  gap: 56px 40px;
 }
 .ttile {
   display: flex;
