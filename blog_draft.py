@@ -32,6 +32,8 @@ from supabase import create_client
 
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 SITE = "https://chaekkok.vercel.app"
+# 블로그에서 들어온 방문을 Vercel Analytics의 UTM Parameters에서 따로 셀 수 있게 꼬리표를 붙인다
+BLOG_LINK = f"{SITE}/?utm_source=naver_blog&utm_medium=blog"
 KST = timezone(timedelta(hours=9))
 CAT = ["총류", "철학", "종교", "사회과학", "자연과학", "기술과학", "예술", "언어", "문학", "역사"]
 CONF_ORDER = {"높음": 0, "보통": 1, "낮음": 2}
@@ -274,7 +276,7 @@ def build(day):
         "· 우리 동네 도서관에 그 책이 있는지, 지금 빌릴 수 있는지도 바로 확인할 수 있어요",
         *gap(1),
         "다음에 읽을 책, 책콕에서 먼저 찾아보세요 👉",
-        SITE,  # 따로 한 줄에 두면 네이버가 링크 카드로 바꿔 준다
+        BLOG_LINK,  # 따로 한 줄에 두면 네이버가 링크 카드로 바꿔 준다
         *gap(1),
         f"※ 데이터 출처: 도서관 정보나루(전국 공공도서관 대출 데이터) · {int(d[5:7])}월 {int(d[8:10])}일 기준",
     ]
