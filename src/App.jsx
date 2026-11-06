@@ -1442,8 +1442,9 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
   // 축: 실제 순위 범위에 맞추되, 상위권(15위 안)에 닿으면 1위부터 보여 TOP10 띠가 의미 있게
   const lo = minR <= 15 ? 1 : Math.max(1, minR - Math.max(3, Math.round((maxR - minR) * 0.3)))
   const hiRaw = maxR + Math.max(2, Math.round((maxR - minR) * 0.2))
-  const top = Math.max(lo + 4, Math.ceil(hiRaw / 5) * 5)
   const showBand = lo <= 10
+  // TOP10 띠를 그릴 때는 축 아래 끝을 10위 이상으로 잡아 띠가 그래프 밖으로 나가지 않게 한다
+  const top = Math.max(lo + 4, Math.ceil(hiRaw / 5) * 5, showBand ? 10 : 0)
   const x = (i) => L + (rows.length === 1 ? 0 : (i * (W - L - R)) / (rows.length - 1))
   const y = (rank) => T + ((rank - lo) * (H - T - B)) / Math.max(top - lo, 1)
   // 순위 밖인 날은 선을 끊는다
