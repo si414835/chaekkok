@@ -39,6 +39,7 @@ const TABS = [
   { id: 'composite', label: '종합', desc: '여러 신호를 합친 종합 점수순이에요' },
   { id: 'popular', label: '꾸준한 인기', desc: '최근 30일 대출이 많은 순이에요' },
   { id: 'rising', label: '급상승', desc: '최근 2주 사이 대출순위가 많이 오른 책을 모두 모았어요' },
+  { id: 'comeback', label: '역주행', desc: '나온 지 2년이 넘었는데 요즘 다시 순위가 오르는 책이에요' },
   { id: 'recommended', label: '사서 추천', desc: '국립중앙도서관 사서가 최근 6개월 동안 추천한 책이에요' },
 ]
 
@@ -104,6 +105,18 @@ function save(key, value) {
   } catch {
     /* 저장 불가 환경은 무시 */
   }
+}
+// 콕 대결용 기기 번호 (로그인이 없어서 기기마다 무작위 번호 하나를 만들어 둔다)
+function deviceId() {
+  let id = load('chaekkok.device', null)
+  if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
+    id =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16))
+    save('chaekkok.device', id)
+  }
+  return id
 }
 function useStored(key, fallback) {
   const [v, setV] = useState(() => load(key, fallback))
@@ -687,6 +700,7 @@ function daysUntil(ymd) {
 // 우리 동네에서 뜨는 책: 시·도별 인기대출(전 분야 100위)의 순위 변화
 function LocalRising({ libs }) {
   const [region, setRegion] = useStored('chaekkok.region', regionOfAddr(libs[0]?.address))
+  const [only, setOnly] = useStored('chaekkok.regionOnly', false)
   const [rows, setRows] = useState(null)
   useEffect(() => {
     if (!region) return setRows(null)
@@ -706,6 +720,8 @@ function LocalRising({ libs }) {
   const adult = (rows || []).filter((b) => !(b.addition_symbol || '').startsWith('7'))
   const picks = adult
     .filter((b) => b.rank_diff > 0 || b.new_entry)
+    // '이 지역에서만': 인기대출 순위권에 든 지역이 3곳 이하인 책만 (전국에서 다 뜨는 책은 뺀다)
+    .filter((b) => !only || (b.region_count != null && b.region_count <= 3))
     .sort((a, b) => (b.new_entry ? 100 - b.rank : b.rank_diff) - (a.new_entry ? 100 - a.rank : a.rank_diff))
     .slice(0, 5)
   const first = rows?.[0]
@@ -736,7 +752,14 @@ function LocalRising({ libs }) {
           <p className="sub local__lead">
             {name} 공공도서관 인기대출 100위 · {gap ? `${gap}일 전보다 순위가 오른 책` : '순위가 오른 책'}
           </p>
-          {picks.length === 0 && <p className="state">아직 비교할 기록이 부족해요. 며칠 뒤에 다시 보여드릴게요.</p>}
+          <div className="local__filter">
+            <button className={`chip${only ? ' is-on' : ''}`} aria-pressed={only} onClick={() => setOnly(!only)}>
+              이 지역에서만 뜨는 책
+            </button>
+          </div>
+          {picks.length === 0 && (
+            <p className="state">{only ? '지금은 이 지역에서만 뜨는 책이 없어요.' : '아직 비교할 기록이 부족해요. 며칠 뒤에 다시 보여드릴게요.'}</p>
+          )}
           {picks.map((b, i) => (
             <a key={b.isbn13} className="row rise" style={delay(i, 0.05, 0.04)} href={`/book/${encodeURIComponent(b.isbn13)}`}>
               <span className={`row__rank num${i === 0 ? ' is-first' : ''}${i < 3 ? ' is-top' : ''}`}>{i + 1}</span>
@@ -870,6 +893,290 @@ function HitCompare({ b }) {
   )
 }
 
+// 빗나간 예측: 포착한 책의 2주 뒤 결과를 네 가지로 나눠 보여준다
+function HitMisses({ b, index }) {
+  const [list, setList] = useState(null)
+  useEffect(() => {
+    supabase
+      .from('v_spot_result')
+      .select('isbn13,first_spotted,first_stage,rank_at_spot,rank_after,outcome,title,cover_url')
+      .in('outcome', ['down', 'out'])
+      .order('first_spotted', { ascending: false })
+      .limit(5)
+      .then(({ data }) => setList(data || []))
+  }, [])
+  const flat = Math.max(0, 100 - b.spot_up - b.spot_drop)
+  const rows = [
+    { label: '20% 넘게 오름', v: b.spot_up20, tone: 'spot' },
+    { label: '조금 오름', v: Math.max(0, b.spot_up - b.spot_up20), tone: 'spot' },
+    { label: '제자리·내림', v: flat },
+    { label: '순위 밖으로', v: b.spot_drop },
+  ]
+  const miss = Math.round(flat + b.spot_drop)
+  return (
+    <section className="card card--list rise misses" style={{ animationDelay: '0.12s' }}>
+      <div className="misses__head">
+        <Eyebrow>MISSES</Eyebrow>
+        <h2 className="h2 display">빗나간 예측도 있어요</h2>
+        <p className="sub">
+          포착한 책 {b.spot_n.toLocaleString()}권의 2주 뒤 결과예요. <b className="hl">{miss}%</b>는 오르지 않았어요.
+        </p>
+        <div className="rates">
+          {rows.map((r) => (
+            <div key={r.label} className="rates__row">
+              <span className="rates__label">{r.label}</span>
+              <span className="compare__track">
+                <i className={r.tone === 'spot' ? 'is-spot' : ''} style={{ width: `${Math.min(100, r.v)}%` }} />
+              </span>
+              <b className="num">{Math.round(r.v)}%</b>
+            </div>
+          ))}
+        </div>
+      </div>
+      {list && list.length > 0 && <p className="misses__sub">최근에 빗나간 책</p>}
+      {list &&
+        list.map((m) => (
+          <a key={m.isbn13} className="row" href={`/book/${encodeURIComponent(m.isbn13)}`}>
+            <Cover src={m.cover_url || index.get(m.isbn13)?.cover_url} alt="" className="row__cover" title={m.title} />
+            <span className="row__info">
+              <span className="row__title">{shortTitle(m.title)}</span>
+              <span className="row__meta row__meta--wrap">
+                {fmtDate(m.first_spotted)} {m.first_stage}({m.rank_at_spot}위) → 2주 뒤 {m.rank_after ? `${m.rank_after}위` : '순위 밖'}
+              </span>
+            </span>
+          </a>
+        ))}
+    </section>
+  )
+}
+
+// 단계·신뢰도·예보가 실제로 얼마나 맞았는지 (매일 다시 계산한 표를 그대로 보여준다)
+function HitCalibration() {
+  const [d, setD] = useState(null)
+  useEffect(() => {
+    Promise.all([supabase.from('hit_breakdown').select('*'), supabase.from('forecast_bins').select('*').order('lo')]).then(([a, b]) =>
+      setD({ bd: a.data || [], bins: b.data || [] }),
+    )
+  }, [])
+  if (!d || d.bd.length === 0) return null
+  const pick = (kind, labels) => labels.map((l) => d.bd.find((r) => r.kind === kind && r.label === l)).filter(Boolean)
+  const all = d.bd.find((r) => r.kind === 'all')
+  const groups = [
+    { title: '단계별', rows: pick('stage', ['확산', '떠오름', '포착', '단계 없음']) },
+    { title: '신뢰도별', rows: pick('confidence', ['높음', '보통', '낮음']) },
+  ]
+  const binLabel = (b) => (Number(b.lo) === 0 ? '0점' : b.hi == null ? `${Math.round(b.lo)}점 이상` : `${Math.round(b.lo)}~${Math.round(b.hi)}점`)
+  return (
+    <section className="card rise calib" style={{ animationDelay: '0.14s' }}>
+      <Eyebrow>CHECK</Eyebrow>
+      <h2 className="h2 display">단계와 신뢰도는 믿을 만할까요?</h2>
+      <p className="sub">
+        그 단계·신뢰도였던 책이 2주 뒤 순위가 20% 넘게 오른 비율이에요.{all ? ` 순위권 책 전체로는 ${Number(all.rate)}%예요.` : ''}
+      </p>
+      {groups.map((g) => (
+        <div key={g.title} className="calib__group">
+          <span className="compare__label">{g.title}</span>
+          <div className="rates">
+            {g.rows.map((r) => (
+              <div key={r.label} className="rates__row">
+                <span className="rates__label">{r.label}</span>
+                <span className="compare__track">
+                  <i className={r.label === '단계 없음' ? '' : 'is-spot'} style={{ width: `${Math.min(100, r.rate)}%` }} />
+                </span>
+                <b className="num">{r.n < 10 ? '-' : `${Math.round(r.rate)}%`}</b>
+                <small className="num">{r.n < 10 ? `${r.n}건뿐` : `${r.n.toLocaleString()}건`}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {d.bins.length > 0 && (
+        <div className="calib__group">
+          <span className="compare__label">모멘텀 점수별 · 책 상세의 예보는 이 값이에요</span>
+          <div className="rates">
+            {d.bins.map((b) => (
+              <div key={b.lo} className="rates__row">
+                <span className="rates__label">{binLabel(b)}</span>
+                <span className="compare__track">
+                  <i className="is-spot" style={{ width: `${Math.min(100, b.rate)}%` }} />
+                </span>
+                <b className="num">{Math.round(b.rate)}%</b>
+                <small className="num">{b.n.toLocaleString()}건</small>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <p className="sub small">
+        책×날짜 기준이라 같은 책이 여러 날 세어져요. 10건이 안 되는 칸은 비율을 적지 않았어요. 기록이 적은 점수대의 예보는 전체 평균 쪽으로 낮춰 잡아요.
+      </p>
+    </section>
+  )
+}
+
+/* ================= 예보 · 콕 대결 ================= */
+
+const DUEL_WHY = {
+  not_eligible: '분야 10위 밖의 순위권 책만 고를 수 있어요.',
+  dup: '이미 고른 책이에요.',
+  limit: '이번 주에 고를 수 있는 3권을 다 골랐어요.',
+  busy: '지금은 잠시 고를 수 없어요. 나중에 다시 해 주세요.',
+}
+
+// 책 상세: 2주 뒤 순위가 20% 넘게 오를 확률(예보)과 '오른다에 걸기'
+function Forecast({ isbn, st }) {
+  const f = st?.forecast != null ? Number(st.forecast) : null
+  const [duel, setDuel] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+  useEffect(() => {
+    setDuel(null)
+    setMsg(null)
+    if (f == null) return
+    let off = false
+    supabase.rpc('duel_book', { p_device: deviceId(), p_isbn: isbn }).then(({ data }) => !off && setDuel(data || null))
+    return () => {
+      off = true
+    }
+  }, [isbn, f])
+  if (f == null || !st?.rank_now) return null
+  const target = Math.floor(st.rank_now * 0.8)
+  const pick = async () => {
+    setBusy(true)
+    const { data, error } = await supabase.rpc('duel_pick', { p_device: deviceId(), p_isbn: isbn })
+    setBusy(false)
+    if (error || !data) return setMsg('저장하지 못했어요. 잠시 뒤에 다시 해 주세요.')
+    if (!data.ok) return setMsg(DUEL_WHY[data.why] || '지금은 고를 수 없어요.')
+    setDuel((d) => ({ ...(d || {}), picked: true, week_left: data.week_left, pickers: (d?.pickers || 0) + 1 }))
+    setMsg(null)
+  }
+  const left = duel ? Math.max(0, duel.week_left) : null
+  return (
+    <div className="fc rise" style={{ animationDelay: '0.29s' }}>
+      <div className="fc__head">
+        <span className="fc__label">책콕 예보</span>
+        <strong className="fc__num num">
+          {Math.round(f)}
+          <small>%</small>
+        </strong>
+      </div>
+      <span className="fc__track" aria-hidden="true">
+        <i style={{ width: `${Math.min(100, f)}%` }} />
+      </span>
+      <p className="fc__desc">
+        2주 뒤 {st.cat || '분야'} <b>{target}위 안</b>으로 오를 확률이에요 (지금 {st.rank_now}위). 같은 점수대였던 책이 실제로 오른 비율이에요.
+      </p>
+      <div className="fc__duel">
+        {duel?.picked ? (
+          <span className="fc__picked">
+            {Icon.ginkgo(true, 16)}
+            오른다에 걸었어요
+          </span>
+        ) : (
+          <button className="btn btn--soft fc__btn" disabled={busy || !duel || left === 0} onClick={pick}>
+            오른다에 걸기
+          </button>
+        )}
+        <a className="fc__link" href="/wish">
+          콕 대결 {Icon.chev()}
+        </a>
+      </div>
+      {msg ? (
+        <p className="fc__note">{msg}</p>
+      ) : duel?.picked ? (
+        <p className="fc__note">2주 뒤 데이터로 맞았는지 알려드려요.</p>
+      ) : (
+        left != null && (
+          <p className="fc__note">
+            {left === 0 ? '이번 주에 고를 수 있는 3권을 다 골랐어요.' : `책콕과 겨뤄 보세요 · 이번 주 ${left}권 더 고를 수 있어요`}
+            {duel.pickers >= 2 ? ` · 최근 2주 ${duel.pickers}명이 골랐어요` : ''}
+          </p>
+        )
+      )}
+    </div>
+  )
+}
+
+// 콕한 책 화면: 내가 고른 책과 책콕의 적중률 비교
+function Duel({ base }) {
+  const [d, setD] = useState(null)
+  useEffect(() => {
+    supabase.rpc('duel_my', { p_device: deviceId() }).then(({ data }) => setD(data || { picks: [], week_left: 3 }))
+  }, [])
+  const picks = d?.picks || []
+  const done = picks.filter((p) => p.status !== 'pending')
+  const won = done.filter((p) => p.status === 'hit').length
+  const mine = done.length ? Math.round((100 * won) / done.length) : null
+  const left = d ? Math.max(0, d.week_left) : null
+  return (
+    <section className="card card--list duel">
+      <div className="duel__head">
+        <Eyebrow tone="spot">KOK DUEL</Eyebrow>
+        <h2 className="h2 display">콕 대결</h2>
+        <p className="sub">2주 뒤 순위가 20% 넘게 오를 책을 일주일에 3권까지 골라서 책콕과 적중률을 겨뤄요.</p>
+        <div className="hitgrid hitgrid--3">
+          <div>
+            <span>나</span>
+            <strong className="num">
+              {mine ?? '-'}
+              {mine != null && <small>%</small>}
+            </strong>
+          </div>
+          <div>
+            <span>책콕</span>
+            <strong className="num">
+              {base?.spot_up20 != null ? Math.round(base.spot_up20) : '-'}
+              {base?.spot_up20 != null && <small>%</small>}
+            </strong>
+          </div>
+          <div>
+            <span>아무 책</span>
+            <strong className="num">
+              {base?.base_up20 != null ? Math.round(base.base_up20) : '-'}
+              {base?.base_up20 != null && <small>%</small>}
+            </strong>
+          </div>
+        </div>
+        <p className="sub small">
+          {done.length ? `내 결과 ${done.length}권 중 ${won}권 적중` : '내 적중률은 고른 지 2주가 지난 책부터 계산돼요'} · 책콕은 처음 포착한 책 기준이에요
+        </p>
+      </div>
+      {d === null && <Loading />}
+      {d && picks.length === 0 && (
+        <div className="empty">
+          <p>아직 고른 책이 없어요.</p>
+          <p className="sub">책 상세의 '책콕 예보' 아래에서 '오른다에 걸기'를 눌러 보세요.</p>
+          <a className="btn btn--soft" href="/trend">책 고르러 가기</a>
+        </div>
+      )}
+      {picks.map((p) => {
+        const days = daysUntil(p.due)
+        const now = p.status === 'pending' ? p.rank_latest : p.rank_after
+        return (
+          <a key={p.isbn13 + p.picked_on} className="row" href={`/book/${encodeURIComponent(p.isbn13)}`}>
+            <Cover src={p.cover_url} alt="" className="row__cover" title={p.title} />
+            <span className="row__info">
+              <span className="row__title">{shortTitle(p.title)}</span>
+              <span className="row__meta row__meta--wrap">
+                {fmtDate(p.picked_on)} {p.rank_at_pick}위에서 고름 → {p.status === 'pending' ? '지금' : '2주 뒤'} {now ? `${now}위` : '순위 밖'}
+              </span>
+              <span className="row__meta">
+                목표 {Math.floor(p.rank_at_pick * 0.8)}위 안{p.forecast != null ? ` · 책콕 예보 ${Math.round(p.forecast)}%` : ''}
+              </span>
+            </span>
+            <span className={`duel__status duel__status--${p.status}`}>
+              {p.status === 'hit' ? '적중' : p.status === 'miss' ? '빗나감' : days ? `D-${days}` : '집계 중'}
+            </span>
+          </a>
+        )
+      })}
+      {d && picks.length > 0 && left != null && (
+        <p className="sub small duel__foot">{left === 0 ? '이번 주에 고를 수 있는 3권을 다 골랐어요.' : `이번 주 ${left}권 더 고를 수 있어요.`}</p>
+      )}
+    </section>
+  )
+}
+
 function Hits({ stats, index }) {
   const [books, setBooks] = useState(null)
   useEffect(() => {
@@ -921,6 +1228,8 @@ function Hits({ stats, index }) {
           </section>
         )}
         {s?.base?.spot_n > 0 && <HitCompare b={s.base} />}
+        {s?.base?.spot_n > 0 && <HitMisses b={s.base} index={index} />}
+        <HitCalibration />
 
         <section className="card card--list rise" style={{ animationDelay: '0.15s' }}>
           <div className="card__head">
@@ -962,7 +1271,11 @@ function Hits({ stats, index }) {
             <li>
               <b>TOP10 진입</b>은 포착 당시 분야 10위 밖이던 책이 그 뒤 10위 안에 든 경우예요.
             </li>
-            <li>기록을 시작하기 전 기간은 같은 기준을 과거 대출 데이터에 적용해 계산했어요.</li>
+            <li>
+              <b>예보</b>는 같은 점수대였던 책이 2주 뒤 실제로 20% 넘게 오른 비율이에요. 기록이 적은 점수대는 전체 평균 쪽으로 낮춰 잡아요.
+            </li>
+            <li>기록을 시작하기 전 기간은 같은 기준을 과거 대출 데이터에 적용해 계산했어요. 그 날짜에 알 수 있던 정보만 써요.</li>
+            <li>점수 가중치는 이 기록으로 맞춘 값이라, 같은 기간으로 잰 적중률은 실제보다 조금 좋게 나올 수 있어요.</li>
           </ul>
           <p className="sub small">데이터 출처: 도서관 정보나루 인기대출·대출 급상승</p>
         </section>
@@ -1072,6 +1385,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
     if (tab === 'composite') return [`${b.score ?? 0}점`]
     if (tab === 'rising') return [`▲${b.rank_diff ?? 0}`, 'up']
     if (tab === 'popular') return [`${(b.loan_count ?? 0).toLocaleString()}회`]
+    if (tab === 'comeback') return [b.pubYear ? `${b.pubYear}년 출간` : '다시 오르는 중']
     return [b.snapshotDate ? `${Number(b.snapshotDate.slice(5, 7))}월 추천` : '사서 추천', 'accent']
   }
   const desc = demoActive ? `${demoLabel(prefs)}이 최근 30일 많이 빌린 순이에요` : TABS.find((t) => t.id === tab).desc
@@ -1757,7 +2071,8 @@ function CopyIsbn({ isbn }) {
   )
 }
 
-// 왜 뜨는지: 신뢰도를 정하는 7가지 근거 중 이 책에 해당하는 것만 보여준다
+// 왜 뜨는지: 신뢰도를 정하는 5가지 근거 중 이 책에 해당하는 것만 보여준다
+// (꾸준한 상승·지난달 대출 증가는 2주 뒤 결과와 관계가 없어서 2026-11-10에 근거에서 뺐다)
 function useEvidence(isbn) {
   const [ev, setEv] = useState(null)
   useEffect(() => {
@@ -1784,12 +2099,6 @@ function evidenceOf(e) {
     out.push({ title: `순위 ${Math.round(rcr * 100)}% 상승`, desc: `${cat} ${e.rank_prev}위 → ${e.rank_now}위, 일주일 동안` })
   if (e.new_entry) out.push({ title: '새로 진입', desc: `지난주엔 ${cat} 인기대출 목록에 없다가 ${e.rank_now}위로 들어왔어요` })
   if (e.hot_diff > 0) out.push({ title: '전국 대출 급상승', desc: `전국 공공도서관 대출 급상승 목록 ▲${e.hot_diff}` })
-  if (e.rise_steady)
-    out.push({
-      title: '꾸준히 상승',
-      desc: e.rank_mid === e.rank_now ? `${e.rank_prev}위 → ${e.rank_mid}위로 오른 뒤 그 자리를 지키는 중이에요` : `${e.rank_prev}위 → ${e.rank_mid}위 → ${e.rank_now}위, 일주일 내내 올랐어요`,
-    })
-  if (Number(e.loan_growth) >= 0.2) out.push({ title: '지난달 대출 증가', desc: `지난달 대출이 그 전 석 달 평균보다 ${Math.round(e.loan_growth * 100)}% 늘었어요` })
   if (e.regions >= 3 || e.demo_groups >= 3) {
     const parts = [e.regions >= 3 && `${e.regions}개 지역`, e.demo_groups >= 3 && `${e.demo_groups}개 연령·성별 목록`].filter(Boolean)
     out.push({ title: '여러 곳에서 인기', desc: `${parts.join(' · ')}에서 인기대출 순위에 올랐어요` })
@@ -1961,6 +2270,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               {st.stage !== '스테디' && <WhyRising isbn={book.isbn13} />}
             </div>
           )}
+          <Forecast isbn={book.isbn13} st={st} />
           <div className="statgrid rise" style={{ animationDelay: '0.3s' }}>
             {stats.map((s) => (
               <div key={s.label}>
@@ -3472,7 +3782,7 @@ function LibraryPicker({ libs, setLibs, onClose }) {
 
 /* ================= 콕한 책 ================= */
 
-function Wish({ wish, index, toggleWish, hits, alertState, push }) {
+function Wish({ wish, index, toggleWish, hits, alertState, push, base }) {
   const wide = useWide()
   const items = wish.map((w) => ({ ...w, live: index.get(w.isbn13), hit: hits.get(w.isbn13) }))
   return (
@@ -3500,6 +3810,7 @@ function Wish({ wish, index, toggleWish, hits, alertState, push }) {
             </div>
           </div>
         </section>
+        <Duel base={base} />
         <section className="card card--list wishlist">
           {items.length === 0 && (
             <div className="empty">
@@ -3573,7 +3884,7 @@ const STAGE_GUIDE = [
   {
     stage: '포착',
     title: '뜨기 전에 먼저 잡은 신호',
-    body: '분야 인기대출 200위 안에서 순위가 오르기 시작했지만 아직 아래쪽 절반(100위 밖)에 있는 책이에요. 지난달 대출이 30% 이상 늘었거나, 요즘 뜨는 작가의 신작이 곧 나올 때도 포착이에요.',
+    body: '분야 인기대출 200위 안에서 순위가 오르기 시작했지만 아직 아래쪽 절반(100위 밖)에 있는 책이에요. 요즘 뜨는 작가의 신작이 곧 나올 때도 포착이에요.',
   },
   {
     stage: '떠오름',
@@ -3679,7 +3990,7 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
     {
       id: 'score',
       label: '모멘텀 점수와 신뢰도는 뭔가요?',
-      body: '모멘텀은 책이 얼마나 빠르게 뜨고 있는지를 0~100점으로 나타낸 점수예요. 분야 순위가 오른 비율이 가장 크게 반영되고, 신규 진입·전국 대출 급상승·지난달 대출 증가·최근 출간·사서 추천·여러 지역·연령 인기·유튜브 언급·검색 관심을 더해요. 이미 TOP10에 오래 머문 책은 점수를 덜 받아요. 신뢰도는 서로 다른 근거가 몇 개 겹치는지예요. 근거는 ① 순위 20% 이상 상승 ② 새로 진입 ③ 전국 급상승 ④ 일주일 내내 꾸준히 상승 ⑤ 지난달 대출 20% 이상 증가 ⑥ 3곳 이상 지역 또는 3개 이상 연령·성별 목록 ⑦ 사서 추천·유튜브·검색 급증, 7가지예요. 1개면 낮음, 2개면 보통, 3개 이상이면 높음이에요. 스테디는 10일 넘게 지켜본 책이면 높음이에요.',
+      body: '모멘텀은 책이 얼마나 빠르게 뜨고 있는지를 0~100점으로 나타낸 점수예요. 과거 기록에서 2주 뒤 순위가 실제로 크게 오른 책에 많았던 신호일수록 점수를 많이 줘요. 지금은 새로 진입(27점)과 순위가 오른 비율(23점)이 가장 크고, 올해 출간·전국 대출 급상승·유튜브 언급·사서 추천·여러 지역·연령 인기·검색 관심을 더해요. 이미 TOP10에 오래 머문 책은 점수를 덜 받아요. 신뢰도는 서로 다른 근거가 몇 개 겹치는지예요. 근거는 ① 순위 20% 이상 상승 ② 새로 진입 ③ 전국 급상승 ④ 3곳 이상 지역 또는 3개 이상 연령·성별 목록 ⑤ 사서 추천·유튜브·검색 급증, 5가지예요. 1개면 낮음, 2개면 보통, 3개 이상이면 높음이에요. 스테디는 10일 넘게 지켜본 책이면 높음이에요. 단계와 신뢰도가 실제로 얼마나 맞았는지는 적중 기록에서 볼 수 있어요.',
     },
     {
       id: 'source',
@@ -3800,7 +4111,7 @@ function mapRow(r) {
 
 function useFeed() {
   const [state, setState] = useState({
-    feed: { composite: [], rising: [], popular: [], recommended: [] },
+    feed: { composite: [], rising: [], popular: [], recommended: [], comeback: [] },
     loading: true,
     error: null,
   })
@@ -3809,6 +4120,8 @@ function useFeed() {
     async function run() {
       // v_feed는 탭마다 '올바른 날짜'의 데이터만 준다. 한 번에 최대 1,000건이라 탭별로 나눠 받는다.
       const types = ['composite', 'rising', 'popular', 'recommended']
+      // 역주행은 따로 받는다 (실패해도 다른 탭은 그대로 보여준다)
+      const comebackReq = supabase.from('v_comeback').select('*').order('momentum', { ascending: false }).limit(300)
       const res = await Promise.all(
         types.map((t) => {
           let q = supabase.from('v_feed').select('*').eq('trend_type', t)
@@ -3838,6 +4151,9 @@ function useFeed() {
         else rows.sort((a, b) => (b.snapshotDate ?? '').localeCompare(a.snapshotDate ?? ''))
         feed[t] = rows
       })
+      const cb = await comebackReq
+      if (off) return
+      feed.comeback = (cb.data || []).map((r) => ({ ...mapRow(r), score: r.momentum != null ? Number(r.momentum) : null, pubYear: r.pub_year, trendType: 'composite' }))
       setState({ feed, loading: false, error: null })
     }
     run()
@@ -3882,7 +4198,7 @@ function useBookStates() {
       for (let from = 0; from < 5000; from += 1000) {
         const { data, error } = await supabase
           .from('v_book_state_latest')
-          .select('isbn13,snapshot_date,stage,reason,confidence,momentum,first_spotted,rank_now,cat')
+          .select('isbn13,snapshot_date,stage,reason,confidence,momentum,first_spotted,rank_now,cat,forecast')
           .order('isbn13')
           .range(from, from + 999)
         if (error || !data) break
@@ -4034,7 +4350,7 @@ export default function App() {
         )}
         {route.name === 'book' && route.param && <Detail isbn={route.param} index={index} wish={wish} toggleWish={toggleWish} libs={libs} setLibs={setLibs} onPickLibrary={() => setLibPicker(true)} hits={hits} />}
         {route.name === 'library' && route.param && <LibraryPage libCode={route.param} libs={libs} setLibs={setLibs} />}
-        {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} hits={hits} alertState={alertState} push={push} />}
+        {route.name === 'wish' && <Wish wish={wish} index={index} toggleWish={toggleWish} hits={hits} alertState={alertState} push={push} base={home.hitStats?.base} />}
         {route.name === 'search' && <Search key={window.location.search} />}
         {route.name === 'keyword' && route.param && <KeywordPage word={route.param} index={index} />}
         {route.name === 'alerts' && <Alerts alerts={alertState.alerts} markRead={alertState.markRead} clear={alertState.clear} />}
