@@ -5,7 +5,15 @@
 --    나중에 받은 대출 이력을 그대로 써서, 9월 판정에 10월 대출량이 섞였다)
 --  * 대출 증가는 '관찰 중인 책 전체의 중앙값'을 뺀 값(loan_growth_rel)으로 본다.
 --    방학·시험 기간처럼 대출이 한꺼번에 늘고 주는 달의 효과를 뺀다.
---  * 가중치와 문턱값은 score_config 표에서 읽는다 (지금 값은 v2와 같다. 과거 적중 분석 뒤 표만 고친다).
+--  * 가중치와 문턱값은 score_config 표에서 읽는다. 지금 값은 9/18~10/27 책·날짜 4,605건의
+--    2주 뒤 결과(순위가 20% 이상 올랐나)로 맞춘 것이다.
+--      순위 상승 23(10% 미만은 0, 30% 이상이면 만점) · 신규 진입 27(100위 밖 진입은 절반)
+--      올해 출간 14(작년 출간은 -7) · 전국 급상승 10 · 유튜브 급증 8
+--      사서 추천 5 · 지역·연령 확산 5 · 검색 급증 5 · 대출 증가 3
+--    맞은 신호: 신규 진입, 순위 30% 이상 상승, 올해 출간, 유튜브 급증
+--    관계없던 신호: 지난달 대출 증가, 꾸준한 상승 -> 신뢰도 근거와 포착 조건에서 뺐다 (근거 5가지)
+--    표본이 적어 그대로 둔 신호: 전국 급상승, 사서 추천, 지역·연령 확산, 검색 급증
+--  * 한 번 맞춘 값이라 기록이 더 쌓이면 다시 맞춰야 한다 (200위까지 받은 건 11/3부터).
 --
 -- 바뀐 점 (v1 -> v2)
 --  * 분야 인기대출을 200위까지 받으면서, 순위 변화는 '목록 길이로 나눈 값' 대신
@@ -41,8 +49,8 @@ create table if not exists score_config (
 );
 alter table score_config enable row level security;
 insert into score_config (id, w, note) values (1,
-  '{"rank":0.35,"rc0":0,"rc1":0.3,"new":0.15,"hot":0.10,"loan":0.10,"loan_cap":0.5,"pub":0.10,"pub_last":0.5,"lib":0.05,"breadth":0.05,"yt":0.05,"gt":0.05,"loan_fall":0,"fall_at":-0.1,"use_rel":0,"steady_evid":1}',
-  'v2 가중치 그대로') on conflict (id) do nothing;
+  '{"rank":0.23,"rc0":0.1,"rc1":0.3,"new":0.27,"new_deep":0.5,"hot":0.10,"loan":0.03,"loan_cap":0.5,"pub":0.14,"pub_last":-0.5,"lib":0.05,"breadth":0.05,"yt":0.08,"gt":0.05,"loan_fall":0,"fall_at":-0.1,"use_rel":1,"steady_evid":0,"loan_evid":0}',
+  '2026-11-10: 9/18~10/27 책·날짜 4,605건의 2주 뒤 결과로 맞춤') on conflict (id) do nothing;
 
 create or replace function public.refresh_book_state(p_date date)
  returns integer
@@ -189,7 +197,7 @@ begin
       (f.complete_days >= 7 and f.top10_days >= 0.9 * f.complete_days) as steady,
       (f.complete_days >= 7 and f.top10_days >= f.complete_days * 2.0 / 3) as near_steady,
       100 * ((cfg->>'rank')::numeric * least(greatest((coalesce(f.rcr, 0) - (cfg->>'rc0')::numeric) / ((cfg->>'rc1')::numeric - (cfg->>'rc0')::numeric), 0), 1)
-           + (cfg->>'new')::numeric * (f.new_entry)::int
+           + (cfg->>'new')::numeric * (f.new_entry)::int * case when f.rank_now > 100 then (cfg->>'new_deep')::numeric else 1 end
            + (cfg->>'hot')::numeric * least(f.hot_diff / 100.0, 1)
            + (cfg->>'loan')::numeric * least(greatest(coalesce(f.g_use, 0), 0) / (cfg->>'loan_cap')::numeric, 1)
            + (cfg->>'pub')::numeric * case when f.recent_pub = 1 then 1 when f.recent_pub = 0.5 then (cfg->>'pub_last')::numeric else 0 end
@@ -204,7 +212,7 @@ begin
     select s.*,
       ((coalesce(s.rcr, 0) >= 0.2)::int + (s.new_entry)::int + (s.hot_diff > 0)::int
        + (s.rise_steady and (cfg->>'steady_evid')::int = 1)::int
-       + (coalesce(s.g_use, 0) >= 0.2)::int + (s.breadth)::int
+       + (coalesce(s.g_use, 0) >= 0.2 and (cfg->>'loan_evid')::int = 1)::int + (s.breadth)::int
        + (s.librarian or s.yt_spike or s.gt_spike)::int) as sources,
       (s.rank_up or s.new_entry or s.hot_diff > 0) as rising
     from scored s
@@ -219,10 +227,10 @@ begin
         when e.rising and (e.rank_now is null or e.rank_now <= greatest(e.list_size, 1) * 0.5) then '떠오름'
         when e.rising then '포착'
         when e.upcoming then '포착'
-        when e.rank_now is not null and coalesce(e.g_use, 0) >= 0.3 then '포착'
+        when e.rank_now is not null and coalesce(e.g_use, 0) >= 0.3 and (cfg->>'loan_evid')::int = 1 then '포착'
         when (e.rank_now is null or e.rank_now > coalesce(e.list_size, 0) / 2.0)
              and (e.librarian or e.recent_pub = 1)
-             and (e.yt_spike or e.gt_spike or coalesce(e.g_use, 0) >= 0.3) then '포착'
+             and (e.yt_spike or e.gt_spike or (coalesce(e.g_use, 0) >= 0.3 and (cfg->>'loan_evid')::int = 1)) then '포착'
       end as stage_v
     from evid e
   )
@@ -265,3 +273,26 @@ begin
   return v_n;
 end;
 $function$;
+
+-- 한 날짜의 종합 순위(trend_type='composite')를 book_state의 모멘텀으로 다시 만든다.
+-- 평소에는 compute_composite.py가 하고, 가중치를 바꾼 뒤 손으로 다시 만들 때 쓴다.
+create or replace function public.refresh_composite(p_date date)
+ returns integer
+ language plpgsql
+ set search_path to 'public'
+as $function$
+declare v_n int;
+begin
+  delete from trend_scores t
+  where t.trend_type = 'composite' and t.snapshot_date = p_date
+    and not exists (select 1 from book_state s where s.snapshot_date = p_date and s.isbn13 = t.isbn13
+                    and s.stage is distinct from '스테디' and s.momentum > 0);
+  insert into trend_scores (isbn13, snapshot_date, trend_type, score)
+  select isbn13, p_date, 'composite', momentum from book_state
+  where snapshot_date = p_date and stage is distinct from '스테디' and momentum > 0
+  on conflict (isbn13, snapshot_date, trend_type) do update set score = excluded.score;
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$function$;
+revoke execute on function public.refresh_composite(date) from anon, authenticated, public;

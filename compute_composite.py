@@ -10,10 +10,8 @@
   2) 그날 계산을 새로 하고 (예전 계산은 지운 뒤)
   3) 스테디셀러를 뺀 모멘텀 점수를 '종합' 순위(trend_type='composite')로 저장한다.
 
-모멘텀 가중치 (정리본 1차 가중치 + 새로 붙인 신호):
-  분야 내 순위 상승(목록 크기로 나눔) 35 · 신규 진입 15 · 전국 급상승 10 · 지난달 대출 증가 10
-  최근 출간 10 · 사서 추천 5 · 지역 확산 5 · 유튜브 급증 5 · 검색 급증 5
-  분야 TOP10에 머문 날이 2/3 이상이면 15점 감점, 90% 이상이면 '스테디'로 분리
+모멘텀 가중치는 score_config 표에 있다 (과거 적중 분석으로 맞춘 값, supabase/sql/book_state.sql 머리말 참고).
+  refresh_forecast() : 같은 점수대였던 책이 2주 뒤 실제로 크게 오른 비율 -> 책마다 예보(%)와 단계·신뢰도별 적중률
 """
 
 import os
@@ -54,6 +52,10 @@ def main():
         supabase.rpc("refresh_hit_baseline", {}).execute()
     except Exception as e:
         print(f"::warning::적중률 비교 기준 계산 실패: {type(e).__name__}")
+    try:  # 예보(2주 뒤 크게 오를 확률)와 단계·신뢰도별 적중률
+        supabase.rpc("refresh_forecast", {}).execute()
+    except Exception as e:
+        print(f"::warning::예보 계산 실패: {type(e).__name__}")
 
     state = fetch_state(d)
     stages = {}
