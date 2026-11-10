@@ -1,4 +1,11 @@
--- 책콕: 트렌드 단계·모멘텀·신뢰도 계산 (v2, 2026-11-03)
+-- 책콕: 트렌드 단계·모멘텀·신뢰도·예보 계산 (v3, 2026-11-10)
+--
+-- 바뀐 점 (v2 -> v3)
+--  * 대출 증가는 '그 날짜에 이미 끝난 달'까지만 본다. (v2는 과거 날짜를 다시 계산할 때
+--    나중에 받은 대출 이력을 그대로 써서, 9월 판정에 10월 대출량이 섞였다)
+--  * 대출 증가는 '관찰 중인 책 전체의 중앙값'을 뺀 값(loan_growth_rel)으로 본다.
+--    방학·시험 기간처럼 대출이 한꺼번에 늘고 주는 달의 효과를 뺀다.
+--  * 가중치와 문턱값은 score_config 표에서 읽는다 (지금 값은 v2와 같다. 과거 적중 분석 뒤 표만 고친다).
 --
 -- 바뀐 점 (v1 -> v2)
 --  * 분야 인기대출을 200위까지 받으면서, 순위 변화는 '목록 길이로 나눈 값' 대신
@@ -23,6 +30,19 @@
 alter table book_state add column if not exists rank_mid int;
 alter table book_state add column if not exists demo_groups int;
 alter table book_state add column if not exists rise_steady boolean;
+alter table book_state add column if not exists loan_growth_rel numeric;
+alter table book_state add column if not exists forecast numeric;
+
+create table if not exists score_config (
+  id int primary key default 1 check (id = 1),
+  w jsonb not null,
+  note text,
+  updated_on date default current_date
+);
+alter table score_config enable row level security;
+insert into score_config (id, w, note) values (1,
+  '{"rank":0.35,"rc0":0,"rc1":0.3,"new":0.15,"hot":0.10,"loan":0.10,"loan_cap":0.5,"pub":0.10,"pub_last":0.5,"lib":0.05,"breadth":0.05,"yt":0.05,"gt":0.05,"loan_fall":0,"fall_at":-0.1,"use_rel":0,"steady_evid":1}',
+  'v2 가중치 그대로') on conflict (id) do nothing;
 
 create or replace function public.refresh_book_state(p_date date)
  returns integer
@@ -34,7 +54,10 @@ declare
   v_mid date;
   v_recent boolean := p_date >= current_date - 3;
   v_n int;
+  cfg jsonb;
+  v_month date := date_trunc('month', p_date)::date;
 begin
+  select w into cfg from score_config where id = 1;
   if not exists (select 1 from v_popular_complete_dates where snapshot_date = p_date) then
     raise exception 'not a complete date: %', p_date;
   end if;
@@ -83,6 +106,8 @@ begin
     select u.isbn13, (x->>'loanCnt')::numeric as cnt, ord
     from book_usage u, jsonb_array_elements(coalesce(u.loan_history, '[]'::jsonb)) with ordinality as e(x, ord)
     where x->>'loanCnt' is not null
+      and x->>'month' ~ '^\d{4}년 \d{1,2}월$'
+      and to_date(x->>'month', 'YYYY"년" MM"월"') < v_month   -- 그 날짜에 이미 끝난 달만
   ),
   hist_ranked as (
     select isbn13, cnt, row_number() over (partition by isbn13 order by ord desc) as rn,
@@ -94,6 +119,7 @@ begin
            max(cnt) filter (where rn = 1) / nullif(avg(cnt) filter (where rn between 2 and 4), 0) - 1 as g
     from hist_ranked where total >= 4 group by isbn13
   ),
+  market as (select percentile_cont(0.5) within group (order by g) as med from growth where g is not null),
   regions as (
     select isbn13, count(distinct region) as n from region_popular
     where snapshot_date = (select max(snapshot_date) from region_popular where snapshot_date between p_date - 2 and p_date)
@@ -128,6 +154,7 @@ begin
       (select count(*) from complete21)::int as complete_days,
       coalesce(r7.diff, 0) as hot_diff,
       g.g as loan_growth,
+      g.g - coalesce((select med from market), 0) as loan_growth_rel,
       coalesce(rg.n, 0)::int as regions,
       coalesce(dm.n, 0)::int as demo_groups,
       case when b.pub_year ~ '^\d{4}$' and b.pub_year::int = extract(year from p_date)::int then 1
@@ -161,28 +188,30 @@ begin
       (f.regions >= 3 or f.demo_groups >= 3) as breadth,
       (f.complete_days >= 7 and f.top10_days >= 0.9 * f.complete_days) as steady,
       (f.complete_days >= 7 and f.top10_days >= f.complete_days * 2.0 / 3) as near_steady,
-      100 * (0.35 * least(greatest(coalesce(f.rcr, 0), 0) / 0.3, 1)
-           + 0.15 * (f.new_entry)::int
-           + 0.10 * least(f.hot_diff / 100.0, 1)
-           + 0.10 * least(greatest(coalesce(f.loan_growth, 0), 0) / 0.5, 1)
-           + 0.10 * f.recent_pub
-           + 0.05 * (f.librarian)::int
-           + 0.05 * greatest(least(f.regions / 8.0, 1), least(f.demo_groups / 6.0, 1))
-           + 0.05 * (f.yt_spike)::int
-           + 0.05 * (f.gt_spike)::int) as raw_score
-    from feat f
+      100 * ((cfg->>'rank')::numeric * least(greatest((coalesce(f.rcr, 0) - (cfg->>'rc0')::numeric) / ((cfg->>'rc1')::numeric - (cfg->>'rc0')::numeric), 0), 1)
+           + (cfg->>'new')::numeric * (f.new_entry)::int
+           + (cfg->>'hot')::numeric * least(f.hot_diff / 100.0, 1)
+           + (cfg->>'loan')::numeric * least(greatest(coalesce(f.g_use, 0), 0) / (cfg->>'loan_cap')::numeric, 1)
+           + (cfg->>'pub')::numeric * case when f.recent_pub = 1 then 1 when f.recent_pub = 0.5 then (cfg->>'pub_last')::numeric else 0 end
+           + (cfg->>'lib')::numeric * (f.librarian)::int
+           + (cfg->>'breadth')::numeric * greatest(least(f.regions / 8.0, 1), least(f.demo_groups / 6.0, 1))
+           + (cfg->>'yt')::numeric * (f.yt_spike)::int
+           + (cfg->>'gt')::numeric * (f.gt_spike)::int
+           - (cfg->>'loan_fall')::numeric * (coalesce(f.g_use, 0) <= (cfg->>'fall_at')::numeric)::int) as raw_score
+    from (select *, case when (cfg->>'use_rel')::int = 1 then loan_growth_rel else loan_growth end as g_use from feat) f
   ),
   evid as (
     select s.*,
-      ((coalesce(s.rcr, 0) >= 0.2)::int + (s.new_entry)::int + (s.hot_diff > 0)::int + (s.rise_steady)::int
-       + (coalesce(s.loan_growth, 0) >= 0.2)::int + (s.breadth)::int
+      ((coalesce(s.rcr, 0) >= 0.2)::int + (s.new_entry)::int + (s.hot_diff > 0)::int
+       + (s.rise_steady and (cfg->>'steady_evid')::int = 1)::int
+       + (coalesce(s.g_use, 0) >= 0.2)::int + (s.breadth)::int
        + (s.librarian or s.yt_spike or s.gt_spike)::int) as sources,
       (s.rank_up or s.new_entry or s.hot_diff > 0) as rising
     from scored s
   ),
   staged as (
     select e.*,
-      greatest(0, round((e.raw_score - case when e.near_steady and not e.steady then 15 else 0 end)::numeric, 1)) as momentum_v,
+      greatest(0, round((greatest(e.raw_score, 0) - case when e.near_steady and not e.steady then 15 else 0 end)::numeric, 1)) as momentum_v,
       case
         when e.steady then '스테디'
         when e.rising and e.breadth and e.rank_now is not null and e.rank_now <= greatest(e.list_size, 1) * 0.25 then '확산'
@@ -190,18 +219,18 @@ begin
         when e.rising and (e.rank_now is null or e.rank_now <= greatest(e.list_size, 1) * 0.5) then '떠오름'
         when e.rising then '포착'
         when e.upcoming then '포착'
-        when e.rank_now is not null and coalesce(e.loan_growth, 0) >= 0.3 then '포착'
+        when e.rank_now is not null and coalesce(e.g_use, 0) >= 0.3 then '포착'
         when (e.rank_now is null or e.rank_now > coalesce(e.list_size, 0) / 2.0)
              and (e.librarian or e.recent_pub = 1)
-             and (e.yt_spike or e.gt_spike or coalesce(e.loan_growth, 0) >= 0.3) then '포착'
+             and (e.yt_spike or e.gt_spike or coalesce(e.g_use, 0) >= 0.3) then '포착'
       end as stage_v
     from evid e
   )
   insert into book_state (snapshot_date, isbn13, kdc, cat, rank_now, rank_prev, rank_mid, list_size, rank_change_ratio, new_entry,
-    top10_days, complete_days, hot_diff, loan_growth, regions, demo_groups, rise_steady, recent_pub, librarian, upcoming,
+    top10_days, complete_days, hot_diff, loan_growth, loan_growth_rel, regions, demo_groups, rise_steady, recent_pub, librarian, upcoming,
     yt_spike, gt_spike, momentum, sources, confidence, stage, reason)
   select p_date, isbn13, kdc, cat, rank_now, rank_prev, rank_mid, list_size, round(rcr, 4), new_entry,
-    top10_days, complete_days, hot_diff, round(loan_growth, 3), regions, demo_groups, rise_steady, recent_pub, librarian, upcoming,
+    top10_days, complete_days, hot_diff, round(loan_growth, 3), round(loan_growth_rel, 3), regions, demo_groups, rise_steady, recent_pub, librarian, upcoming,
     yt_spike, gt_spike, momentum_v, sources,
     case
       when stage_v is null then null
@@ -227,7 +256,7 @@ begin
     kdc = excluded.kdc, cat = excluded.cat, rank_now = excluded.rank_now, rank_prev = excluded.rank_prev,
     rank_mid = excluded.rank_mid, list_size = excluded.list_size, rank_change_ratio = excluded.rank_change_ratio,
     new_entry = excluded.new_entry, top10_days = excluded.top10_days, complete_days = excluded.complete_days,
-    hot_diff = excluded.hot_diff, loan_growth = excluded.loan_growth, regions = excluded.regions,
+    hot_diff = excluded.hot_diff, loan_growth = excluded.loan_growth, loan_growth_rel = excluded.loan_growth_rel, regions = excluded.regions,
     demo_groups = excluded.demo_groups, rise_steady = excluded.rise_steady, recent_pub = excluded.recent_pub,
     librarian = excluded.librarian, upcoming = excluded.upcoming, yt_spike = excluded.yt_spike,
     gt_spike = excluded.gt_spike, momentum = excluded.momentum, sources = excluded.sources,
