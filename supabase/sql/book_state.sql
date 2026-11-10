@@ -119,7 +119,7 @@ begin
            max(cnt) filter (where rn = 1) / nullif(avg(cnt) filter (where rn between 2 and 4), 0) - 1 as g
     from hist_ranked where total >= 4 group by isbn13
   ),
-  market as (select percentile_cont(0.5) within group (order by g) as med from growth where g is not null),
+  market as (select (percentile_cont(0.5) within group (order by g))::numeric as med from growth where g is not null),
   regions as (
     select isbn13, count(distinct region) as n from region_popular
     where snapshot_date = (select max(snapshot_date) from region_popular where snapshot_date between p_date - 2 and p_date)
