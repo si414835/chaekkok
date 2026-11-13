@@ -2036,7 +2036,7 @@ function Drafts() {
                     <CopyBtn key={t} text={t} label={`『${t}』 복사`} />
                   ))}
                 </div>
-                <p className="sub small">본문은 붙여 넣기만 해도 완성이에요. 책을 첨부하고 싶으면 각 📖 줄 위에 넣어 주세요(선택).</p>
+                <p className="sub small">본문은 붙여 넣기만 해도 완성이에요. 책을 첨부하고 싶으면 각 책 번호 줄(1. 『…』) 아래에 넣어 주세요(선택).</p>
               </>
             )}
             <p className="label">2. 본문</p>
