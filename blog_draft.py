@@ -333,7 +333,7 @@ def why_sentences(s, cat, seed):
             out.append(f"{prev}위, {s['rank_mid']}위, {now}위로 한 주 내내 쉬지 않고 올랐어요.")
     if float(s.get("loan_growth") or 0) >= 0.2:
         out.append(pick([
-            f"지난달엔 그 전 석 달 평균보다 {times_text(1 + float(s['loan_growth']))} 빌려 갔어요.",
+            f"지난달엔 그 전 석 달 평균보다 {times_text(1 + float(s['loan_growth']))} 많이 빌려 갔어요.",
             f"대출 건수로 보면 지난달이 그 전 석 달 평균보다 {times_text(1 + float(s['loan_growth']))} 많았어요.",
         ], seed))
     if (s.get("regions") or 0) >= 3:
