@@ -211,6 +211,8 @@ def book_intro(isbn):
     text = re.sub(r"[★☆◆◇■□●○▶▷※]+[^★☆◆◇■□●○▶▷※]{0,80}?[★☆◆◇■□●○▶▷※]+", " ", text)  # '★★ 수상! ★★' 같은 광고 문구 빼기
     text = re.sub(r"[★☆◆◇■□●○▶▷※]+", " ", text)
     text = re.sub(r"([,.])(?=[가-힣A-Za-z“\"])", r"\1 ", text)  # '진행되지만,건강하고' 띄우기
+    text = re.sub(r"([!?.])(?=[“\"]?[가-힣])", r"\1 ", text)  # '연가!"영원' 띄우기
+    text = re.sub(r"”(?=[가-힣])", "” ", text)  # '.”노화' 띄우기
     text = re.sub(r"\s+", " ", text).strip()
     # 문장 단위로 잘라 150자 안쪽까지만 (너무 길게 옮기지 않는다)
     sents = re.split(r"(?<=[.!?。])\s+", text)
@@ -364,7 +366,7 @@ def build(day):
         field = f"{it['cat']} 분야 " if it["cat"] else ""
         p1 = f"{josa(quoted, '은', '는')} {who}{pub}{field}책이에요."
         if it["intro"]:
-            p1 += f" 책 소개에는 이렇게 적혀 있어요. \"{it['intro']}\" (책 소개 출처: 도서관 정보나루)"
+            p1 += f" 책 소개 일부를 옮기면 이래요.\n{it['intro']} (책 소개 출처: 도서관 정보나루)"
         block.append(p1)
 
         # 2) 왜 요즘 뜨는지
