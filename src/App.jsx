@@ -2030,13 +2030,13 @@ function Drafts() {
             <CopyBtn text={d.title} label="제목 복사" />
             {d.book_titles?.length > 0 && (
               <>
-                <p className="label">책 첨부할 때 검색어 (글감 → 책)</p>
+                <p className="label">책 첨부할 때 검색어 (선택 · 글감 → 책)</p>
                 <div className="draft__books">
                   {d.book_titles.map((t) => (
                     <CopyBtn key={t} text={t} label={`『${t}』 복사`} />
                   ))}
                 </div>
-                <p className="sub small">본문의 📌 줄 자리에 책을 첨부하고, 📌 줄은 지워 주세요.</p>
+                <p className="sub small">본문은 붙여 넣기만 해도 완성이에요. 책을 첨부하고 싶으면 각 📖 줄 위에 넣어 주세요(선택).</p>
               </>
             )}
             <p className="label">2. 본문</p>

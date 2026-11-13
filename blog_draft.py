@@ -5,15 +5,16 @@
 초안을 blog_drafts 표에 저장하면, 책콕의 /draft 화면에서 제목·본문·태그를 복사해 붙여 넣는다.
 
 양식(고정)
-  제목  M월 D일 오늘의 책 추천!
-  본문  11월 4일에 직접 다듬어 올린 글과 같은 모양 — 친근한 인사 → 책 2~3권(책 첨부 자리 → 책 소개 → 책콕 데이터)
-        → 책콕 추천(마지막 줄 링크 카드) → 데이터 출처
+  제목  M월 D일 요즘 도서관에서 뜨는 책 N권 추천 | 『책 이름』…
+  본문  붙여 넣기만 해도 되는 완성본 — 인사 → 한눈에 보기 → 책 2~3권(소개 · 뜨는 이유 · 대출 흐름 · 많이 빌린 독자
+        · 예보 · 함께 빌린 책 · 키워드 · 이런 분께) → 책콕 소개 → 자주 묻는 질문 → 링크 카드 → 데이터 출처
+        (네이버가 밝힌 작성 원칙: 일관된 주제 · 읽기 쉬운 구조 · 최신성 · 과도한 홍보 피하기)
   태그  고정 태그 + 분야 + 책 제목
 
 책 고르는 기준
   · 오늘 포착·떠오름·확산 단계이고 어린이 책이 아닌 책, 상세 데이터(키워드·연령)가 있는 책
   · 신뢰도 높음 > 보통 > 낮음, 같은 신뢰도면 모멘텀 순
-  · 최근 14일 안에 블로그에 소개한 책은 빼고, 가능하면 분야가 겹치지 않게
+  · 최근 14일 안에 블로그에 소개한 책은 빼고(권만 다른 같은 책 포함), 가능하면 분야가 겹치지 않게
   · 신뢰도 보통 이상이 3권이면 3권, 아니면 2권
 
 정보나루는 책 소개(줄거리)에만 책 1권당 1회 부른다 (하루 2~3회, api_budget으로 같이 셈).
@@ -51,6 +52,12 @@ INTROS = [
 
 def short_title(t):
     return (t or "").split(":")[0].split("=")[0].strip()
+
+
+def norm_title(t):
+    """'서리꽃 1', '서리꽃 2권'처럼 권만 다른 책을 같은 책으로 본다"""
+    t = re.sub(r"\s+", "", short_title(t))
+    return re.sub(r"(\d+|[상중하])권?$", "", t) or t
 
 
 def clean_author(a):
@@ -132,8 +139,10 @@ def keywords(kw, title, author):
 
 def pick_books(day):
     since = (day - timedelta(days=14)).isoformat()
-    recent = supabase.table("blog_drafts").select("isbns").gte("day", since).lt("day", day.isoformat()).execute().data or []
+    recent = (supabase.table("blog_drafts").select("isbns,book_titles").gte("day", since).lt("day", day.isoformat())
+              .execute().data or [])
     used = {i for r in recent for i in (r.get("isbns") or [])}
+    used_titles = {norm_title(t) for r in recent for t in (r.get("book_titles") or [])}
     latest = supabase.table("book_state").select("snapshot_date").order("snapshot_date", desc=True).limit(1).execute().data
     d = latest[0]["snapshot_date"]
     rows = (supabase.table("v_book_state_latest").select("*").in_("stage", ["확산", "떠오름", "포착"])
@@ -143,12 +152,14 @@ def pick_books(day):
     for i in range(0, len(ids), 150):
         for b in supabase.table("books").select("isbn13,title,author,publisher,class_no,addition_symbol,cover_url").in_("isbn13", ids[i:i + 150]).execute().data or []:
             books[b["isbn13"]] = b
-        for u in supabase.table("book_usage").select("isbn13,keywords,loan_grps").in_("isbn13", ids[i:i + 150]).execute().data or []:
+        for u in supabase.table("book_usage").select("isbn13,keywords,loan_grps,loan_history,co_loan").in_("isbn13", ids[i:i + 150]).execute().data or []:
             usage[u["isbn13"]] = u
     cands = []
     for r in rows:
         b, u = books.get(r["isbn13"]), usage.get(r["isbn13"])
         if not b or not u or (b.get("addition_symbol") or "").startswith("7") or r["isbn13"] in used:
+            continue
+        if norm_title(b.get("title")) in used_titles:
             continue
         if not evidence(r):
             continue
@@ -156,19 +167,23 @@ def pick_books(day):
     cands.sort(key=lambda x: (x[0], x[1]))
     good = [c for c in cands if c[0] <= 1]
     want = 3 if len(good) >= 3 else 2
-    picked, cats = [], set()
+    picked, cats, names = [], set(), set()
     for c in cands:  # 분야가 겹치지 않게 먼저 고르고
         cat = (c[3].get("class_no") or " ")[:1]
-        if cat not in cats:
+        nm = norm_title(c[3].get("title"))
+        if cat not in cats and nm not in names:
             picked.append(c)
             cats.add(cat)
+            names.add(nm)
         if len(picked) == want:
             break
     for c in cands:  # 모자라면 분야가 겹쳐도 채운다
         if len(picked) == want:
             break
-        if c not in picked:
+        nm = norm_title(c[3].get("title"))
+        if c not in picked and nm not in names:
             picked.append(c)
+            names.add(nm)
     return d, picked
 
 
@@ -207,6 +222,59 @@ def book_intro(isbn):
     return out
 
 
+def top_readers(grps, n=3):
+    """많이 빌린 연령·성별 상위 n개 ('40대 여성' 형태)"""
+    g = sorted([x for x in (grps or []) if x.get("loanCnt")], key=lambda x: -x["loanCnt"])
+    out = []
+    for x in g:
+        lab = f"{x.get('age', '')} {x.get('gender', '')}".strip()
+        if lab and lab not in out:
+            out.append(lab)
+        if len(out) == n:
+            break
+    return out
+
+
+def loan_flow(hist):
+    """최근 3개월 대출 건수 ('9월 1,067건 → 10월 1,160건 → 11월 1,383건')"""
+    rows = []
+    for x in hist or []:
+        m = re.match(r"(\d{4})년 (\d{1,2})월", x.get("month") or "")
+        if m and x.get("loanCnt") is not None:
+            rows.append((int(m.group(1)), int(m.group(2)), int(x["loanCnt"])))
+    rows.sort()
+    rows = rows[-3:]
+    if len(rows) < 2:
+        return None
+    flow = " → ".join(f"{mo}월 {c:,}건" for _, mo, c in rows)
+    first, last = rows[0][2], rows[-1][2]
+    trend = " (대출 건수는 줄었지만 순위는 오르는 중이에요)" if first > 0 and (last - first) / first <= -0.1 else ""
+    return flow + trend
+
+
+def eul(word):
+    """받침 있으면 '을', 없으면 '를' (한글이 아니면 '을(를)')"""
+    ch = (word or " ").rstrip("』」 ")[-1:]
+    if "가" <= ch <= "힣":
+        return "을" if (ord(ch) - 0xAC00) % 28 else "를"
+    return "을(를)"
+
+
+def co_loans(co, own_title, n=2):
+    """이 책과 함께 많이 빌린 책 (권만 다른 같은 책은 하나로)"""
+    out, seen = [], {norm_title(own_title)}
+    for x in co or []:
+        nm = short_title(x.get("title"))
+        key = norm_title(nm)
+        if not nm or key in seen:
+            continue
+        seen.add(key)
+        out.append(f"『{nm}』")
+        if len(out) == n:
+            break
+    return out
+
+
 def build(day):
     d, picked = pick_books(day)
     if not picked:
@@ -214,48 +282,105 @@ def build(day):
     base = supabase.table("hit_baseline").select("*").limit(1).execute().data
     base = base[0] if base else None
     md = f"{day.month}월 {day.day}일"
-    title = f"{md} 오늘의 책 추천!"
-
-    # 이승환님이 직접 다듬어 올린 첫 글(11월 4일)과 같은 모양: 빈 줄 개수, 책 첨부 자리, 마지막 링크 카드까지 맞춘다
     gap = lambda k: [""] * k  # noqa: E731  (네이버 블로그에 붙여 넣으면 빈 문단이 된다)
-    lines = [
-        "요즘 뭐 읽을지 고민되시는 독자분들, 안녕하세요 😊",
-        f"오늘은 전국 도서관에서 요즘 부쩍 많이 빌려 가는 책 {len(picked)}권을 골라 왔어요.",
-        INTROS[day.toordinal() % len(INTROS)],
-        *gap(3),
-    ]
-    tag_titles, tag_cats, book_titles = [], [], []
-    for n, (_, _, s, b, u) in enumerate(picked):
+
+    # 먼저 책마다 내용을 모은다 (요약과 제목에 같이 쓰려고)
+    items = []
+    for _, _, s, b, u in picked:
         cat_no = (b.get("class_no") or "")[:1]
         cat = CAT[int(cat_no)] if cat_no.isdigit() else (s.get("cat") or "")
         author = clean_author(b.get("author"))
         name = short_title(b["title"])
-        meta = " · ".join(x for x in [author, (b.get("publisher") or "").strip(), cat] if x)
-        if n > 0:
-            lines += gap(4)
+        items.append({
+            "s": s, "b": b, "u": u, "cat": cat, "author": author, "name": name,
+            "meta": " · ".join(x for x in [author, (b.get("publisher") or "").strip(), cat] if x),
+            "ev": evidence(s),
+            "readers": top_readers(u.get("loan_grps")),
+            "flow": loan_flow(u.get("loan_history")),
+            "co": co_loans(u.get("co_loan"), b.get("title")),
+            "kws": keywords(u.get("keywords"), b.get("title"), author),
+            "intro": book_intro(s["isbn13"]),
+        })
+
+    names = [it["name"] for it in items]
+    # 제목: 날짜 + 무엇을 다루는 글인지 + 책 이름 (검색에서 책 이름으로도 찾을 수 있게)
+    title = f"{md} 요즘 도서관에서 뜨는 책 {len(items)}권 추천 | " + " · ".join(f"『{n}』" for n in names)
+    if len(title) > 60:
+        title = f"{md} 요즘 도서관에서 뜨는 책 {len(items)}권 추천 | 『{names[0]}』 외"
+
+    lines = [
+        "요즘 뭐 읽을지 고민되시는 독자분들, 안녕하세요 😊",
+        f"오늘은 전국 공공도서관에서 요즘 부쩍 많이 빌려 가는 책 {len(items)}권을 골라 왔어요.",
+        INTROS[day.toordinal() % len(INTROS)],
+        *gap(2),
+        "━━━━━━━━━━━━━━",
+        "📋 오늘의 책 한눈에 보기",
+        "━━━━━━━━━━━━━━",
+    ]
+    for n, it in enumerate(items):
+        s = it["s"]
+        if s.get("rank_prev") and s.get("rank_now") and s["rank_prev"] > s["rank_now"]:
+            move = f"{it['cat']} {s['rank_prev']}위 → {s['rank_now']}위"
+        elif s.get("new_entry") and s.get("rank_now"):
+            move = f"{it['cat']} 인기대출 {s['rank_now']}위로 새로 진입"
+        else:
+            move = f"{it['cat']} 인기대출 {s.get('rank_now') or '-'}위"
+        lines.append(f"{NUM[n]}. 『{it['name']}』 {it['author']} — {move} ({s['stage']} 단계)")
+
+    tag_titles, tag_cats, tag_kws = [], [], []
+    for n, it in enumerate(items):
+        s = it["s"]
         lines += [
-            f"📌 [책 첨부 자리] 글감 → 책에서 '{name}' 검색해서 넣고 이 줄은 지워 주세요",
+            *gap(4),
             "━━━━━━━━━━━━━━",
-            f"📖 {NUM[n]}. 『{name}』",
-            meta,
+            f"📖 {NUM[n]}. 『{it['name']}』",
+            it["meta"],
             "━━━━━━━━━━━━━━",
             *gap(1),
         ]
-        intro = book_intro(s["isbn13"])
-        if intro:
-            lines += ["📝 어떤 책이에요?", intro, "(책 소개 출처: 도서관 정보나루)", *gap(1)]
-        lines += ["📊 책콕 데이터로 보면", f"· 지금 단계: {s['stage']} (신뢰도 {s['confidence']})"]
-        lines += [f"· {e}" for e in evidence(s)]
-        reader = top_reader(u.get("loan_grps"))
-        if reader:
-            lines.append(f"· {reader} 독자가 가장 많이 빌렸어요")
-        kws = keywords(u.get("keywords"), b.get("title"), author)
-        if kws:
-            lines.append(f"· 함께 나온 키워드 {' '.join(kws)}")
-        book_titles.append(name)
-        tag_titles.append("#" + name.replace(" ", ""))
-        if cat:
-            tag_cats.append(f"#{cat}책")
+        if it["intro"]:
+            lines += ["📝 어떤 책이에요?", it["intro"], "(책 소개 출처: 도서관 정보나루)", *gap(1)]
+
+        lines += ["📊 왜 요즘 뜨냐면요", f"· 지금 단계: {s['stage']} (신뢰도 {s['confidence']})"]
+        lines += [f"· {e}" for e in it["ev"]]
+        lines += gap(1)
+
+        if it["flow"]:
+            lines += ["📈 최근 대출 흐름 (전국 공공도서관)", f"· {it['flow']}", *gap(1)]
+
+        if it["readers"]:
+            lines += ["👥 누가 많이 빌렸을까요?", "· " + " > ".join(it["readers"]), *gap(1)]
+
+        fc = s.get("forecast")
+        if fc is not None and (s.get("rank_now") or 0) > 10:
+            target = int(s["rank_now"] * 0.8)
+            lines += [
+                "🔮 책콕 예보",
+                f"· 2주 뒤 {it['cat']} {target}위 안으로 오를 확률 {round(float(fc))}%",
+                "· 과거에 비슷한 점수였던 책이 실제로 그만큼 오른 비율로 계산했어요",
+                *gap(1),
+            ]
+
+        if it["co"]:
+            lines += ["📚 이 책을 빌린 사람들이 함께 빌린 책", "· " + ", ".join(it["co"]), *gap(1)]
+
+        if it["kws"]:
+            lines += ["🏷️ 책 속 키워드", "· " + " ".join(it["kws"]), *gap(1)]
+
+        fit = []
+        if it["co"]:
+            fit.append(f"{it['co'][0]}{eul(it['co'][0])} 재밌게 읽으셨다면 잘 맞을 거예요")
+        elif it["kws"]:
+            fit.append(f"'{it['kws'][0].lstrip('#')}' 같은 주제가 궁금한 분께 추천해요")
+        if it["readers"]:
+            fit.append(f"요즘 {it['readers'][0]} 독자들이 무엇을 읽는지 궁금한 분께도 좋아요")
+        if fit:
+            lines += ["💡 이런 분께 잘 맞아요"] + [f"· {x}" for x in fit]
+
+        tag_titles.append("#" + it["name"].replace(" ", ""))
+        if it["cat"]:
+            tag_cats.append(f"#{it['cat']}책")
+        tag_kws += [k for k in it["kws"][:1]]
 
     lines += [
         *gap(4),
@@ -274,21 +399,31 @@ def build(day):
         )
     lines += [
         "· 우리 동네 도서관에 그 책이 있는지, 지금 빌릴 수 있는지도 바로 확인할 수 있어요",
+        *gap(2),
+        "━━━━━━━━━━━━━━",
+        "❓ 자주 묻는 질문",
+        "━━━━━━━━━━━━━━",
+        "Q. '포착 · 떠오름 · 확산'은 무슨 뜻인가요?",
+        "A. 포착은 순위는 아직 낮지만 오를 신호가 보이는 책, 떠오름은 순위가 오르기 시작한 책, "
+        "확산은 여러 지역·연령에서 함께 인기가 퍼지는 책, 스테디는 오래 꾸준히 읽히는 책이에요.",
         *gap(1),
+        "Q. 순위는 어디 기준인가요?",
+        "A. 서점 판매량이 아니라 전국 공공도서관의 분야별 인기 대출 순위예요. 일주일 전과 비교했어요.",
+        *gap(2),
         "다음에 읽을 책, 책콕에서 먼저 찾아보세요 👉",
         BLOG_LINK,  # 따로 한 줄에 두면 네이버가 링크 카드로 바꿔 준다
         *gap(1),
         f"※ 데이터 출처: 도서관 정보나루(전국 공공도서관 대출 데이터) · {int(d[5:7])}월 {int(d[8:10])}일 기준",
     ]
-    tags = ["#책추천", "#오늘의책", "#요즘읽을만한책", "#도서관", "#요즘읽을책", "#도서관추천도서", "#책콕", "#읽을만한책"]
-    tags += list(dict.fromkeys(tag_cats)) + tag_titles
+    tags = ["#책추천", "#오늘의책", "#요즘읽을만한책", "#도서관", "#도서관추천도서", "#책콕", "#읽을만한책"]
+    tags += list(dict.fromkeys(tag_cats)) + tag_titles + list(dict.fromkeys(tag_kws))
     return {
         "day": day.isoformat(),
         "title": title,
         "body": "\n".join(lines),
-        "tags": " ".join(tags),
-        "isbns": [c[2]["isbn13"] for c in picked],
-        "book_titles": book_titles,
+        "tags": " ".join(dict.fromkeys(tags)),
+        "isbns": [it["s"]["isbn13"] for it in items],
+        "book_titles": names,
     }
 
 
