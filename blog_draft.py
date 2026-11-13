@@ -6,8 +6,10 @@
 
 양식(고정)
   제목  M월 D일 요즘 도서관에서 뜨는 책 N권 추천 | 『책 이름』…
-  본문  이모티콘 없는 줄글 완성본(붙여 넣기만 하면 됨) — 인사 → 오늘 소개할 책 → 책마다 문단 4개(어떤 책인지 ·
-        왜 뜨는지(대출 흐름 포함) · 누가 무엇과 함께 읽는지 · 예보) → 책콕 소개 → 단계 설명 → 링크 카드 → 데이터 출처
+  본문  이모티콘 없는 줄글 완성본(붙여 넣기만 하면 됨). 사람이 쓴 블로그처럼 읽히게 —
+        같은 뜻의 문장을 여러 개 두고 날짜·순서로 돌려 쓰고, 숫자는 '네 배 가까이'처럼 말로, 같은 설명(예보 계산법·
+        책 소개 출처)은 글 전체에서 한 번만, 신뢰도 같은 내부 용어는 뺀다.
+        인사 → 책마다 문단 3~4개(어떤 책 · 왜 뜨는지 · 누가 무엇과 함께 읽는지 · 예보) → 책콕 소개 → 마무리 → 링크 → 출처
         (네이버가 밝힌 작성 원칙: 일관된 주제 · 읽기 쉬운 구조 · 최신성 · 과도한 홍보 피하기)
   태그  고정 태그 + 분야 + 책 제목
 
@@ -278,6 +280,8 @@ def _jong(word):
     ch = (word or " ").rstrip("』」'\" ")[-1:]
     if "가" <= ch <= "힣":
         return (ord(ch) - 0xAC00) % 28 != 0
+    if ch.isdigit():
+        return ch in "013678"  # 영·일·삼·육·칠·팔 → 받침 있음
     return None
 
 
@@ -286,34 +290,67 @@ def josa(word, with_jong, without_jong):
     return word + (with_jong if j else without_jong if j is False else f"{with_jong}({without_jong})")
 
 
-def why_sentences(s, cat):
-    """'왜 뜨나요' 근거를 문장으로 (evidence()와 같은 기준)"""
+def pick(options, seed):
+    """같은 문장이 매일·매 책마다 반복되지 않게 날짜와 순서로 골라 쓴다"""
+    return options[seed % len(options)]
+
+
+def times_text(ratio):
+    """1 + 증가율 → '두 배쯤', '네 배 가까이' 같은 말"""
+    words = {2: "두", 3: "세", 4: "네", 5: "다섯", 6: "여섯", 7: "일곱", 8: "여덟", 9: "아홉", 10: "열"}
+    if ratio < 1.5:
+        return f"{round((ratio - 1) * 100)}% 정도 더"
+    n = round(ratio)
+    if n > 10:
+        return "열 배 넘게"
+    if ratio < n - 0.1:
+        return f"{words.get(n, n)} 배 가까이"
+    return f"{words.get(n, n)} 배쯤"
+
+
+def why_sentences(s, cat, seed):
+    """순위·대출 근거를 사람이 쓰는 말투로 (책상세 '왜 뜨나요'와 같은 기준)"""
     out = []
-    rcr = float(s.get("rank_change_ratio") or 0)
     prev, now = s.get("rank_prev"), s.get("rank_now")
     if prev and now and prev > now:
-        sent = f"일주일 전 {cat} 인기대출 {prev}위였던 이 책은 지금 {now}위까지 올라왔어요."
-        if rcr >= 0.2:
-            sent += f" 일주일 사이 순위가 {round(rcr * 100)}% 오른 셈이에요."
-        out.append(sent)
+        out.append(pick([
+            f"일주일 전만 해도 {cat} 인기대출 {prev}위였는데 지금은 {now}위예요.",
+            f"{cat} 인기대출 순위가 일주일 만에 {prev}위에서 {now}위로 올라왔어요.",
+            f"일주일 사이 {cat} 순위가 {prev}위에서 {now}위가 됐어요.",
+        ], seed))
     if s.get("new_entry") and now:
-        out.append(f"지난주에는 {cat} 인기대출 목록에 없었는데, 이번 주에 {now}위로 새로 들어왔어요.")
+        out.append(pick([
+            f"지난주엔 {cat} 인기대출 목록에 아예 없던 책인데, 이번 주에 {now}위로 들어왔어요.",
+            f"{cat} 인기대출 목록에 이번 주 처음 이름을 올렸어요. 바로 {now}위예요.",
+            f"일주일 전엔 순위 밖이었는데, 이번 주 {cat} 인기대출 {now}위에 들어왔어요.",
+        ], seed))
     if (s.get("hot_diff") or 0) > 0:
-        out.append(f"전국 도서관 대출 급상승 목록에서도 {s['hot_diff']}계단 올랐어요.")
-    if s.get("rise_steady") and s.get("rank_mid"):
+        out.append(f"전국 도서관 대출 급상승 목록에서도 {s['hot_diff']}계단 올랐고요.")
+    if s.get("rise_steady") and s.get("rank_mid") and prev and now:
         if s["rank_mid"] == now:
-            out.append(f"{prev}위에서 {s['rank_mid']}위로 오른 뒤 그 자리를 지키고 있어요.")
+            out.append(f"중간에 {s['rank_mid']}위까지 오른 뒤로는 그 자리를 지키고 있어요.")
         else:
-            out.append(f"{prev}위, {s['rank_mid']}위, {now}위로 일주일 내내 순위가 올랐어요.")
+            out.append(f"{prev}위, {s['rank_mid']}위, {now}위로 한 주 내내 쉬지 않고 올랐어요.")
     if float(s.get("loan_growth") or 0) >= 0.2:
-        out.append(f"지난달 대출은 그 전 석 달 평균보다 {round(float(s['loan_growth']) * 100)}% 많았어요.")
+        out.append(pick([
+            f"지난달엔 그 전 석 달 평균보다 {times_text(1 + float(s['loan_growth']))} 빌려 갔어요.",
+            f"대출 건수로 보면 지난달이 그 전 석 달 평균보다 {times_text(1 + float(s['loan_growth']))} 많았어요.",
+        ], seed))
     if (s.get("regions") or 0) >= 3:
-        out.append(f"전국 {s['regions']}개 지역 도서관에서 함께 인기를 얻고 있어요.")
+        out.append(f"한 지역만의 유행도 아니에요. 전국 {s['regions']}개 지역 도서관에서 같이 인기예요.")
     elif (s.get("demo_groups") or 0) >= 3:
-        out.append(f"{s['demo_groups']}개 연령·성별 인기 목록에 함께 이름을 올렸어요.")
+        out.append(f"연령·성별로 나눈 인기 목록 {s['demo_groups']}곳에 함께 올라 있어요.")
     if s.get("librarian"):
-        out.append("국립중앙도서관 사서 추천 도서로도 뽑혔어요.")
+        out.append("국립중앙도서관 사서들이 고른 추천 도서이기도 해요.")
     return out[:3]
+
+
+STAGE_SAY = {
+    "포착": ["아직 순위는 낮지만, 오를 낌새가 보이는 책이에요.", "지금은 눈에 덜 띄어도 슬슬 신호가 오는 책이에요."],
+    "떠오름": ["이제 막 순위가 오르기 시작한 책이에요.", "막 뜨기 시작한 단계예요."],
+    "확산": ["여러 곳에서 동시에 읽히기 시작한, 한창 퍼지는 중인 책이에요.", "이미 여기저기서 같이 읽히고 있어요."],
+    "스테디": ["오래 꾸준히 읽히는 책이에요.", "유행을 타기보다는 꾸준히 찾는 사람이 많은 책이에요."],
+}
 
 
 def build(day):
@@ -323,17 +360,17 @@ def build(day):
     base = supabase.table("hit_baseline").select("*").limit(1).execute().data
     base = base[0] if base else None
     md = f"{day.month}월 {day.day}일"
+    seed0 = day.toordinal()
 
     items = []
     for _, _, s, b, u in picked:
         cat_no = (b.get("class_no") or "")[:1]
         cat = CAT[int(cat_no)] if cat_no.isdigit() else (s.get("cat") or "")
         author = clean_author(b.get("author"))
+        pub = re.sub(r"\(.*?\)", "", (b.get("publisher") or "")).strip() or (b.get("publisher") or "").strip()
         items.append({
-            "s": s, "b": b, "u": u, "cat": cat, "author": author, "name": short_title(b["title"]),
-            "publisher": re.sub(r"\(.*?\)", "", (b.get("publisher") or "")).strip() or (b.get("publisher") or "").strip(),
-            "why": why_sentences(s, cat or "분야"),
-            "readers": top_readers(u.get("loan_grps")),
+            "s": s, "cat": cat, "author": author, "pub": pub, "name": short_title(b["title"]),
+            "readers": [r.replace("이상", " 이상") for r in top_readers(u.get("loan_grps"))],
             "flow": loan_flow(u.get("loan_history")),
             "co": co_loans(u.get("co_loan"), b.get("title")),
             "kws": keywords(u.get("keywords"), b.get("title"), author),
@@ -344,70 +381,84 @@ def build(day):
     if len(title) > 60:
         title = f"{md} 요즘 도서관에서 뜨는 책 {len(items)}권 추천 | 『{names[0]}』 외"
 
-    listed = ", ".join(f"『{n}』" for n in names)
+    opening = pick([
+        f"오늘도 도서관에서 요즘 부쩍 많이 빌려 가는 책 {len(items)}권을 골라 왔어요.",
+        f"요즘 도서관에서 대출이 눈에 띄게 늘고 있는 책 {len(items)}권을 모아 봤어요.",
+        f"이번에도 도서관 대출 순위가 쑥 오른 책 {len(items)}권을 가져왔어요.",
+    ], seed0)
     paras = [
-        "요즘 뭐 읽을지 고민되시는 독자분들, 안녕하세요.\n"
-        f"오늘은 전국 공공도서관에서 요즘 부쩍 많이 빌려 가는 책 {len(items)}권을 골라 왔어요. "
-        + INTROS[day.toordinal() % len(INTROS)],
-        f"오늘 소개할 책은 {josa(listed, '이에요', '예요')}. "
-        "서점 판매량이 아니라 도서관에서 실제로 빌려 읽는 흐름을 기준으로 골랐어요.",
+        "안녕하세요. " + opening + " " + INTROS[seed0 % len(INTROS)],
     ]
 
+    forecast_explained = False
     tag_titles, tag_cats, tag_kws = [], [], []
     for n, it in enumerate(items):
-        s = it["s"]
-        head = f"{NUM[n]}. 『{it['name']}』 — {it['author']}" if it["author"] else f"{NUM[n]}. 『{it['name']}』"
-        block = [head]
+        s, seed = it["s"], seed0 + n
+        name_q = f"『{it['name']}』"
+        block = [f"{NUM[n]}. {name_q}" + (f" — {it['author']}" if it["author"] else "")]
 
-        # 1) 어떤 책인지
-        who = f"{it['author']} 작가가 쓰고 " if it["author"] else ""
-        pub = f"{it['publisher']}에서 펴낸 " if it["publisher"] else ""
-        quoted = f"『{it['name']}』"
-        field = f"{it['cat']} 분야 " if it["cat"] else ""
-        p1 = f"{josa(quoted, '은', '는')} {who}{pub}{field}책이에요."
+        # 어떤 책인지: 짧게, 매번 다른 문장으로
+        who = it["author"]
+        if who and it["pub"]:
+            first = pick([
+                f"{who}의 {it['cat']} 책으로, {it['pub']}에서 나왔어요.",
+                f"{it['pub']}에서 나온 {who}의 책이에요.",
+                f"{it['cat']} 분야에서 요즘 눈에 띄는 {who}의 책이에요.",
+            ], seed)
+        else:
+            first = f"요즘 {it['cat']} 분야에서 눈에 띄는 책이에요."
+        p1 = first
         if it["intro"]:
-            p1 += f" 책 소개 일부를 옮기면 이래요.\n{it['intro']} (책 소개 출처: 도서관 정보나루)"
+            p1 += " " + pick(["책 소개를 보면 이런 내용이에요.", "어떤 책인지는 소개 글이 잘 말해 줘요.", "출판사 소개는 이렇게 시작해요."], seed) + "\n" + it["intro"]
         block.append(p1)
 
-        # 2) 왜 요즘 뜨는지
-        p2 = " ".join(it["why"])
+        # 왜 요즘 뜨는지
+        p2 = why_sentences(s, it["cat"] or "분야", seed)
         if it["flow"]:
-            flow = it["flow"].replace(" → ", ", ")
-            if "줄었지만" in flow:
-                p2 += f" 월별 대출 건수는 {flow.split(' (')[0]}이었는데, 건수는 줄었어도 순위는 오르는 중이에요."
+            flow = it["flow"].split(" (")[0].replace(" → ", ", ")
+            if "줄었지만" in it["flow"]:
+                p2.append(f"월별 대출은 {flow}으로 오히려 줄었는데, 순위는 오르고 있다는 게 재밌어요.")
             else:
-                p2 += f" 월별 대출 건수도 {flow}으로 꾸준히 늘었어요."
-        p2 += f" 그래서 책콕은 이 책을 '{s['stage']}' 단계(신뢰도 {s['confidence']})로 보고 있어요."
-        block.append(p2.strip())
+                p2.append(pick([f"월별로 보면 {flow}이에요.", f"월별 대출도 {flow}으로 계속 늘고 있어요."], seed))
+        stage_line = pick(STAGE_SAY.get(s["stage"], [""]), seed)
+        if stage_line:
+            p2.append(f"책콕 단계로는 '{s['stage']}'. {stage_line}")
+        block.append(" ".join(p2))
 
-        # 3) 누가 읽는지, 무엇과 함께 읽는지
+        # 누가 무엇과 함께 읽는지
         p3 = []
-        if it["readers"]:
-            rd = [r.replace("이상", " 이상") for r in it["readers"]]
-            if len(rd) == 1:
-                p3.append(f"가장 많이 빌린 독자는 {josa(rd[0], '이에요', '예요')}.")
-            else:
-                rest = josa(rd[1], "과", "와") + " " + rd[2] if len(rd) == 3 else rd[1]
-                p3.append(f"가장 많이 빌린 독자는 {rd[0]}이고, {josa(rest, '이', '가')} 뒤를 이었어요.")
+        rd = it["readers"]
+        if len(rd) >= 2:
+            p3.append(pick([
+                f"주로 {rd[0]} 독자가 많이 빌렸고, {josa(rd[1], '이', '가')} 그다음이에요.",
+                f"빌려 간 사람을 보면 {josa(rd[0], '이', '가')} 가장 많고 {josa(rd[1], '이', '가')} 뒤를 이어요.",
+            ], seed))
+        elif rd:
+            p3.append(f"{rd[0]} 독자가 가장 많이 빌렸어요.")
         if it["co"]:
-            co = " ".join([josa(it["co"][0], "과", "와")] + it["co"][1:]) if len(it["co"]) > 1 else it["co"][0]
-            p3.append(f"이 책을 빌린 사람들은 {co}도 함께 빌렸어요.")
-        if len(it["kws"]) >= 2:
-            words = ", ".join(f"'{k.lstrip('#')}'" for k in it["kws"])
-            p3.append(f"책 소개에는 {words} 같은 말이 자주 나와요.")
-        if it["co"]:
-            p3.append(f"{josa(it['co'][0], '을', '를')} 재밌게 읽으셨다면 이 책도 잘 맞을 거예요.")
+            co = f"{josa(it['co'][0], '과', '와')} {it['co'][1]}" if len(it["co"]) > 1 else it["co"][0]
+            p3.append(pick([
+                f"이 책을 빌린 분들은 {co}도 같이 빌려 갔어요. 그런 책을 좋아하셨다면 한번 펼쳐 볼 만해요.",
+                f"같이 빌려 간 책으로는 {josa(co, '이', '가')} 많았어요. 결이 비슷한 책을 찾으신다면 참고하세요.",
+            ], seed))
+        elif len(it["kws"]) >= 2:
+            words = ", ".join(k.lstrip("#") for k in it["kws"][:2])
+            p3.append(f"소개 글에 {words} 같은 말이 자주 나와요. 이런 주제가 궁금하셨다면 잘 맞을 거예요.")
         if p3:
             block.append(" ".join(p3))
 
-        # 4) 책콕 예보
+        # 책콕 예보: 설명은 처음 한 번만
         fc = s.get("forecast")
         if fc is not None and (s.get("rank_now") or 0) > 10:
             target = int(s["rank_now"] * 0.8)
-            block.append(
-                f"책콕 예보로는 2주 뒤 {it['cat']} {target}위 안으로 오를 확률이 {round(float(fc))}%예요. "
-                "과거에 비슷한 점수였던 책이 실제로 그만큼 오른 비율로 계산했어요."
-            )
+            if not forecast_explained:
+                block.append(
+                    f"책콕은 이 책이 2주 뒤 {it['cat']} {target}위 안에 들 확률을 {round(float(fc))}%로 보고 있어요. "
+                    "예전에 비슷한 점수였던 책들이 실제로 얼마나 올랐는지를 보고 낸 숫자예요."
+                )
+                forecast_explained = True
+            else:
+                block.append(f"2주 뒤 {target}위 안에 들 확률은 {round(float(fc))}%예요.")
 
         paras.append("\n\n".join(block))
         tag_titles.append("#" + it["name"].replace(" ", ""))
@@ -416,26 +467,25 @@ def build(day):
         tag_kws += it["kws"][:1]
 
     about = (
-        "오늘 소개한 책은 모두 '책콕'에서 골랐어요. 책콕은 전국 공공도서관 대출 데이터로 뜨기 시작한 책을 "
-        "먼저 알려 주는 무료 웹사이트예요. 책마다 포착, 떠오름, 확산, 스테디 네 단계 중 어디에 있는지 매일 아침 "
-        "업데이트하고, 우리 동네 도서관에 그 책이 있는지, 지금 빌릴 수 있는지도 바로 확인할 수 있어요."
+        "오늘 책들은 '책콕'에서 골랐어요. 전국 공공도서관 대출 데이터로 막 뜨기 시작한 책을 먼저 찾아 주는 "
+        "무료 사이트인데, 우리 동네 도서관에 그 책이 있는지, 지금 빌릴 수 있는지도 같이 볼 수 있어요."
     )
     if base and base.get("spot_up20") and base.get("base_up20") and float(base["spot_up20"]) > float(base["base_up20"]):
-        times = round(float(base["spot_up20"]) / float(base["base_up20"]), 1)
         about += (
-            f" 지금까지 책콕이 포착한 책은 2주 뒤 순위가 20% 넘게 오른 비율이 {round(float(base['spot_up20']))}%로, "
-            f"전체 평균({round(float(base['base_up20']))}%)의 약 {times}배였어요."
+            f" 지금까지 책콕이 미리 짚은 책은 2주 뒤 순위가 20% 넘게 오른 경우가 {round(float(base['spot_up20']))}%였어요. "
+            f"아무 책이나 골랐을 때({round(float(base['base_up20']))}%)보다 두 배 넘게 잘 맞힌 셈이에요."
+            if float(base["spot_up20"]) / float(base["base_up20"]) >= 2 else
+            f" 지금까지 책콕이 미리 짚은 책은 2주 뒤 순위가 20% 넘게 오른 경우가 {round(float(base['spot_up20']))}%로, "
+            f"전체 평균({round(float(base['base_up20']))}%)보다 높았어요."
         )
-    stages = (
-        "단계가 낯설다면 이렇게 보시면 돼요. 포착은 순위는 아직 낮지만 오를 신호가 보이는 책, 떠오름은 순위가 "
-        "오르기 시작한 책, 확산은 여러 지역과 연령에서 함께 인기가 퍼지는 책, 스테디는 오래 꾸준히 읽히는 책이에요. "
-        "순위는 서점 판매량이 아니라 전국 공공도서관의 분야별 인기 대출 순위이고, 일주일 전과 비교했어요."
-    )
     paras += [
         about,
-        stages,
-        "다음에 읽을 책, 책콕에서 먼저 찾아보세요.\n" + BLOG_LINK,  # 따로 한 줄에 두면 네이버가 링크 카드로 바꿔 준다
-        f"데이터 출처: 도서관 정보나루(전국 공공도서관 대출 데이터), {int(d[5:7])}월 {int(d[8:10])}일 기준",
+        pick([
+            "순위는 서점 판매량이 아니라 도서관 분야별 인기 대출 순위고, 일주일 전과 비교했어요. 마음에 드는 책이 있었다면 가까운 도서관에서 빌려 보세요.",
+            "참고로 여기 나온 순위는 서점이 아니라 도서관 대출 기준이에요. 일주일 전과 비교한 거고요. 읽고 싶은 책이 생겼다면 동네 도서관부터 찾아보세요.",
+        ], seed0),
+        "책콕 바로가기\n" + BLOG_LINK,  # 따로 한 줄에 두면 네이버가 링크 카드로 바꿔 준다
+        f"데이터 출처: 도서관 정보나루(전국 공공도서관 대출 데이터), {int(d[5:7])}월 {int(d[8:10])}일 기준. 책 소개 글도 도서관 정보나루에서 옮겼어요.",
     ]
     tags = ["#책추천", "#오늘의책", "#요즘읽을만한책", "#도서관", "#도서관추천도서", "#책콕", "#읽을만한책"]
     tags += list(dict.fromkeys(tag_cats)) + tag_titles + list(dict.fromkeys(tag_kws))
