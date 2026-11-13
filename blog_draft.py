@@ -208,6 +208,10 @@ def book_intro(isbn):
     text = re.sub(r"<[^>]+>", " ", html.unescape(desc))
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"([!?])(?=[^\s!?”\"'’)])", r"\1 ", text)  # '신화!오직'처럼 붙은 문장 띄우기
+    text = re.sub(r"[★☆◆◇■□●○▶▷※]+[^★☆◆◇■□●○▶▷※]{0,80}?[★☆◆◇■□●○▶▷※]+", " ", text)  # '★★ 수상! ★★' 같은 광고 문구 빼기
+    text = re.sub(r"[★☆◆◇■□●○▶▷※]+", " ", text)
+    text = re.sub(r"([,.])(?=[가-힣A-Za-z“\"])", r"\1 ", text)  # '진행되지만,건강하고' 띄우기
+    text = re.sub(r"\s+", " ", text).strip()
     # 문장 단위로 잘라 150자 안쪽까지만 (너무 길게 옮기지 않는다)
     sents = re.split(r"(?<=[.!?。])\s+", text)
     out = ""
