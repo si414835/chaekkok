@@ -37,6 +37,7 @@ supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 SITE = "https://chaekkok.vercel.app"
 # 블로그에서 들어온 방문을 Vercel Analytics의 UTM Parameters에서 따로 셀 수 있게 꼬리표를 붙인다
 BLOG_LINK = f"{SITE}/?utm_source=naver_blog&utm_medium=blog"
+YT_LINK = f"{SITE}/?utm_source=youtube&utm_medium=community"
 KST = timezone(timedelta(hours=9))
 CAT = ["총류", "철학", "종교", "사회과학", "자연과학", "기술과학", "예술", "언어", "문학", "역사"]
 CONF_ORDER = {"높음": 0, "보통": 1, "낮음": 2}
@@ -353,6 +354,33 @@ STAGE_SAY = {
 }
 
 
+def build_poll(day, items):
+    """유튜브 커뮤니티 투표 초안 — 2주 뒤 어느 책 순위가 가장 많이 오를지 맞히기.
+    옵션 글자 수 제한(36자)에 맞추고, 정답 공개 때 비교할 지금 순위를 같이 남긴다."""
+    options, baseline = [], []
+    for it in items:
+        label = f"{it['name']} ({it['author']})" if it["author"] else it["name"]
+        if len(label) > 36:  # 제목이 길면 제목을 줄인다
+            room = 36 - len(f" ({it['author']})") - 1 if it["author"] else 35
+            label = (it["name"][:max(room, 4)] + "…" + (f" ({it['author']})" if it["author"] else ""))[:36]
+        options.append(label)
+        baseline.append({
+            "isbn": it["s"]["isbn13"], "title": it["name"], "cat": it["cat"],
+            "rank": it["s"].get("rank_now"),
+        })
+    text = "\n".join([
+        f"도서관에서 요즘 대출이 늘고 있는 책 {len(items)}권이에요.",
+        "2주 뒤 도서관 인기대출 순위가 가장 많이 오를 책은?",
+        "",
+        '"책콕"에서 다른책도 찾아보기',
+        "",
+        "👇",
+        YT_LINK,
+    ])
+    answer_on = (day + timedelta(days=14)).isoformat()
+    return {"text": text, "options": options, "baseline": baseline, "answer_on": answer_on}
+
+
 def build(day):
     d, picked = pick_books(day)
     if not picked:
@@ -496,6 +524,7 @@ def build(day):
         "tags": " ".join(dict.fromkeys(tags)),
         "isbns": [it["s"]["isbn13"] for it in items],
         "book_titles": names,
+        "poll": build_poll(day, items),
     }
 
 

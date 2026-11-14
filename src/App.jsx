@@ -2045,6 +2045,28 @@ function Drafts() {
             <p className="label">3. 태그</p>
             <p className="draft__tags">{d.tags}</p>
             <CopyBtn text={d.tags} label="태그 복사" />
+            {d.poll && (
+              <>
+                <p className="label">4. 유튜브 커뮤니티 투표 (선택)</p>
+                <p className="sub small">유튜브 스튜디오 → 게시물 → 설문 조사에서 본문과 옵션 3개를 넣고, 옵션마다 책 표지 이미지를 올려 주세요.</p>
+                <pre className="draft__body">{d.poll.text}</pre>
+                <CopyBtn text={d.poll.text} label="투표 본문 복사" />
+                <div className="draft__books">
+                  {d.poll.options.map((t, n) => (
+                    <CopyBtn key={t} text={t} label={`옵션 ${n + 1} 복사`} />
+                  ))}
+                </div>
+                <ol className="sub small">
+                  {d.poll.options.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ol>
+                <p className="sub small">
+                  정답 공개는 {fmtDate(d.poll.answer_on)}쯤이에요. 그날 비교할 지금 순위:{' '}
+                  {d.poll.baseline.map((b) => `${b.title} ${b.cat} ${b.rank}위`).join(' · ')}
+                </p>
+              </>
+            )}
             <p className="sub small">책 표지 사진은 저작권 문제가 생길 수 있어서 넣지 않았어요. 사진이 필요하면 책콕 화면을 캡처해서 넣어 주세요.</p>
           </section>
         )}
