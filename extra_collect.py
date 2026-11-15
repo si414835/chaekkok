@@ -25,6 +25,14 @@ SEOJI_URL = "https://www.nl.go.kr/seoji/SearchApi.do"
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 import api_budget  # noqa: E402
 from api_budget import BudgetExceeded  # noqa: E402
+from isbn_util import fix_isbns  # noqa: E402
+
+
+class NoData(RuntimeError):
+    """정보나루에 그 책 자료가 없음. 다시 불러도 같으니 재시도하지 않는다."""
+
+
+NO_DATA_MARKERS = ("해당하는 도서가 없습니다",)
 api_budget.init(supabase)
 BASE = "http://data4library.kr/api/"
 KST = timezone(timedelta(hours=9))
@@ -74,9 +82,11 @@ def call(api, params, retries=(5, 15, 30)):
             if err:
                 if api_budget.is_limit_error(err):
                     raise BudgetExceeded(f"정보나루 하루 한도: {err}")
+                if any(m in str(err) for m in NO_DATA_MARKERS):
+                    raise NoData(f"자료 없음: {err}")
                 raise RuntimeError(f"API 오류: {err}")
-            return data
-        except BudgetExceeded:
+            return fix_isbns(data)  # 'ISBN1 ISBN2' → 13자리 하나
+        except (BudgetExceeded, NoData):
             raise
         except Exception as e:  # 연결 끊김, JSON 아님, API 오류 모두 재시도
             last = e
@@ -203,7 +213,7 @@ def collect_demographics():
             part = f"demo {age}/{gender}"
             try:
                 data = call("loanItemSrch", params)
-                docs = [d for d in find_dicts_with(data, "isbn13") if d.get("bookname")]
+                docs = [d for d in find_dicts_with(data, "isbn13") if d.get("bookname") and d.get("isbn13")]
                 books, rows = {}, {}
                 for d in docs:
                     isbn = d["isbn13"]
@@ -260,7 +270,7 @@ def collect_regions():
     for code in REGIONS:
         try:
             data = call("loanItemSrchByLib", {**period, "region": code})
-            docs = [d for d in find_dicts_with(data, "isbn13") if d.get("bookname")]
+            docs = [d for d in find_dicts_with(data, "isbn13") if d.get("bookname") and d.get("isbn13")]
             if not docs:
                 continue
             books = {d["isbn13"]: doc_to_book(d) for d in docs}
@@ -552,6 +562,13 @@ def pick_usage_targets():
         rows = (supabase.table("book_usage").select("isbn13").gte("updated_at", since)
                 .in_("isbn13", targets[i:i + 200]).execute().data or [])
         fresh |= {r["isbn13"] for r in rows}
+        # 최근에 '자료 없음'이었던 책도 건너뜀 (매일 같은 책을 다시 부르던 문제)
+        try:
+            rows = (supabase.table("usage_nodata").select("isbn13").gte("checked_at", since)
+                    .in_("isbn13", targets[i:i + 200]).execute().data or [])
+            fresh |= {r["isbn13"] for r in rows}
+        except Exception as e:
+            print(f"  [자료 없음 목록 조회 실패] {safe_err(e)}")
     return [t for t in targets if t not in fresh][:USAGE_LIMIT]
 
 
@@ -581,7 +598,7 @@ def collect_usage():
         log_run("usage", "failed", 0, e)
         print(f"::warning::이용분석 대상 조회 실패: {safe_err(e)}")
         return 0
-    ok = 0
+    ok, nodata = 0, []
     for isbn in targets:
         try:
             data = call("usageAnalysisList", {"isbn13": isbn}, retries=(5,))
@@ -593,14 +610,27 @@ def collect_usage():
             }, on_conflict="isbn13").execute()
             ok += 1
         except BudgetExceeded as e:
-            print(f"  [이용분석] {e} - 남은 {len(targets) - ok}권은 내일 받음")
+            print(f"  [이용분석] {e} - 남은 {len(targets) - ok - len(nodata)}권은 내일 받음")
             break
+        except NoData:
+            nodata.append(isbn)  # 실패가 아님: 정보나루에 이 책 이용 자료가 아직 없음
         except Exception as e:
             print(f"  [이용분석 실패] {isbn}: {safe_err(e)}")
         time.sleep(0.5)
-    status = "ok" if ok == len(targets) else ("failed" if ok == 0 and targets else "partial")
-    log_run("usage", status, ok, None if status == "ok" else f"{len(targets) - ok}권 실패")
-    print(f"[이용분석] {ok}/{len(targets)}권")
+    if nodata:
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            supabase.table("usage_nodata").upsert([{"isbn13": i, "checked_at": now} for i in nodata],
+                                                  on_conflict="isbn13").execute()
+        except Exception as e:
+            print(f"  [자료 없음 기록 실패] {safe_err(e)}")
+    failed = len(targets) - ok - len(nodata)
+    status = "ok" if failed == 0 else ("failed" if ok == 0 and targets else "partial")
+    note = [f"{len(nodata)}권 자료 없음(14일 뒤 다시 확인)"] if nodata else []
+    if failed:
+        note.insert(0, f"{failed}권 실패")
+    log_run("usage", status, ok, ", ".join(note) or None)
+    print(f"[이용분석] {ok}/{len(targets)}권, 자료 없음 {len(nodata)}권, 실패 {failed}권")
     return ok
 
 

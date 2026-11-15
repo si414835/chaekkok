@@ -12,6 +12,7 @@ import requests
 from supabase import create_client
 import api_budget
 from api_budget import BudgetExceeded
+from isbn_util import fix_isbns
 
 DATA4LIBRARY_KEY = os.environ["DATA4LIBRARY_KEY"]
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -55,7 +56,7 @@ def get_with_retry(url, params, max_retries=4, timeout=60):
                 if api_budget.is_limit_error(api_error):
                     raise BudgetExceeded(f"정보나루 하루 한도: {api_error}")
                 raise RuntimeError(f"API 오류 응답: {api_error}")
-            return data
+            return fix_isbns(data)  # 'ISBN1 ISBN2' → 13자리 하나
         except (requests.exceptions.RequestException, ValueError, RuntimeError) as e:
             last_error = e
             wait = [5, 15, 30, 60][attempt - 1]

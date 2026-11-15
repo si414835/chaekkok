@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 import xml.etree.ElementTree as ET
 from supabase import create_client
+from isbn_util import isbn_candidates
 
 NL_KEY = os.environ["NL_API_KEY"]
 # 표지 이미지는 정보나루 도서 상세 조회(srchDtlList)에서 가져온다 (없으면 국립중앙도서관 표지 사용)
@@ -119,9 +120,17 @@ def lookup_cover(isbn13):
 
 
 def upsert_book(item):
-    isbn13 = (item.findtext("recomisbn") or "").strip()
-    if not isbn13:
+    # 'ISBN1 ISBN2'처럼 여러 개 오면 정보나루가 아는(표지가 나오는) 쪽을 키로 쓴다.
+    # 그대로 저장하면 books 키가 깨진다 (2026-11 '찰나의 기억, 냄새' 사례).
+    candidates = isbn_candidates(item.findtext("recomisbn"))
+    if not candidates:
         return None
+    isbn13, cover = candidates[0], None
+    for c in candidates:
+        cover = lookup_cover(c)
+        if cover:
+            isbn13 = c
+            break
 
     book_row = {
         "isbn13": isbn13,
@@ -129,7 +138,7 @@ def upsert_book(item):
         "author": (item.findtext("recomauthor") or "").strip(),
         "publisher": (item.findtext("recompublisher") or "").strip(),
         "class_name": (item.findtext("drCodeName") or "").strip() or None,
-        "cover_url": lookup_cover(isbn13)
+        "cover_url": cover
         or (item.findtext("mokchFilePath") or "").strip()
         or None,
     }
