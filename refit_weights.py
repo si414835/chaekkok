@@ -61,7 +61,7 @@ def features(rows, cfg):
         y.append(int(hit))
         days.append(d)
         mom.append(num(m))
-    return np.array(X), np.array(y), np.array(days), np.array(mom)
+    return np.array(X), np.array(y), days, np.array(mom)
 
 
 def fit_logit(X, y, lam=1.0, iters=60):
@@ -141,10 +141,11 @@ def main():
     cur = {k: float(v) for k, v in cfg_row["w"].items()}
     rows = supabase.rpc("eval_features", {}).execute().data or []
     X, y, days, _ = features(rows, cur)
-    print(f"[데이터] {len(y)}건, 적중 {y.sum()}건 ({100 * y.mean():.1f}%), {days.min()} ~ {days.max()}")
+    print(f"[데이터] {len(y)}건, 적중 {y.sum()}건 ({100 * y.mean():.1f}%), {min(days)} ~ {max(days)}")
 
     cut = TEST_FROM or sorted(days)[int(len(days) * 0.7)]
-    tr, te = days < cut, days >= cut
+    tr = np.array([d < cut for d in days])
+    te = ~tr
     print(f"[나눔] 앞 기간 {tr.sum()}건 / 뒤 기간(평가) {te.sum()}건, 기준일 {cut}")
 
     beta_tr = fit_logit(X[tr], y[tr])
@@ -176,7 +177,7 @@ def main():
         if not better:
             print("::warning::새 가중치가 지금보다 낫지 않아 저장하지 않음")
             return
-        note = (f"{date.today()}: {days.min()}~{days.max()} {len(y)}건으로 다시 맞춤(지금 값과 {BLEND:.0%} 섞음). "
+        note = (f"{date.today()}: {min(days)}~{max(days)} {len(y)}건으로 다시 맞춤(지금 값과 {BLEND:.0%} 섞음). "
                 f"뒤 기간 AUC {res['지금'][0]:.3f}→{res[f'섞음({BLEND:.0%})'][0]:.3f}, "
                 f"상위10% 적중률 {100 * res['지금'][1]:.1f}%→{100 * res[f'섞음({BLEND:.0%})'][1]:.1f}%")
         supabase.table("score_config").update({"w": final, "note": note, "updated_on": str(date.today())}).eq("id", 1).execute()
