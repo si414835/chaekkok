@@ -25,6 +25,7 @@ supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 TEST_FROM = os.environ.get("TEST_FROM", "")      # 비우면 마지막 30%를 뒤 기간으로
 BLEND = float(os.environ.get("BLEND", "0.5"))     # 새 값 비중 (0.5 = 지금 값과 반반)
 MIN_POS = 30
+ZERO = [k for k in os.environ.get("ZERO", "").split(",") if k.strip()]  # 예: lib,gt -> 0으로 둔 경우도 비교
 MAIN = ["rank", "new", "hot", "loan", "pub", "lib", "breadth", "yt", "gt"]
 COLS = MAIN + ["new_deep_x", "pub_last_x", "loan_fall_x", "steady_x"]
 
@@ -150,36 +151,41 @@ def main():
 
     beta_tr = fit_logit(X[tr], y[tr])
     w_fit_tr, _, _ = to_weights(beta_tr, X[tr], y[tr], cur)
-    w_blend_tr = blend(cur, w_fit_tr, BLEND)
-    res = {}
-    for name, w in [("지금", cur), ("새로 맞춤", w_fit_tr), (f"섞음({BLEND:.0%})", w_blend_tr)]:
-        s = score(X[te], w)
-        res[name] = (auc(s, y[te]), top_rate(s, y[te]))
-        print(f"  {name:10s} AUC {res[name][0]:.3f} · 상위10% 적중률 {100 * res[name][1]:.1f}%")
-
-    beta = fit_logit(X, y)
+    beta = fit_logit(X, y)                       # 저장할 값은 전체 기간으로 맞춘 것
     w_fit, coef, pos = to_weights(beta, X, y, cur)
-    w_new = blend(cur, w_fit, BLEND)
-    print("\n[신호별] 계수(전체 기간) · 양성 적중 건수 · 지금 → 제안")
+    mix = f"섞음({BLEND:.0%})"
+    # (이름, 뒤 기간 평가용 가중치, 저장용 가중치). ZERO 신호는 0으로 (다른 가중치는 그대로라 점수 크기 유지)
+    cands = [("지금", cur, cur), ("새로 맞춤", w_fit_tr, w_fit), (mix, blend(cur, w_fit_tr, BLEND), blend(cur, w_fit, BLEND))]
+    if ZERO:
+        z = {k: 0.0 for k in ZERO}
+        cands += [(f"지금+{'·'.join(ZERO)} 0", {**cur, **z}, {**cur, **z}),
+                  (f"{mix}+{'·'.join(ZERO)} 0", {**blend(cur, w_fit_tr, BLEND), **z}, {**blend(cur, w_fit, BLEND), **z})]
+    res = {}
+    for name, w_te, _ in cands:
+        s = score(X[te], {**cur, **w_te})
+        res[name] = (round(auc(s, y[te]), 3), round(top_rate(s, y[te]), 3))
+        print(f"  {name:18s} AUC {res[name][0]:.3f} · 상위10% 적중률 {100 * res[name][1]:.1f}%")
+
+    print("\n[신호별] 계수(전체 기간) · 양성 적중 건수 · 지금 → 섞은 제안")
+    w_mix = blend(cur, w_fit, BLEND)
     for k in COLS:
         key = {"new_deep_x": "new_deep", "pub_last_x": "pub_last", "loan_fall_x": "loan_fall"}.get(k, k)
-        cur_v = cur.get(key, "-")
-        new_v = w_new.get(key, "-")
-        print(f"  {k:12s} {coef[k]:+.2f} · {pos[k]:4d}건 · {cur_v} → {new_v}")
+        print(f"  {k:12s} {coef[k]:+.2f} · {pos[k]:4d}건 · {cur.get(key, '-')} → {w_mix.get(key, '-')}")
 
-    better = res[f"섞음({BLEND:.0%})"][0] >= res["지금"][0] and res[f"섞음({BLEND:.0%})"][1] >= res["지금"][1]
-    final = {**cur, **w_new}
-    print("\n[제안 score_config.w]")
-    print(json.dumps(final, ensure_ascii=False))
-    print(f"\n[판정] 뒤 기간에서 섞은 값이 지금보다 {'낫거나 같음' if better else '나쁨'}")
-
-    if apply:
-        if not better:
+    base = res["지금"]
+    ok = [(res[n], n, w) for n, _, w in cands[1:] if n != "새로 맞춤" and res[n][0] >= base[0] and res[n][1] >= base[1] and res[n] != base]
+    if not ok:
+        print("\n[판정] 지금 가중치보다 나은 후보 없음")
+        if apply:
             print("::warning::새 가중치가 지금보다 낫지 않아 저장하지 않음")
-            return
-        note = (f"{date.today()}: {min(days)}~{max(days)} {len(y)}건으로 다시 맞춤(지금 값과 {BLEND:.0%} 섞음). "
-                f"뒤 기간 AUC {res['지금'][0]:.3f}→{res[f'섞음({BLEND:.0%})'][0]:.3f}, "
-                f"상위10% 적중률 {100 * res['지금'][1]:.1f}%→{100 * res[f'섞음({BLEND:.0%})'][1]:.1f}%")
+        return
+    (b_auc, b_top), b_name, b_w = max(ok, key=lambda t: (t[0][0], t[0][1]))
+    final = {**cur, **{k: round(float(v), 3) for k, v in b_w.items()}}
+    print(f"\n[판정] 가장 나은 후보: {b_name} (AUC {base[0]:.3f}→{b_auc:.3f}, 상위10% {100 * base[1]:.1f}%→{100 * b_top:.1f}%)")
+    print(json.dumps(final, ensure_ascii=False))
+    if apply:
+        note = (f"{date.today()}: {min(days)}~{max(days)} {len(y)}건, 뒤 기간 {cut}~ 비교로 '{b_name}' 채택. "
+                f"AUC {base[0]:.3f}→{b_auc:.3f}, 상위10% 적중률 {100 * base[1]:.1f}%→{100 * b_top:.1f}%")
         supabase.table("score_config").update({"w": final, "note": note, "updated_on": str(date.today())}).eq("id", 1).execute()
         print(f"[저장] {note}")
 

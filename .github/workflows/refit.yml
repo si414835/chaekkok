@@ -16,6 +16,10 @@ on:
         description: '새 값 비중 (0.5 = 지금 값과 반반)'
         type: string
         default: '0.5'
+      zero:
+        description: '0으로 둔 경우도 비교할 신호 (예: lib,gt)'
+        type: string
+        default: ''
 
 concurrency:
   group: collect
@@ -36,4 +40,5 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           TEST_FROM: ${{ inputs.test_from }}
           BLEND: ${{ inputs.blend }}
+          ZERO: ${{ inputs.zero }}
         run: python refit_weights.py ${{ inputs.apply && '--apply' || '' }}
