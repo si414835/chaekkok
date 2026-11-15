@@ -1,0 +1,39 @@
+name: 점수 가중치 다시 맞추기
+
+# 손으로 실행한다. apply를 끄면 비교 결과만 로그에 찍고, 켜면 지금보다 나을 때만 저장한다.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: '지금보다 나으면 score_config에 저장'
+        type: boolean
+        default: false
+      test_from:
+        description: '평가 기간 시작일 (비우면 마지막 30%)'
+        type: string
+        default: ''
+      blend:
+        description: '새 값 비중 (0.5 = 지금 값과 반반)'
+        type: string
+        default: '0.5'
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  refit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install supabase numpy
+      - name: 가중치 비교와 제안
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TEST_FROM: ${{ inputs.test_from }}
+          BLEND: ${{ inputs.blend }}
+        run: python refit_weights.py ${{ inputs.apply && '--apply' || '' }}

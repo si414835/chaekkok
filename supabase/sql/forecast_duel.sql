@@ -3,6 +3,7 @@
 --  refresh_forecast()  : 과거에 같은 점수대였던 책이 2주 뒤 실제로 크게(20% 이상) 오른 비율을 구해
 --                        forecast_bins(점수 구간별 비율)와 book_state.forecast(책마다 예보 %)에 넣는다.
 --                        hit_breakdown에는 단계·신뢰도별 실제 비율을 넣는다. 매일 단계 계산 뒤에 부른다.
+--                        신뢰도도 여기서 예보 확률로 다시 매긴다 (30% 이상 높음 · 12% 이상 보통 · 그 아래 낮음)
 --  v_eval_rows         : 책×날짜마다 2주 뒤 순위(r2). 분석·예보 계산용 (앱에서는 읽지 않는다)
 --  v_spot_result       : 포착한 책의 2주 뒤 결과 (up20 크게 오름 / up 조금 오름 / down 제자리·하락 / out 순위 밖)
 --  v_comeback          : 역주행. 출간 2년이 넘었는데 지금 다시 오르는 책
@@ -84,6 +85,13 @@ begin
     and coalesce(b.addition_symbol, '') not like '7%'
     and (p_all or s.snapshot_date >= (select max(snapshot_date) from book_state) - 2);
   get diagnostics v_n = row_count;
+
+  -- 신뢰도 = 예보 확률 구간 (2026-11-15부터). 예전 '근거 개수' 방식은 높음(28.6%)이 보통(52.4%)보다
+  -- 덜 맞았다. 예보는 과거 실제 적중률이라 순서가 맞는다. 10위 안 책·스테디는 예보가 없어 예전 방식 유지.
+  update book_state s
+    set confidence = case when s.forecast >= 30 then '높음' when s.forecast >= 12 then '보통' else '낮음' end
+  where s.stage in ('포착', '떠오름', '확산') and s.forecast is not null
+    and (p_all or s.snapshot_date >= (select max(snapshot_date) from book_state) - 2);
   return v_n;
 end;
 $function$;
@@ -214,3 +222,19 @@ as $function$
                  from v_duel_results where status <> 'pending')
   );
 $function$;
+
+-- 가중치 재조정용 (refit_weights.py): 2주 결과가 나온 책x날짜의 특징과 결과
+create or replace function public.eval_features()
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_array(
+    e.snapshot_date, s.rank_now, s.rank_change_ratio, s.new_entry, s.hot_diff, s.loan_growth_rel,
+    s.recent_pub, s.librarian, s.regions, s.demo_groups, s.yt_spike, s.gt_spike, s.rise_steady,
+    s.momentum, (e.r2 is not null and e.r2 <= e.rank_now * 0.8)::int)), '[]'::jsonb)
+  from v_eval_rows e join book_state s using (snapshot_date, isbn13)
+  where e.matured;
+$$;
+revoke all on function public.eval_features() from public, anon, authenticated;

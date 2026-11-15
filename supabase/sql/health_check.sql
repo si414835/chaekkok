@@ -72,3 +72,9 @@ begin
 end $$;
 
 revoke all on function public.health_check() from public, anon, authenticated;
+
+-- 분류(KDC)를 정보나루에서도 못 찾은 책: 14일 동안 다시 부르지 않음 (extra_collect.collect_classes)
+create table if not exists class_nodata (isbn13 text primary key, checked_at timestamptz not null default now());
+alter table class_nodata enable row level security;
+create table if not exists usage_nodata (isbn13 text primary key, checked_at timestamptz not null default now());
+alter table usage_nodata enable row level security;
