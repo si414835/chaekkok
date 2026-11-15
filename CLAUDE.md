@@ -13,6 +13,7 @@
 
 ## 점검 (사용량 아끼는 순서)
 1. 데이터: `select public.health_check();` 한 번. `warnings`가 비어 있으면 정상.
+   (수집 전인 0시~04:30 KST에는 '오늘 수집 기록 없음·스냅샷이 오늘이 아님·초안 없음' 3개가 뜨는 게 정상)
 2. 방문: Vercel `aggregate_pageviews` — by `day`(최근 7일), 필요할 때만 `referrerHostname`/`requestPath`.
 3. 경고가 있을 때만 `collect_runs`나 Actions 로그(`gh run view <id> --log | grep ...`)를 연다.
 
@@ -24,4 +25,6 @@
 
 ## 주의
 - 방문자 수는 날마다 초기화되는 해시라 날짜 합계는 중복 포함.
+- 가중치 재조정은 Actions '점수 가중치 다시 맞추기'(refit.yml)로. 결과는 로그에서 `[데이터]`~`[판정]`만 보면 된다.
+  score_config의 정수 값(use_rel·loan_evid·steady_evid)은 꼭 정수로 (1.0이면 refresh_book_state 실패).
 - `_backup_book_state_1110`, `_backup_spotted_1110`은 점수 가중치 재조정(11월 말) 확인 후 삭제 예정.
