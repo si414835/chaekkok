@@ -180,7 +180,10 @@ def main():
             print("::warning::새 가중치가 지금보다 낫지 않아 저장하지 않음")
         return
     (b_auc, b_top), b_name, b_w = max(ok, key=lambda t: (t[0][0], t[0][1]))
-    final = {**cur, **{k: round(float(v), 3) for k, v in b_w.items()}}
+    # 정수 설정값(use_rel·loan_evid·steady_evid 등)은 정수로 남겨야 SQL의 ::int 변환이 된다
+    orig = cfg_row["w"]
+    final = {**orig, **{k: (int(round(v)) if isinstance(orig.get(k), int) else round(float(v), 3))
+                        for k, v in b_w.items()}}
     print(f"\n[판정] 가장 나은 후보: {b_name} (AUC {base[0]:.3f}→{b_auc:.3f}, 상위10% {100 * base[1]:.1f}%→{100 * b_top:.1f}%)")
     print(json.dumps(final, ensure_ascii=False))
     if apply:
