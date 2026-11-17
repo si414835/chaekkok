@@ -1,3 +1,4 @@
+import re
 """
 책콕: 휴대폰 알림(Web Push) 보내기 — 매일 단계 계산이 끝난 뒤 실행
 
@@ -26,7 +27,7 @@ APP_URL = "https://chaekkok.vercel.app"
 
 
 def short(t, n=18):
-    t = (t or "").split(":")[0].split("=")[0].strip()
+    t = re.split(r"\s*:\s*|\s+=\s*|\s+/\s*", t or "")[0].strip()
     return t if len(t) <= n else t[: n - 1] + "…"
 
 

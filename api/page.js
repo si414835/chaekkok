@@ -36,7 +36,8 @@ const esc = (s) =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-const shortTitle = (t) => (t || '').split(/\s*:\s*/)[0].trim() || t || ''
+// 본제만: ' :부제', ' =대등표제', ' /영문 제목' 앞에서 자른다
+const shortTitle = (t) => (t || '').split(/\s*:\s*|\s+=\s*|\s+\/\s*/)[0].trim() || t || ''
 const cleanAuthor = (a) =>
   (a || '')
     .split(/[;,]/)[0]

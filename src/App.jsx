@@ -69,9 +69,10 @@ function matchesCategory(b, cat) {
   if (isChildBook(b)) return false
   return topCategory(b.classNameFull) === cat
 }
+const TITLE_CUT = /\s*:\s*|\s+=\s*|\s+\/\s*/
 function shortTitle(t) {
-  // "제목 :부제" 형태에서 부제를 뗀다
-  return (t || '').split(/\s*:\s*/)[0].trim() || t
+  // 정보나루 제목은 "본제 :부제 =대등표제 /영문 제목" 꼴이라 본제만 남긴다 (AI/IT처럼 붙은 /는 그대로)
+  return (t || '').split(TITLE_CUT)[0].trim() || t
 }
 // 권 번호: 정보나루 vol ("" = 권 구분 없음, null = 아직 모름)
 function volLabel(v) {
@@ -83,7 +84,7 @@ function volLabel(v) {
 function withVol(title, vol) {
   const l = volLabel(vol)
   if (!l || !title) return title
-  const i = title.search(/\s*:\s*/)
+  const i = title.search(TITLE_CUT)
   const main = (i < 0 ? title : title.slice(0, i)).trim()
   const num = l.replace(/권$/, '')
   if (new RegExp(`(^|\\s)${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}권?$`).test(main)) return title // 제목에 이미 권 번호가 있음

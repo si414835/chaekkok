@@ -54,7 +54,7 @@ INTROS = [
 
 
 def short_title(t):
-    return (t or "").split(":")[0].split("=")[0].strip()
+    return re.split(r"\s*:\s*|\s+=\s*|\s+/\s*", t or "")[0].strip()
 
 
 def norm_title(t):
