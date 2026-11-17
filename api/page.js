@@ -73,13 +73,14 @@ function setMeta(html, { title, description, url, image, jsonld, body }) {
 
 async function bookPage(isbn) {
   const [books, states] = await Promise.all([
-    sb(`books?isbn13=eq.${isbn}&select=title,author,publisher,class_name,cover_url,pub_year,addition_symbol&limit=1`),
+    sb(`books?isbn13=eq.${isbn}&select=title,author,publisher,class_name,cover_url,pub_year,addition_symbol,vol&limit=1`),
     sb(`v_book_state_latest?isbn13=eq.${isbn}&select=stage,reason&limit=1`),
   ])
   const b = books?.[0]
   if (!b) return null
   const st = states?.[0]
-  const t = shortTitle(b.title)
+  const vol = (b.vol || '').trim()
+  const t = shortTitle(b.title) + (vol ? (/^\d+$/.test(vol) ? ` ${vol}권` : ` ${vol}`) : '') // 서리꽃 1권·2권 구분
   const author = cleanAuthor(b.author)
   const cat = (b.class_name || '').split('>').slice(0, 2).map((s) => s.trim()).filter(Boolean).join(' > ')
   const title = `${t}${author ? ` — ${author}` : ''} | 책콕`
@@ -90,7 +91,7 @@ async function bookPage(isbn) {
   const jsonld = {
     '@context': 'https://schema.org',
     '@type': 'Book',
-    name: shortTitle(b.title),
+    name: t,
     ...(author ? { author: { '@type': 'Person', name: author } } : {}),
     isbn,
     ...(b.publisher ? { publisher: { '@type': 'Organization', name: b.publisher } } : {}),

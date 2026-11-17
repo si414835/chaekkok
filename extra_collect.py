@@ -132,7 +132,7 @@ def to_int(v):
 
 def doc_to_book(d):
     cls = d.get("class_nm")
-    return {
+    row = {
         "isbn13": d["isbn13"],
         "title": (d.get("bookname") or "").strip(),
         "author": d.get("authors"),
@@ -144,6 +144,10 @@ def doc_to_book(d):
         "detail_url": d.get("bookDtlUrl"),
         "addition_symbol": d.get("addition_symbol") or None,
     }
+    # 권 번호 ("" = 권 구분 없음). 같은 제목의 1권·2권을 가르는 데 쓴다. 응답에 vol이 없으면 기존 값을 건드리지 않는다
+    if "vol" in d:
+        row["vol"] = (d.get("vol") or "").strip()
+    return row
 
 
 # ---------- 1. 이달의 키워드 ----------

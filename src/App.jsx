@@ -73,6 +73,34 @@ function shortTitle(t) {
   // "제목 :부제" 형태에서 부제를 뗀다
   return (t || '').split(/\s*:\s*/)[0].trim() || t
 }
+// 권 번호: 정보나루 vol ("" = 권 구분 없음, null = 아직 모름)
+function volLabel(v) {
+  const t = (v || '').trim()
+  if (!t) return ''
+  return /^\d+$/.test(t) ? `${t}권` : t
+}
+// "서리꽃 :조정래 장편소설" + vol 2 -> "서리꽃 2권 :조정래 장편소설" (부제를 떼도 권이 남게)
+function withVol(title, vol) {
+  const l = volLabel(vol)
+  if (!l || !title) return title
+  const i = title.search(/\s*:\s*/)
+  const main = (i < 0 ? title : title.slice(0, i)).trim()
+  const num = l.replace(/권$/, '')
+  if (new RegExp(`(^|\\s)${num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}권?$`).test(main)) return title // 제목에 이미 권 번호가 있음
+  return i < 0 ? `${main} ${l}` : `${main} ${l}${title.slice(i)}`
+}
+// 같은 책(제목·저자·권까지 같은데 ISBN만 다른 판)이 목록에 두 번 나오지 않게 첫 번째만 남긴다.
+// 권 번호를 아직 모르는 책(vol null)은 서리꽃 1·2권처럼 다른 권일 수 있어 합치지 않는다.
+function dedupeSame(list) {
+  const seen = new Set()
+  const norm = (t) => (t || '').toLowerCase().replace(/[^가-힣a-z0-9]/g, '')
+  return list.filter((b) => {
+    const key = b.vol == null ? `isbn:${b.isbn13}` : `${norm(b.title)}|${norm(cleanAuthor(b.author))}|${b.vol}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 function cleanAuthor(a) {
   if (!a) return ''
   return a
@@ -631,9 +659,9 @@ function TopGrid({ books }) {
 
 function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs }) {
   const wide = useWide()
-  const top5 = feed.composite.filter((b) => !isChildBook(b)).slice(0, 5)
+  const top5 = dedupeSame(feed.composite.filter((b) => !isChildBook(b))).slice(0, 5)
   // 넓은 화면은 옆 칸(우리 동네)과 높이를 맞추려고 5권, 폰은 3권
-  const rising3 = feed.rising.filter((b) => !isChildBook(b)).slice(0, wide ? 5 : 3)
+  const rising3 = dedupeSame(feed.rising.filter((b) => !isChildBook(b))).slice(0, wide ? 5 : 3)
   return (
     <>
       <header className="topbar">
@@ -1378,7 +1406,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
     // 급상승은 책 수가 적어 분야 구분 없이 모아서 보여준다 (어린이 책만 제외)
     if (tab === 'rising') src = src.filter((b) => !isChildBook(b))
     else if (tab !== 'recommended') src = src.filter((b) => matchesCategory(b, cat))
-    return src.slice(0, LIST_SIZE)
+    return dedupeSame(src).slice(0, LIST_SIZE)
   }, [feed, tab, cat, demoActive, demo.list])
 
   const value = (b) => {
@@ -1584,6 +1612,7 @@ function useBook(isbn, index) {
       }
       // 책콕에 없는 책(같이 빌린 책 등)이나 표지가 없는 책은 정보나루 도서 상세에서 보강
       let base = bookRes.data
+      if (base) base = { ...base, title: withVol(base.title, base.vol) }
       const need = [...(base || index.get(isbn) ? [] : [isbn]), ...coIsbns.filter((i) => !coCovers[i] && !index.get(i)?.cover_url)]
       if (need.length) {
         const { data } = await supabase.functions.invoke('library-info', { body: { action: 'books', isbns: need.slice(0, 12) } })
@@ -1760,7 +1789,16 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
   // TOP10 띠를 그릴 때는 축 아래 끝을 10위 이상으로 잡아 띠가 그래프 밖으로 나가지 않게 한다
   const top = Math.max(lo + 4, Math.ceil(hiRaw / 5) * 5, showBand ? 10 : 0)
   const x = (i) => L + (rows.length === 1 ? 0 : (i * (W - L - R)) / (rows.length - 1))
-  const y = (rank) => T + ((rank - lo) * (H - T - B)) / Math.max(top - lo, 1)
+  // 순위 폭이 크면(예: 127위 → 1위) 1위와 10위가 거의 같은 높이에 붙어 글씨가 겹친다.
+  // 이때는 제곱근 눈금으로 상위권을 넓혀 TOP10 띠와 눈금이 읽히게 한다.
+  const sq = showBand && top > 30
+  const f = sq ? Math.sqrt : (v) => v
+  const y = (rank) => T + ((f(rank) - f(lo)) * (H - T - B)) / Math.max(f(top) - f(lo), 1e-6)
+  // 눈금 글씨끼리 12px보다 가까우면 뒤의 것을 뺀다
+  const ticks = []
+  for (const v of [...new Set(showBand ? [1, 10, top] : [lo, top])]) {
+    if (ticks.every((t) => Math.abs(y(t) - y(v)) >= 12)) ticks.push(v)
+  }
   // 순위 밖인 날은 선을 끊는다
   const segs = []
   let cur = []
@@ -1807,10 +1845,11 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
         {showBand && (
           <>
             <rect x={L} y={y(1) - 4} width={W - L - R} height={y(10) - y(1) + 8} rx="6" className="rankchart__band" />
-            <text x={W - R - 4} y={y(10) - 6} textAnchor="end" className="rankchart__bandlabel">TOP10</text>
+            {/* 오른쪽 끝은 최근 점이 TOP10 안에 있을 때 글씨와 겹쳐서 왼쪽 안쪽에 둔다 */}
+            <text x={L + 6} y={y(10) - 2} textAnchor="start" className="rankchart__bandlabel">TOP10</text>
           </>
         )}
-        {[...new Set(showBand ? [1, 10, top] : [lo, top])].map((v) => (
+        {ticks.map((v) => (
           <text key={v} x={L - 8} y={y(v) + 4} textAnchor="end" className="rankchart__tick num">
             {v}
           </text>
@@ -4114,7 +4153,8 @@ function My({ prefs, interests, setInterests, onOpenFilter, libs, setLibs, onPic
 function mapRow(r) {
   return {
     isbn13: r.isbn13,
-    title: r.title,
+    title: withVol(r.title, r.vol),
+    vol: r.vol ?? null,
     author: r.author,
     publisher: r.publisher,
     classNameFull: r.class_name,

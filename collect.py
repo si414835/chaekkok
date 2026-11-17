@@ -81,7 +81,7 @@ def log_run(source, part, status, rows_saved=0, error=None):
 
 
 def book_row_from_doc(doc):
-    return {
+    row = {
         "isbn13": doc.get("isbn13"),
         "title": (doc.get("bookname") or "").strip(),
         "author": doc.get("authors"),
@@ -93,6 +93,10 @@ def book_row_from_doc(doc):
         "detail_url": doc.get("bookDtlUrl"),
         "addition_symbol": doc.get("addition_symbol") or None,
     }
+    # 권 번호 ("" = 권 구분 없음). 같은 제목의 1권·2권을 가르는 데 쓴다. 응답에 vol이 없으면 기존 값을 건드리지 않는다
+    if "vol" in doc:
+        row["vol"] = (doc.get("vol") or "").strip()
+    return row
 
 
 def bulk_upsert(table, rows, on_conflict, key_fields):
@@ -101,8 +105,12 @@ def bulk_upsert(table, rows, on_conflict, key_fields):
     for r in rows:
         unique[tuple(r[k] for k in key_fields)] = r
     rows = list(unique.values())
-    if rows:
-        supabase.table(table).upsert(rows, on_conflict=on_conflict).execute()
+    # 키 구성이 다른 행이 섞이면(예: vol이 있는 응답·없는 응답) 빈 칸이 null로 덮이거나 거부되므로 나눠서 저장
+    groups = {}
+    for r in rows:
+        groups.setdefault(tuple(sorted(r)), []).append(r)
+    for part in groups.values():
+        supabase.table(table).upsert(part, on_conflict=on_conflict).execute()
     return len(rows)
 
 
