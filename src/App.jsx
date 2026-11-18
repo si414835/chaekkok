@@ -2427,27 +2427,10 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               </div>
             ))}
           </div>
-          <RankChart isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} embedded />
         </section>
 
-        {wide && (
-          <LibraryStatusSheet
-            inline
-            book={book}
-            libs={libs}
-            setLibs={setLibs}
-            onClose={() => {}}
-            onPick={onPickLibrary}
-            onBuy={() => buyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-          />
-        )}
-        </DetailMain>
-        <DetailSide wide={wide}>
-        <LoanChart history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
-        <Groups groups={usage?.loan_grps} />
-
         {co.length > 0 && (
-          <section className="card card--bleed rise" style={{ animationDelay: '0.55s' }}>
+          <section className="card card--bleed rise" style={{ animationDelay: '0.36s' }}>
             <Eyebrow>ALSO BORROWED</Eyebrow>
             <h2 className="h2 display">함께 빌린 책</h2>
             <p className="sub">이 책을 빌린 사람들이 같이 빌린 책 · 도서관 대출 기록 기준</p>
@@ -2462,6 +2445,25 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             </div>
           </section>
         )}
+
+        {wide && (
+          <LibraryStatusSheet
+            inline
+            book={book}
+            libs={libs}
+            setLibs={setLibs}
+            onClose={() => {}}
+            onPick={onPickLibrary}
+            onBuy={() => buyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          />
+        )}
+        </DetailMain>
+        <DetailSide wide={wide}>
+        {/* 순위 → 월별 대출 추이 → 누가 빌렸나 (2026-11-18 배치 변경) */}
+        <RankChart isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
+        <LoanChart history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
+        <Groups groups={usage?.loan_grps} />
+
 
         {!loading && !usage && (
           <section className="card">
