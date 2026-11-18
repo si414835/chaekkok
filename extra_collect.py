@@ -10,6 +10,7 @@
 한 부분이 실패해도 나머지는 계속 진행한다.
 """
 
+import html
 import os
 import re
 import sys
@@ -46,7 +47,7 @@ DEMO_PAGE_SIZE = 50
 USAGE_LIMIT = 170          # 하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수
 USAGE_REFRESH_DAYS = 14    # 이 기간 안에 받은 책은 건너뜀 (월별 데이터라 2주면 충분)
 COLOAN_LIMIT = 30          # 같이 빌린 책 중 책콕에 없는 책을 하루에 몇 권 정식으로 등록할지
-CLASS_LIMIT = 40           # 분류(KDC)가 빈 책을 하루에 몇 권 채울지 (분야별 순위 비교에 필요)
+DETAIL_LIMIT = 50          # 도서 상세로 분류·책 소개를 하루에 몇 권 채울지 (화면에 보이는 책부터)
 # 정보나루 호출 예산: 이 스크립트가 하루에 쓰는 최대 호출 수.
 # 하루 합계는 api_budget.py가 DB에서 같이 센다 (IP 미등록 키는 하루 500건 넘으면 막힘, 2026-11-03 실제 확인).
 CALL_BUDGET = int(os.environ.get("CALL_BUDGET", "280"))
@@ -613,6 +614,11 @@ def collect_usage():
                 "loan_history": history, "loan_grps": groups,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }, on_conflict="isbn13").execute()
+            # 이용분석 응답에도 책 소개가 들어 있어 추가 호출 없이 함께 저장 (아직 안 받은 책만)
+            desc = clean_desc(((data.get("response") or {}).get("book") or {}).get("description"))
+            if desc:
+                supabase.table("books").update({"description": desc, "desc_checked_at": datetime.now(timezone.utc).isoformat()}) \
+                    .eq("isbn13", isbn).is_("desc_checked_at", "null").execute()
             ok += 1
         except BudgetExceeded as e:
             print(f"  [이용분석] {e} - 남은 {len(targets) - ok - len(nodata)}권은 내일 받음")
@@ -673,48 +679,61 @@ def collect_coloan():
     return len(added)
 
 
-def collect_classes():
-    """분류(class_no)가 빈 책을 도서 상세(srchDtlList)로 채운다.
-    분류가 없으면 분야(문학·철학 …)를 몰라 분야별 순위 비교와 단계 판정에서 빠진다.
-    최근 단계 계산에 들어간 책부터, 정보나루에도 없던 책은 14일 동안 건너뛴다."""
-    missing = [r["isbn13"] for r in (supabase.table("books").select("isbn13")
-               .or_("class_no.is.null,class_no.eq.").limit(2000).execute().data or [])]
-    if not missing:
-        log_run("classes", "ok", 0)
+def clean_desc(t):
+    """정보나루 책 소개: 태그·엔티티를 걷어내고 공백 정리 (화면에 그대로 보여 준다)"""
+    t = html.unescape(re.sub(r"<br\s*/?>", "\n", t or "", flags=re.I))
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\s*\n\s*", "\n", t).strip()
+    return t or None
+
+
+def collect_details():
+    """도서 상세(srchDtlList) 한 번으로 분류(class_no)와 책 소개(description)를 함께 채운다.
+    - 분류가 없으면 분야별 순위 비교·단계 판정에서 빠지고, 책 소개가 없으면 상세 화면에서 무슨 책인지 알기 어렵다.
+    - 대상은 detail_targets(): 오늘 단계가 붙은 책 → 오늘 순위에 있는 책 → 나머지 순.
+    - 분류가 정보나루에도 없으면 class_nodata에 적어 14일 건너뛰고, 소개는 없어도 desc_checked_at을 남겨 다시 부르지 않는다.
+    (상세 화면을 열 때 library-info 함수도 소개를 받아 저장하므로 둘이 함께 채운다)"""
+    todo = supabase.rpc("detail_targets", {"n": DETAIL_LIMIT}).execute().data or []
+    if not todo:
+        log_run("details", "ok", 0)
         return 0
-    since = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
-    since_day = (now_kst() - timedelta(days=7)).strftime("%Y-%m-%d")
-    skip, recent = set(), set()
-    for i in range(0, len(missing), 200):
-        part = missing[i:i + 200]
-        skip |= {r["isbn13"] for r in (supabase.table("class_nodata").select("isbn13")
-                 .gte("checked_at", since).in_("isbn13", part).execute().data or [])}
-        recent |= {r["isbn13"] for r in (supabase.table("book_state").select("isbn13")
-                   .gte("snapshot_date", since_day).in_("isbn13", part).execute().data or [])}
-    todo = sorted((i for i in missing if i not in skip), key=lambda i: i not in recent)[:CLASS_LIMIT]
-    filled, nodata = 0, []
-    for isbn in todo:
+    classes, descs, nodata = 0, 0, []
+    for t in todo:
+        isbn = t["isbn13"]
+        upd = {}
         try:
             data = call("srchDtlList", {"isbn13": isbn, "loaninfoYN": "N"}, retries=(5,))
-            found = [d for d in find_dicts_with(data, "class_no") if (d.get("class_no") or "").strip()]
-            if not found:
-                nodata.append(isbn)
-                continue
-            d = dict(found[0])
-            d["isbn13"] = isbn
-            row = doc_to_book(d)
-            upd = {"class_no": row["class_no"], "updated_at": datetime.now(timezone.utc).isoformat()}
-            if row.get("class_name"):
-                upd["class_name"] = row["class_name"]
-            supabase.table("books").update(upd).eq("isbn13", isbn).execute()
-            filled += 1
+            book = next(iter(find_dicts_with(data, "bookname")), None) or {}
+            if t.get("need_class"):
+                if (book.get("class_no") or "").strip():
+                    row = doc_to_book({**book, "isbn13": isbn})
+                    upd["class_no"] = row["class_no"]
+                    if row.get("class_name"):
+                        upd["class_name"] = row["class_name"]
+                    classes += 1
+                else:
+                    nodata.append(isbn)
+            if t.get("need_desc"):
+                upd["description"] = clean_desc(book.get("description"))
+                upd["desc_checked_at"] = datetime.now(timezone.utc).isoformat()
+                descs += 1 if upd["description"] else 0
         except BudgetExceeded as e:
-            print(f"  [분류 채우기] {e}")
+            print(f"  [상세 채우기] {e}")
             break
         except NoData:
-            nodata.append(isbn)
+            if t.get("need_class"):
+                nodata.append(isbn)
+            if t.get("need_desc"):
+                upd["desc_checked_at"] = datetime.now(timezone.utc).isoformat()
         except Exception as e:
-            print(f"  [분류 채우기 {isbn}] {safe_err(e)}")
+            print(f"  [상세 채우기 {isbn}] {safe_err(e)}")
+        if upd:
+            upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+            try:
+                supabase.table("books").update(upd).eq("isbn13", isbn).execute()
+            except Exception as e:
+                print(f"  [상세 저장 {isbn}] {safe_err(e)}")
         time.sleep(0.5)
     if nodata:
         try:
@@ -723,15 +742,16 @@ def collect_classes():
                                                   on_conflict="isbn13").execute()
         except Exception as e:
             print(f"  [분류 없음 기록 실패] {safe_err(e)}")
-    log_run("classes", "ok", filled, f"{len(nodata)}권 정보나루에도 분류 없음" if nodata else None)
-    print(f"[분류 채우기] 빈 책 {len(missing)}권 중 {len(todo)}권 시도, {filled}권 채움, 분류 없음 {len(nodata)}권")
-    return filled
+    note = f"분류 {classes}권·소개 {descs}권 채움" + (f", 분류 없음 {len(nodata)}권" if nodata else "")
+    log_run("details", "ok", classes + descs, note)
+    print(f"[상세 채우기] {len(todo)}권 시도, {note}")
+    return classes + descs
 
 
 def main():
     # 정보나루 '이달의 키워드'는 어린이 책이 섞여 화면에서 쓰지 않으므로 수집하지 않는다 (홈 키워드는 v_home_keywords)
     steps = [collect_demographics, collect_regions, collect_libraries, collect_usage, collect_coloan,
-             collect_classes, collect_upcoming]
+             collect_details, collect_upcoming]
     only = sys.argv[1:]  # 예: python extra_collect.py upcoming  -> 그 단계만 실행
     if only:
         steps = [f for f in steps if f.__name__.replace("collect_", "") in only]

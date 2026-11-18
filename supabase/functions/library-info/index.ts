@@ -1,7 +1,7 @@
 // 책콕: 도서관 기능 (정보나루 키는 이 함수 비밀값 DATA4LIBRARY_KEY에만 둔다)
 //   action 'nearby'  : 이 책을 가진 도서관을 지역에서 찾고, 가까운 몇 곳은 지금 대출 가능한지 확인
 //   action 'library' : 도서관 한 곳의 운영 정보, 시간대·요일별 대출 비율, 최근 인기대출, 신착도서
-//   action 'books'   : 책콕에 없는 책의 기본 정보·표지 (정보나루 도서 상세)
+//   action 'books'   : 책콕에 없는 책의 기본 정보·표지, 책 소개 (정보나루 도서 상세). 책콕에 있는 책이면 소개를 books에 저장
 // 정보나루가 끊기거나 비어 있으면 '모름'으로 돌려줘서 화면이 잘못된 값을 보여주지 않게 한다.
 // 배포: Supabase Edge Function 'library-info' (verify_jwt 끔, 입력값 검증으로 대신함)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -223,6 +223,33 @@ async function library(body: Record<string, unknown>) {
   return json(out);
 }
 
+// 정보나루 책 소개: 태그·엔티티를 걷어내고 공백을 정리
+function cleanDesc(t: string): string {
+  return (t || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim();
+}
+
+let dbc: ReturnType<typeof createClient> | null = null;
+async function saveDescriptions(list: { isbn13: string; description: string }[]) {
+  if (!list.length) return;
+  try {
+    dbc ??= createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const now = new Date().toISOString();
+    for (const b of list) {
+      // 책콕에 있는 책만, 아직 확인 안 한 책만 (없는 행을 새로 만들지 않는다)
+      await dbc.from("books").update({ description: b.description || null, desc_checked_at: now })
+        .eq("isbn13", b.isbn13).is("desc_checked_at", null);
+    }
+  } catch (_e) {
+    // 저장 실패는 화면 기능에 영향 없음
+  }
+}
+
 // 책콕에 아직 없는 책(같이 빌린 책 등)의 기본 정보와 표지: 정보나루 도서 상세
 async function books(body: Record<string, unknown>) {
   const isbns = Array.isArray(body.isbns) ? (body.isbns as unknown[]).map(String).filter((x) => /^\d{13}$/.test(x)).slice(0, 12) : [];
@@ -255,9 +282,11 @@ async function books(body: Record<string, unknown>) {
       classNo: b.class_no ?? "",
       additionSymbol: b.addition_symbol ?? "",
       cover: https(b.bookImageURL ?? ""),
-      description: b.description ?? "",
+      description: cleanDesc(b.description ?? ""),
     };
   })));
+  // 책콕에 있는 책이면 책 소개를 저장해 둔다 (다음 방문부터는 정보나루를 다시 부르지 않음)
+  await saveDescriptions(out.filter((b): b is NonNullable<typeof b> => !!b && b.found !== false && "description" in b) as { isbn13: string; description: string }[]);
   return json({ books: out.map((b, i) => b ?? { isbn13: isbns[i], found: false }) });
 }
 

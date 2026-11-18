@@ -1614,12 +1614,15 @@ function useBook(isbn, index) {
       // 책콕에 없는 책(같이 빌린 책 등)이나 표지가 없는 책은 정보나루 도서 상세에서 보강
       let base = bookRes.data
       if (base) base = { ...base, title: withVol(base.title, base.vol) }
-      const need = [...(base || index.get(isbn) ? [] : [isbn]), ...coIsbns.filter((i) => !coCovers[i] && !index.get(i)?.cover_url)]
+      // 책 소개를 아직 받아 본 적 없는 책도 함께 묻는다 (library-info가 받아서 books에 저장해 두므로 처음 한 번만)
+      const needDesc = base && !base.desc_checked_at
+      const need = [...((base && !needDesc) || (!base && index.get(isbn)) ? [] : [isbn]), ...coIsbns.filter((i) => !coCovers[i] && !index.get(i)?.cover_url)]
       if (need.length) {
         const { data } = await supabase.functions.invoke('library-info', { body: { action: 'books', isbns: need.slice(0, 12) } })
         for (const b of data?.books || []) {
           if (!b.found) continue
           if (b.cover) coCovers[b.isbn13] = b.cover
+          if (b.isbn13 === isbn && base && needDesc) base = { ...base, description: b.description || null }
           if (b.isbn13 === isbn && !base) {
             base = {
               isbn13: b.isbn13,
@@ -1657,7 +1660,7 @@ function useBook(isbn, index) {
       description: base.description,
       external: !!base.external,
     })
-  return { book, ...extra }
+  return { book: book && { ...book, description: book.description || base?.description || null }, ...extra }
 }
 
 /* ================= 순위 기록 · 콕 적중 ================= */
@@ -1766,6 +1769,30 @@ function useRankHistory(isbn) {
     }
   }, [isbn])
   return rows
+}
+
+// 책 소개: 처음엔 3줄, '더 보기'로 펼친다. 접힌 상태에선 '★★ 수상 ★★' 같은 홍보 줄을 빼고 본문부터 보여 준다
+function BookIntro({ text }) {
+  const [open, setOpen] = useState(false)
+  if (!text) return null
+  const body = text
+    .split('\n')
+    .filter((l) => !/^\s*[★☆■□◆◇●○▶▷※#]/.test(l))
+    .join(' ')
+    .trim() || text
+  const long = text.length > 110
+  return (
+    <div className={`intro rise${open ? ' is-open' : ''}`} style={{ animationDelay: '0.26s' }}>
+      <h2 className="intro__label">책 소개</h2>
+      <p className="intro__text">{open ? text : body}</p>
+      {long && (
+        <button type="button" className="intro__more" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          {open ? '접기' : '더 보기'}
+        </button>
+      )}
+      {open && <p className="intro__src">출처: 도서관 정보나루 책 소개</p>}
+    </div>
+  )
 }
 
 // 분야 순위 그래프 (2026-11-18 재설계)
@@ -2359,6 +2386,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               )}
             </div>
           </div>
+          <BookIntro text={book.description} key={'d' + isbn} />
           {book.external && (
             <p className="notice notice--box hero__ext">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>
           )}

@@ -21,6 +21,7 @@
 - `trend_scores`: `popular`는 rank만, `composite`는 score만 있다 (빈 값은 설계).
 - `book_state`: 단계(stage)는 매일 약 400권만 붙고 나머지는 stage·confidence 둘 다 null.
 - 이용분석 "자료 없음"은 실패가 아니라 `usage_nodata`에 적고 14일 뒤 다시 확인.
+- 책 소개(books.description)는 두 곳에서 채운다: 상세 화면을 열면 library-info 함수가 받아 저장, 새벽 수집 collect_details가 화면에 보이는 책부터 하루 50권(분류와 함께). desc_checked_at이 있으면 소개가 없어도 다시 부르지 않음.
 - ISBN은 `isbn_util.py`로 13자리 하나만 저장 (API가 'ISBN1 ISBN2'로 줄 때가 있음).
 
 ## 주의

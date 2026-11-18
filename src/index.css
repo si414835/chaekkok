@@ -4684,3 +4684,50 @@ a.lib__info {
     padding: 2px 0 6px;
   }
 }
+
+/* 책 소개 (상세 상단, 3줄 + 더 보기) */
+.intro {
+  margin: 18px 0 4px;
+  padding: 14px 16px 12px;
+  border-radius: 14px;
+  background: var(--line-2);
+}
+.intro__label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: var(--ink-soft);
+}
+.intro__text {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--ink-2, #333d4b);
+  white-space: pre-line;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.intro.is-open .intro__text {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+.intro__more {
+  margin-top: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+.intro__src {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
