@@ -2290,26 +2290,54 @@ a.kw__main {
 .rankcard .sub b.up {
   color: var(--up);
 }
+.rankchart__box {
+  width: 100%;
+  margin-top: 14px;
+}
 .rankchart {
   display: block;
   width: 100%;
   height: auto;
-  margin-top: 12px;
   overflow: visible;
+  touch-action: pan-y;
+  cursor: crosshair;
 }
 .rankchart__band {
   fill: var(--ginkgo-soft);
+  opacity: 0.7;
 }
-.rankchart__bandlabel {
-  font-size: 9px;
-  font-weight: 800;
-  fill: #8a5a00;
-  letter-spacing: 0.5px;
+.rankchart__grid {
+  stroke: var(--line, #e5e8eb);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
 }
 .rankchart__tick,
 .rankchart__date {
-  font-size: 10px;
+  font-size: 11px;
   fill: var(--ink-soft);
+}
+.rankchart__nowlabel {
+  font-size: 13px;
+  font-weight: 800;
+  fill: var(--accent);
+}
+.rankchart__hover line {
+  stroke: var(--ink-soft);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.rankchart__hover circle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.rankchart__hover rect {
+  fill: var(--ink, #191f28);
+}
+.rankchart__hover text {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #fff;
 }
 .rankchart__line {
   fill: none;
@@ -2342,7 +2370,7 @@ a.kw__main {
   stroke-dasharray: 3 3;
 }
 .rankchart__savedlabel {
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 800;
   fill: #8a5a00;
 }
@@ -2363,6 +2391,12 @@ a.kw__main {
   width: 8px;
   height: 8px;
   border-radius: 4px;
+}
+.rankchart__mile i.is-band {
+  width: 14px;
+  border-radius: 3px;
+  background: var(--ginkgo-soft);
+  border: 1px solid #e9d49a;
 }
 .rankchart__mile i.is-top {
   background: var(--ginkgo);

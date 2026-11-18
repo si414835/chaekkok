@@ -1768,41 +1768,54 @@ function useRankHistory(isbn) {
   return rows
 }
 
-// 분야 순위 그래프: 위로 갈수록 높은 순위. TOP10 구간을 띠로 표시하고, 단계가 바뀐 날을 점으로 찍는다
+// 분야 순위 그래프 (2026-11-18 재설계)
+// - 화면 실제 폭으로 1:1 그린다 (예전엔 폭 320으로 그려 통째로 확대해서 태블릿에서 글씨·선이 3배로 커져 겹쳤다)
+// - 눈금은 왼쪽 여백에만, 그래프 안에는 글씨를 두지 않는다 (TOP10은 옅은 띠 + 범례)
+// - 마지막 점 옆에 지금 순위, 그래프를 짚으면 그날 날짜·순위를 보여 준다
+function useBoxWidth(fallback = 320) {
+  const ref = useRef(null)
+  const [w, setW] = useState(fallback)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => setW(Math.max(240, Math.round(el.getBoundingClientRect().width)))
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(el)
+    return () => ro?.disconnect()
+  })
+  return [ref, w]
+}
+
 function RankChart({ isbn, firstSpotted, hit, embedded }) {
   const rows = useRankHistory(isbn)
+  const [boxRef, W] = useBoxWidth()
+  const [hover, setHover] = useState(null)
   if (!rows) return null
   const ranked = rows.filter((r) => r.rank_now != null)
   if (ranked.length < 2) return null
   const minR = Math.min(...ranked.map((r) => r.rank_now))
   const maxR = Math.max(...ranked.map((r) => r.rank_now))
-  const flat = maxR - minR <= 3 // 거의 그대로면 그래프를 작게
-  const W = 320
-  const H = flat ? 86 : 150
-  const L = 30
-  const R = 14
-  const T = 12
-  const B = 24
-  // 축: 실제 순위 범위에 맞추되, 상위권(15위 안)에 닿으면 1위부터 보여 TOP10 띠가 의미 있게
+  const flat = maxR - minR <= 3 // 거의 그대로면 그래프를 낮게
+  const H = flat ? 110 : W < 480 ? 180 : 210
+  const L = 40 // 왼쪽 눈금 칸
+  const R = 44 // 오른쪽: 지금 순위 글씨 칸
+  const T = 14
+  const B = 28
+  // 세로축: 15위 안에 닿았으면 1위부터(TOP10 띠), 아니면 실제 범위에 여유를 조금
   const lo0 = minR <= 15 ? 1 : Math.max(1, minR - Math.max(3, Math.round((maxR - minR) * 0.3)))
-  // 축 위쪽 끝이 2~10위면 TOP10 띠(1~10위)와 '1' 눈금이 그래프 밖 위로 튀어나간다 → 띠를 그릴 땐 1위부터
   const lo = lo0 <= 10 ? 1 : lo0
-  const hiRaw = maxR + Math.max(2, Math.round((maxR - minR) * 0.2))
-  const showBand = lo <= 10
-  // TOP10 띠를 그릴 때는 축 아래 끝을 10위 이상으로 잡아 띠가 그래프 밖으로 나가지 않게 한다
-  const top = Math.max(lo + 4, Math.ceil(hiRaw / 5) * 5, showBand ? 10 : 0)
-  const x = (i) => L + (rows.length === 1 ? 0 : (i * (W - L - R)) / (rows.length - 1))
-  // 순위 폭이 크면(예: 127위 → 1위) 1위와 10위가 거의 같은 높이에 붙어 글씨가 겹친다.
-  // 이때는 제곱근 눈금으로 상위권을 넓혀 TOP10 띠와 눈금이 읽히게 한다.
-  const sq = showBand && top > 30
-  const f = sq ? Math.sqrt : (v) => v
+  const showBand = lo === 1
+  const top = Math.max(lo + 4, Math.ceil((maxR + Math.max(2, Math.round((maxR - minR) * 0.2))) / 5) * 5, showBand ? 12 : 0)
+  // 폭이 크면(1위~127위) 제곱근 눈금으로 상위권을 넓힌다
+  const f = showBand && top > 30 ? Math.sqrt : (v) => v
   const y = (rank) => T + ((f(rank) - f(lo)) * (H - T - B)) / Math.max(f(top) - f(lo), 1e-6)
-  // 눈금 글씨끼리 12px보다 가까우면 뒤의 것을 뺀다
+  const x = (i) => L + (rows.length === 1 ? 0 : (i * (W - L - R)) / (rows.length - 1))
+  // 눈금: 1위·10위(띠 경계)·아래 끝, 서로 14px보다 가까우면 뺀다
   const ticks = []
-  for (const v of [...new Set(showBand ? [1, 10, top] : [lo, top])]) {
-    if (ticks.every((t) => Math.abs(y(t) - y(v)) >= 12)) ticks.push(v)
+  for (const v of showBand ? [1, 10, top] : [lo, Math.round((lo + top) / 10) * 5, top]) {
+    if (ticks.every((t) => Math.abs(y(t) - y(v)) >= 14)) ticks.push(v)
   }
-  // 순위 밖인 날은 선을 끊는다
   const segs = []
   let cur = []
   rows.forEach((r, i) => {
@@ -1812,7 +1825,6 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
     } else cur.push([x(i), y(r.rank_now)])
   })
   if (cur.length) segs.push(cur)
-  // 단계가 바뀐 날 (순위 밖이던 날은 건너뛰고 직전 단계와 비교)
   const changes = []
   let prevStage = null
   rows.forEach((r, i) => {
@@ -1828,6 +1840,19 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
   const cat = last.cat || first.cat || '분야'
   const diff = first.rank_now - last.rank_now
   const Wrap = embedded ? 'div' : 'section'
+  // 짚은 위치에서 가장 가까운 '순위가 있는 날'
+  const pick = (e) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - box.left) / box.width) * W
+    let best = null
+    rows.forEach((r, i) => {
+      if (r.rank_now == null) return
+      if (best == null || Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i
+    })
+    setHover(best)
+  }
+  const hv = hover != null ? rows[hover] : null
+  const tipX = hv ? Math.min(Math.max(x(hover), 58), W - 58) : 0 // 말풍선(폭 112)이 양옆으로 잘리지 않게
   return (
     <Wrap className={`${embedded ? 'rankcard rankcard--embedded' : 'card rankcard'} rise`} style={{ animationDelay: '0.34s' }}>
       <h2 className="h3 rankcard__title">순위 흐름</h2>
@@ -1844,37 +1869,65 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
           </span>
         </p>
       )}
-      <svg className="rankchart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${cat} 순위 ${first.rank_now}위에서 ${last.rank_now}위로`}>
-        {showBand && (
-          <>
-            <rect x={L} y={y(1) - 4} width={W - L - R} height={y(10) - y(1) + 8} rx="6" className="rankchart__band" />
-            {/* 오른쪽 끝은 최근 점이 TOP10 안에 있을 때 글씨와 겹쳐서 왼쪽 안쪽에 둔다 */}
-            <text x={L + 6} y={y(10) - 2} textAnchor="start" className="rankchart__bandlabel">TOP10</text>
-          </>
-        )}
-        {ticks.map((v) => (
-          <text key={v} x={L - 8} y={y(v) + 4} textAnchor="end" className="rankchart__tick num">
-            {v}
+      <div ref={boxRef} className="rankchart__box">
+        <svg
+          className="rankchart"
+          width={W}
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label={`${cat} 순위 ${first.rank_now}위에서 ${last.rank_now}위로`}
+          onPointerMove={pick}
+          onPointerDown={pick}
+          onPointerLeave={() => setHover(null)}
+        >
+          {showBand && <rect x={L} y={y(1) - 6} width={W - L - R + 8} height={y(10) - y(1) + 12} rx="8" className="rankchart__band" />}
+          {ticks.map((v) => (
+            <g key={v}>
+              <line x1={L} x2={W - R + 8} y1={y(v)} y2={y(v)} className="rankchart__grid" />
+              <text x={L - 10} y={y(v) + 4} textAnchor="end" className="rankchart__tick num">
+                {v}위
+              </text>
+            </g>
+          ))}
+          {savedIdx >= 0 && (
+            <g>
+              <line x1={x(savedIdx)} x2={x(savedIdx)} y1={T - 6} y2={H - B + 4} className="rankchart__saved" />
+              <text x={x(savedIdx) + 5} y={T + 4} className="rankchart__savedlabel">내가 콕</text>
+            </g>
+          )}
+          {segs.map((pts, k) => (
+            <polyline key={k} points={pts.map((p) => p.join(',')).join(' ')} className="rankchart__line" pathLength="1" />
+          ))}
+          {changes.map((c) => (
+            <circle key={c.snapshot_date} cx={x(c.i)} cy={y(c.rank_now)} r="5" fill={STAGE_COLOR[c.stage] || '#4e5968'} className="rankchart__dot" />
+          ))}
+          {top10 && <circle cx={x(rows.indexOf(top10))} cy={y(top10.rank_now)} r="5" fill="#ecbe48" className="rankchart__dot" />}
+          <circle cx={x(lastIdx)} cy={y(last.rank_now)} r="6.5" className="rankchart__now" />
+          <text x={x(lastIdx) + 11} y={y(last.rank_now) + 5} className="rankchart__nowlabel num">
+            {last.rank_now}위
           </text>
-        ))}
-        {savedIdx >= 0 && (
-          <g>
-            <line x1={x(savedIdx)} x2={x(savedIdx)} y1={T - 4} y2={H - B + 2} className="rankchart__saved" />
-            <text x={x(savedIdx) + 4} y={H - B - 4} className="rankchart__savedlabel">내가 콕</text>
-          </g>
-        )}
-        {segs.map((pts, k) => (
-          <polyline key={k} points={pts.map((p) => p.join(',')).join(' ')} className="rankchart__line" pathLength="1" />
-        ))}
-        {changes.map((c) => (
-          <circle key={c.snapshot_date} cx={x(c.i)} cy={y(c.rank_now)} r="4.5" fill={STAGE_COLOR[c.stage] || '#4e5968'} className="rankchart__dot" />
-        ))}
-        {top10 && <circle cx={x(rows.indexOf(top10))} cy={y(top10.rank_now)} r="4.5" fill="#ecbe48" className="rankchart__dot" />}
-        <circle cx={x(lastIdx)} cy={y(last.rank_now)} r="6" className="rankchart__now" />
-        <text x={L} y={H - 6} className="rankchart__date">{fmtDate(rows[0].snapshot_date)}</text>
-        <text x={W - R} y={H - 6} textAnchor="end" className="rankchart__date">{fmtDate(rows[rows.length - 1].snapshot_date)}</text>
-      </svg>
+          {hv && (
+            <g className="rankchart__hover" pointerEvents="none">
+              <line x1={x(hover)} x2={x(hover)} y1={T - 6} y2={H - B + 4} />
+              <circle cx={x(hover)} cy={y(hv.rank_now)} r="5" />
+              <rect x={tipX - 56} y={Math.max(y(hv.rank_now) - 40, 0)} width="112" height="26" rx="8" />
+              <text x={tipX} y={Math.max(y(hv.rank_now) - 40, 0) + 17} textAnchor="middle">
+                {fmtDate(hv.snapshot_date)} · {hv.rank_now}위
+              </text>
+            </g>
+          )}
+          <text x={L} y={H - 8} className="rankchart__date">{fmtDate(rows[0].snapshot_date)}</text>
+          <text x={W - R} y={H - 8} textAnchor="end" className="rankchart__date">{fmtDate(rows[rows.length - 1].snapshot_date)}</text>
+        </svg>
+      </div>
       <div className="rankchart__legend">
+        {showBand && (
+          <span className="rankchart__mile">
+            <i className="is-band" aria-hidden="true" />
+            TOP10 구간
+          </span>
+        )}
         {[
           ...changes.map((c) => ({ d: c.snapshot_date, label: c.stage, color: STAGE_COLOR[c.stage] })),
           ...(top10 ? [{ d: top10.snapshot_date, label: 'TOP10 진입', top: true }] : []),
@@ -1887,7 +1940,7 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
             </span>
           ))}
       </div>
-      {!flat && <p className="sub small">점은 트렌드 단계가 바뀐 날이에요. 선이 끊긴 곳은 그날 분야 순위 목록에 없던 날이에요.</p>}
+      {!flat && <p className="sub small">점은 트렌드 단계가 바뀐 날이에요. 그래프를 누르면 그날 순위가 보여요. 선이 끊긴 곳은 그날 분야 순위 목록에 없던 날이에요.</p>}
     </Wrap>
   )
 }
