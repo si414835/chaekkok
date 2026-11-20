@@ -695,7 +695,7 @@ function Featured({ book }) {
       </a>
       <div className="feat__text">
         <p className="feat__label">
-          {DATE_LABEL} · 오늘 가장 빠르게 뜨는 책{st?.stage ? <b> · {st.stage}</b> : null}
+          <span className="num">01</span> · {DATE_LABEL} 1위{st?.stage ? <b> · {st.stage}</b> : null}
         </p>
         <h1 className="feat__title">
           <a href={href}>{shortTitle(book.title)}</a>
@@ -909,31 +909,29 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
         {error && <p className="state state--error">데이터를 불러오지 못했어요: {error}</p>}
         {!loading && !error && top5.length > 0 && (
           <>
-            <Featured book={top5[0]} />
-            <div className="phome__row">
-              <PSec title="오늘의 서가" more={{ href: '/trend', label: '트렌드 전체 →' }} className="phome__shelf">
-                <div className="shelfgrid">
-                  {top5.slice(1).map((b, i) => (
-                    <ShelfItem key={b.isbn13} book={b} num={i + 2} />
-                  ))}
-                </div>
-              </PSec>
+            <PlainKeyword keywords={keywords} />
+            <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5">
+              <Featured book={top5[0]} />
+              <div className="shelfgrid ptop5__rest">
+                {top5.slice(1).map((b, i) => (
+                  <ShelfItem key={b.isbn13} book={b} num={i + 2} />
+                ))}
+              </div>
+            </PSec>
+            <div className="phome__row phome__row--half">
               <PSec title="대출 급상승" note="지난주 대비" className="phome__rise">
                 <RiseList books={rising} />
               </PSec>
-            </div>
-            <div className="phome__panels">
-              <LibPanel libs={libs || []} />
-              <ShopPanel list={upcoming} />
-            </div>
-            <div className="phome__row phome__row--half">
-              <PlainKeyword keywords={keywords} />
               <PSec title="내 취향 찾기" note="1분이면 돼요" className="ptaste">
                 <p>끌리는 표지 다섯 권을 고르면, 지금 뜨는 책 가운데 취향에 맞는 책을 골라 드려요.</p>
                 <a className="plink" href="/taste">
                   시작하기 →
                 </a>
               </PSec>
+            </div>
+            <div className="phome__panels">
+              <LibPanel libs={libs || []} />
+              <ShopPanel list={upcoming} />
             </div>
             <TasteTop />
             {hitStats?.matured_total ? (
