@@ -135,7 +135,7 @@ function save(key, value) {
     /* 저장 불가 환경은 무시 */
   }
 }
-// 콕 대결용 기기 번호 (로그인이 없어서 기기마다 무작위 번호 하나를 만들어 둔다)
+// 기기 번호 (로그인이 없어서 기기마다 무작위 번호 하나를 만들어 둔다) — 좋아요 집계에 쓴다
 function deviceId() {
   let id = load('chaekkok.device', null)
   if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
@@ -155,7 +155,7 @@ function useStored(key, fallback) {
 
 // 화면 주소: /  /trend/탭  /book/ISBN  /keyword/단어  /wish  /my  /alerts  /hits  /search
 // (책·키워드 주소는 검색 로봇이 각각 다른 페이지로 읽을 수 있게 #이 없는 진짜 주소로 쓴다)
-const ROUTES = ['trend', 'book', 'keyword', 'wish', 'my', 'alerts', 'hits', 'search', 'library', 'draft']
+const ROUTES = ['trend', 'book', 'keyword', 'wish', 'my', 'alerts', 'hits', 'search', 'library', 'draft', 'taste']
 function parsePath() {
   // 예전 주소(#/book/…)로 들어오면 새 주소로 바꿔 준다 (공유된 링크·알림 호환)
   if (window.location.hash.startsWith('#/')) {
@@ -302,6 +302,11 @@ function Delta({ value }) {
 
 const GINKGO_LEAF = 'M12 15.8C11 13 5.9 9.8 2.8 8C2.2 7.2 2.4 6.1 3.3 5.4C5.4 3.8 8.4 2.9 10.7 3L12 5.3L13.3 3C15.6 2.9 18.6 3.8 20.7 5.4C21.6 6.1 21.8 7.2 21.2 8C18.1 9.8 13 13 12 15.8Z'
 const Icon = {
+  taste: (on) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z" />
+    </svg>
+  ),
   gear: () => (
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="3" />
@@ -387,6 +392,7 @@ function Cover({ src, alt, className = '', title }) {
 const NAV_ITEMS = [
   { id: 'home', label: '홈', icon: Icon.home, path: '/' },
   { id: 'trend', label: '트렌드', icon: Icon.trend, path: '/trend' },
+  { id: 'taste', label: '취향', icon: Icon.taste, path: '/taste' },
   { id: 'wish', label: '콕', icon: Icon.ginkgo, path: '/wish' },
   { id: 'my', label: '마이', icon: Icon.user, path: '/my' },
 ]
@@ -690,6 +696,7 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
         {!loading && !error && (
           <>
             {wide ? <TopGrid books={top5} /> : <Carousel books={top5} />}
+            <TasteTop />
             <div className="home__pair">
             <section className="card card--list rise" style={{ animationDelay: '0.65s' }}>
               <div className="card__head">
@@ -1067,43 +1074,13 @@ function HitCalibration() {
   )
 }
 
-/* ================= 예보 · 콕 대결 ================= */
+/* ================= 예보 ================= */
 
-const DUEL_WHY = {
-  not_eligible: '분야 10위 밖의 순위권 책만 고를 수 있어요.',
-  dup: '이미 고른 책이에요.',
-  limit: '이번 주에 고를 수 있는 3권을 다 골랐어요.',
-  busy: '지금은 잠시 고를 수 없어요. 나중에 다시 해 주세요.',
-}
-
-// 책 상세: 2주 뒤 순위가 20% 넘게 오를 확률(예보)과 '오른다에 걸기'
-function Forecast({ isbn, st }) {
+// 책 상세: 2주 뒤 순위가 20% 넘게 오를 확률(예보)
+function Forecast({ st }) {
   const f = st?.forecast != null ? Number(st.forecast) : null
-  const [duel, setDuel] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState(null)
-  useEffect(() => {
-    setDuel(null)
-    setMsg(null)
-    if (f == null) return
-    let off = false
-    supabase.rpc('duel_book', { p_device: deviceId(), p_isbn: isbn }).then(({ data }) => !off && setDuel(data || null))
-    return () => {
-      off = true
-    }
-  }, [isbn, f])
   if (f == null || !st?.rank_now) return null
   const target = Math.floor(st.rank_now * 0.8)
-  const pick = async () => {
-    setBusy(true)
-    const { data, error } = await supabase.rpc('duel_pick', { p_device: deviceId(), p_isbn: isbn })
-    setBusy(false)
-    if (error || !data) return setMsg('저장하지 못했어요. 잠시 뒤에 다시 해 주세요.')
-    if (!data.ok) return setMsg(DUEL_WHY[data.why] || '지금은 고를 수 없어요.')
-    setDuel((d) => ({ ...(d || {}), picked: true, week_left: data.week_left, pickers: (d?.pickers || 0) + 1 }))
-    setMsg(null)
-  }
-  const left = duel ? Math.max(0, duel.week_left) : null
   return (
     <div className="fc rise" style={{ animationDelay: '0.29s' }}>
       <div className="fc__head">
@@ -1119,114 +1096,7 @@ function Forecast({ isbn, st }) {
       <p className="fc__desc">
         2주 뒤 {st.cat || '분야'} <b>{target}위 안</b>으로 오를 확률이에요 (지금 {st.rank_now}위). 같은 점수대였던 책이 실제로 오른 비율이에요.
       </p>
-      <div className="fc__duel">
-        {duel?.picked ? (
-          <span className="fc__picked">
-            {Icon.ginkgo(true, 16)}
-            오른다에 걸었어요
-          </span>
-        ) : (
-          <button className="btn btn--soft fc__btn" disabled={busy || !duel || left === 0} onClick={pick}>
-            오른다에 걸기
-          </button>
-        )}
-        <a className="fc__link" href="/wish">
-          콕 대결 {Icon.chev()}
-        </a>
-      </div>
-      {msg ? (
-        <p className="fc__note">{msg}</p>
-      ) : duel?.picked ? (
-        <p className="fc__note">2주 뒤 데이터로 맞았는지 알려드려요.</p>
-      ) : (
-        left != null && (
-          <p className="fc__note">
-            {left === 0 ? '이번 주에 고를 수 있는 3권을 다 골랐어요.' : `책콕과 겨뤄 보세요 · 이번 주 ${left}권 더 고를 수 있어요`}
-            {duel.pickers >= 2 ? ` · 최근 2주 ${duel.pickers}명이 골랐어요` : ''}
-          </p>
-        )
-      )}
     </div>
-  )
-}
-
-// 콕한 책 화면: 내가 고른 책과 책콕의 적중률 비교
-function Duel({ base }) {
-  const [d, setD] = useState(null)
-  useEffect(() => {
-    supabase.rpc('duel_my', { p_device: deviceId() }).then(({ data }) => setD(data || { picks: [], week_left: 3 }))
-  }, [])
-  const picks = d?.picks || []
-  const done = picks.filter((p) => p.status !== 'pending')
-  const won = done.filter((p) => p.status === 'hit').length
-  const mine = done.length ? Math.round((100 * won) / done.length) : null
-  const left = d ? Math.max(0, d.week_left) : null
-  return (
-    <section className="card card--list duel">
-      <div className="duel__head">
-        <Eyebrow tone="spot">KOK DUEL</Eyebrow>
-        <h2 className="h2 display">콕 대결</h2>
-        <p className="sub">2주 뒤 순위가 20% 넘게 오를 책을 일주일에 3권까지 골라서 책콕과 적중률을 겨뤄요.</p>
-        <div className="hitgrid hitgrid--3">
-          <div>
-            <span>나</span>
-            <strong className="num">
-              {mine ?? '-'}
-              {mine != null && <small>%</small>}
-            </strong>
-          </div>
-          <div>
-            <span>책콕</span>
-            <strong className="num">
-              {base?.spot_up20 != null ? Math.round(base.spot_up20) : '-'}
-              {base?.spot_up20 != null && <small>%</small>}
-            </strong>
-          </div>
-          <div>
-            <span>아무 책</span>
-            <strong className="num">
-              {base?.base_up20 != null ? Math.round(base.base_up20) : '-'}
-              {base?.base_up20 != null && <small>%</small>}
-            </strong>
-          </div>
-        </div>
-        <p className="sub small">
-          {done.length ? `내 결과 ${done.length}권 중 ${won}권 적중` : '내 적중률은 고른 지 2주가 지난 책부터 계산돼요'} · 책콕은 처음 포착한 책 기준이에요
-        </p>
-      </div>
-      {d === null && <Loading />}
-      {d && picks.length === 0 && (
-        <div className="empty">
-          <p>아직 고른 책이 없어요.</p>
-          <p className="sub">책 상세의 '책콕 예보' 아래에서 '오른다에 걸기'를 눌러 보세요.</p>
-          <a className="btn btn--soft" href="/trend">책 고르러 가기</a>
-        </div>
-      )}
-      {picks.map((p) => {
-        const days = daysUntil(p.due)
-        const now = p.status === 'pending' ? p.rank_latest : p.rank_after
-        return (
-          <a key={p.isbn13 + p.picked_on} className="row" href={`/book/${encodeURIComponent(p.isbn13)}`}>
-            <Cover src={p.cover_url} alt="" className="row__cover" title={p.title} />
-            <span className="row__info">
-              <span className="row__title">{shortTitle(p.title)}</span>
-              <span className="row__meta row__meta--wrap">
-                {fmtDate(p.picked_on)} {p.rank_at_pick}위에서 고름 → {p.status === 'pending' ? '지금' : '2주 뒤'} {now ? `${now}위` : '순위 밖'}
-              </span>
-              <span className="row__meta">
-                목표 {Math.floor(p.rank_at_pick * 0.8)}위 안{p.forecast != null ? ` · 책콕 예보 ${Math.round(p.forecast)}%` : ''}
-              </span>
-            </span>
-            <span className={`duel__status duel__status--${p.status}`}>
-              {p.status === 'hit' ? '적중' : p.status === 'miss' ? '빗나감' : days ? `D-${days}` : '집계 중'}
-            </span>
-          </a>
-        )
-      })}
-      {d && picks.length > 0 && left != null && (
-        <p className="sub small duel__foot">{left === 0 ? '이번 주에 고를 수 있는 3권을 다 골랐어요.' : `이번 주 ${left}권 더 고를 수 있어요.`}</p>
-      )}
-    </section>
   )
 }
 
@@ -2484,6 +2354,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   const { book, usage, coCovers, loading, base } = useBook(isbn, index)
   const ev = useEvidence(isbn)
   const rankHist = useRankHistory(isbn)
+  const recs = useBookRecs(isbn)
   const keywords = cleanKeywords(usage?.keywords).slice(0, 8)
   const libRef = useRef(null)
   const actRef = useRef(null)
@@ -2529,7 +2400,9 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
     )
   }
   const saved = wish.some((w) => w.isbn13 === book.isbn13)
-  const co = (usage?.co_loan || []).filter((c, i, a) => a.findIndex((x) => shortTitle(x.title) === shortTitle(c.title)) === i).slice(0, 10)
+  // 함께 빌린 책: 흔한 책 보정 순(book_recs)이 있으면 그 순서, 없으면 정보나루 순서
+  const coSrc = recs?.co?.length ? recs.co : usage?.co_loan || []
+  const co = coSrc.filter((c, i, a) => c.title && a.findIndex((x) => shortTitle(x.title) === shortTitle(c.title)) === i).slice(0, 10)
   const st = stateMap.get(book.isbn13)
   const cat = st?.cat || ev?.cat || '분야'
   const rankNow = st?.rank_now ?? ev?.rank_now
@@ -2711,13 +2584,13 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                     <section className="bk-shelf rise" style={{ animationDelay: '0.3s' }}>
                       <div className="bk-shead">
                         <h2 className="h2 display">이 책과 함께 빌린 책</h2>
-                        <p className="sub">이 책을 빌린 사람들이 같이 빌린 책 · 도서관 대출 기록 기준</p>
+                        <p className="sub">이 책을 빌린 사람들이 같이 빌린 책 · 어디에나 끼는 베스트셀러는 뒤로 미뤘어요</p>
                       </div>
                       <div className="bk-shelf__scroll" style={{ '--n': co.length }}>
                         <div className="bk-shelf__row">
                           {co.map((c) => (
                             <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`}>
-                              <Cover src={coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} alt="" className="bk-shelf__cover" title={c.title} />
+                              <Cover src={c.cover_url || coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} alt="" className="bk-shelf__cover" title={c.title} />
                             </a>
                           ))}
                         </div>
@@ -2734,6 +2607,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                     </section>
                   )}
 
+                  <DeepRecs recs={recs} co={co} />
                   <KeywordBooks bare isbn={book.isbn13} words={keywords.map((k) => k.word)} />
                 </div>
 
@@ -2775,7 +2649,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                       )}
                     </dl>
                     {st.stage !== '스테디' && <WhyRising isbn={book.isbn13} />}
-                    <Forecast isbn={book.isbn13} st={st} />
+                    <Forecast st={st} />
                     {wide && (
                       <button className="bk-diag__next" onClick={() => goPage(1)}>
                         순위 흐름 · 대출 데이터 보기 <span aria-hidden="true">→</span>
@@ -2888,6 +2762,329 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
         />
       )}
     </div>
+  )
+}
+
+/* ================= 취향 찾기 (2026-11-20, 책결 비교 후) =================
+   표지를 보고 좋아요·별로·모르겠어요를 고르면, 좋아한 책의 함께 빌린·마니아·다독자 목록을 합쳐
+   '내 취향 중 지금 뜨는 책'을 보여 준다. AI·유료 API 없이 DB 함수(taste_recs)만 쓴다.
+   좋아요는 기기 번호로 익명 집계해 홈의 '책콕 사람들이 좋다고 고른 책'에 쓴다. */
+
+const TASTE_NEED = 5
+// 받침에 따라 '과/와' (한글이 아니면 '과')
+const gwa = (w) => {
+  const c = (w || '').trim().slice(-1).charCodeAt(0) - 0xac00
+  return c >= 0 && c <= 11171 && c % 28 === 0 ? '와' : '과'
+}
+const TASTE_KEY = 'chaekkok.taste'
+
+function sendVote(isbn13, vote, source = 'taste') {
+  try {
+    supabase.rpc('taste_vote', { p_device: deviceId(), p_isbn: isbn13, p_vote: vote, p_source: source }).then(() => {})
+  } catch {
+    /* 집계 실패는 화면에 영향 없음 */
+  }
+}
+
+// 표지 후보: 지금 순위권 어른 책을 분야별로 돌아가며 섞는다 (한 분야만 연달아 나오지 않게)
+function tastePool(feed) {
+  const seen = new Set()
+  const all = [...(feed.popular || []), ...(feed.composite || []), ...(feed.rising || [])].filter((b) => {
+    const k = shortTitle(b.title)
+    if (!b.cover_url || isChildBook(b) || seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+  const groups = {}
+  for (const b of all) (groups[b.categoryLabel || '기타'] ||= []).push(b)
+  const keys = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length)
+  const out = []
+  for (let i = 0; out.length < all.length; i++) {
+    for (const k of keys) if (groups[k][i]) out.push(groups[k][i])
+    if (i > 400) break
+  }
+  return out
+}
+
+function TastePage({ feed, loading }) {
+  const [votes, setVotes] = useStored(TASTE_KEY, {})
+  const pool = useMemo(() => tastePool(feed), [feed])
+  const queue = pool.filter((b) => !(b.isbn13 in votes))
+  const cur = queue[0]
+  const likes = Object.entries(votes).filter(([, v]) => v.v === 1)
+  const dislikes = Object.entries(votes).filter(([, v]) => v.v === -1)
+  const ready = likes.length >= TASTE_NEED
+  const [recs, setRecs] = useState(null)
+  const [show, setShow] = useState(ready)
+  const resRef = useRef(null)
+
+  const vote = (v) => {
+    if (!cur) return
+    setVotes((m) => ({ ...m, [cur.isbn13]: { v, t: shortTitle(cur.title), c: cur.cover_url } }))
+    if (v !== 0) sendVote(cur.isbn13, v)
+  }
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.closest('input,textarea,select')) return
+      if (e.key === 'ArrowRight') vote(1)
+      else if (e.key === 'ArrowLeft') vote(-1)
+      else if (e.key === 'ArrowDown') vote(0)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+  const likeKey = likes.map(([k]) => k).join(',') + '|' + dislikes.map(([k]) => k).join(',')
+  useEffect(() => {
+    if (!show || likes.length < 1) return
+    let off = false
+    supabase
+      .rpc('taste_recs', { p_like: likes.map(([k]) => k), p_dislike: dislikes.map(([k]) => k), p_seen: Object.keys(votes), p_limit: 40 })
+      .then(({ data }) => !off && setRecs(data || []))
+    return () => {
+      off = true
+    }
+  }, [show, likeKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const reset = () => {
+    setVotes({})
+    setRecs(null)
+    setShow(false)
+  }
+  const seenT = new Set()
+  const uniq = (recs || []).filter((r) => !seenT.has(shortTitle(r.title)) && seenT.add(shortTitle(r.title)))
+  // 지금 뜨는 = 포착·떠오름·확산 (스테디는 꾸준한 인기라 아래 추천으로)
+  const isUp = (r) => ['포착', '떠오름', '확산'].includes(r.stage)
+  const rising = uniq.filter(isUp).slice(0, 8)
+  const more = uniq.filter((r) => !isUp(r)).slice(0, 12)
+  const viaTitle = (isbn) => votes[isbn]?.t
+  const openResults = () => {
+    setShow(true)
+    setTimeout(() => resRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }
+
+  const RecRow = ({ r }) => (
+    <a className="taste__rec" href={`/book/${encodeURIComponent(r.isbn13)}`}>
+      <Cover src={r.cover_url} alt="" className="taste__reccover" title={r.title} />
+      <span className="taste__recinfo">
+        <b>{shortTitle(r.title)}</b>
+        <small>{cleanAuthor(r.author)}</small>
+        {r.via && viaTitle(r.via) && <span className="taste__via">좋아한 「{viaTitle(r.via)}」{gwa(viaTitle(r.via))} 함께 읽힌 책</span>}
+        {r.stage && (
+          <span className="taste__stage">
+            <StageBadge stage={r.stage} />
+            {r.rank_now ? <span className="sub">분야 {r.rank_now}위</span> : null}
+          </span>
+        )}
+      </span>
+    </a>
+  )
+
+  return (
+    <div className="taste">
+      <header className="pagehead">
+        <Eyebrow>MY TASTE</Eyebrow>
+        <h1 className="h1 display">내 취향 찾기</h1>
+        <span className="sub">표지를 보고 끌리면 좋아요, 아니면 별로를 눌러 주세요. 읽지 않은 책도 괜찮아요.</span>
+      </header>
+
+      <section className="card taste__deck">
+        <div className="taste__progress">
+          <span>
+            좋아요 <b className="num">{Math.min(likes.length, TASTE_NEED)}</b> / {TASTE_NEED}
+          </span>
+          <span className="taste__bar">
+            <i style={{ width: `${Math.min(100, (likes.length / TASTE_NEED) * 100)}%` }} />
+          </span>
+        </div>
+        {loading && !cur && <Loading />}
+        {cur ? (
+          <div className="taste__card" key={cur.isbn13}>
+            <Cover src={cur.cover_url} alt={shortTitle(cur.title)} className="taste__cover" title={cur.title} />
+            <div className="taste__meta">
+              <strong>{shortTitle(cur.title)}</strong>
+              <span className="sub">
+                {cleanAuthor(cur.author)}
+                {cur.categoryLabel ? ` · ${cur.categoryLabel}` : ''}
+              </span>
+            </div>
+            <div className="taste__btns">
+              <button className="taste__btn taste__btn--no" onClick={() => vote(-1)}>
+                <span aria-hidden="true">←</span> 별로예요
+              </button>
+              <button className="taste__btn taste__btn--skip" onClick={() => vote(0)}>
+                모르겠어요
+              </button>
+              <button className="taste__btn taste__btn--yes" onClick={() => vote(1)}>
+                좋아요 <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <p className="sub small taste__keys">키보드 ← 별로 · ↓ 모르겠어요 · → 좋아요</p>
+          </div>
+        ) : (
+          !loading && <p className="state">준비한 표지를 다 봤어요. 아래 결과를 확인해 보세요.</p>
+        )}
+        <div className="taste__acts">
+          <button className="btn btn--primary" disabled={!ready && likes.length < 3} onClick={openResults}>
+            {ready ? '내 취향 결과 보기' : likes.length >= 3 ? '지금까지로 결과 보기' : `좋아요 ${TASTE_NEED - likes.length}권 더 골라 주세요`}
+          </button>
+          {Object.keys(votes).length > 0 && (
+            <button className="btn btn--soft" onClick={reset}>
+              처음부터 다시
+            </button>
+          )}
+        </div>
+      </section>
+
+      {show && (
+        <section className="card taste__result" ref={resRef}>
+          <h2 className="h2 display">내 취향 중 지금 뜨는 책</h2>
+          <p className="sub">좋아한 책을 빌린 사람들이 함께 빌린 책 · 마니아와 다독자가 고른 책 가운데, 책콕이 지금 뜨고 있다고 본 책이에요.</p>
+          {recs === null && <Loading />}
+          {recs && rising.length === 0 && <p className="state">지금 뜨는 책 중에는 아직 맞는 책이 없어요. 아래 추천을 먼저 보세요.</p>}
+          <div className="taste__recs">
+            {rising.map((r) => (
+              <RecRow key={r.isbn13} r={r} />
+            ))}
+          </div>
+          {more.length > 0 && (
+            <>
+              <h3 className="h3 taste__h3">내 취향 추천</h3>
+              <p className="sub">흔한 베스트셀러는 뒤로 미뤄서, 놓치기 쉬운 책이 먼저 나와요.</p>
+              <div className="taste__recs">
+                {more.map((r) => (
+                  <RecRow key={r.isbn13} r={r} />
+                ))}
+              </div>
+            </>
+          )}
+          {recs && uniq.length === 0 && <p className="state">좋아한 책의 대출 기록이 아직 적어요. 몇 권 더 골라 주세요.</p>}
+          <p className="sub small">근거: 도서관 정보나루 이용분석(함께 빌린 책·마니아·다독자 추천). 좋아요는 이름 없이 집계돼 홈의 '책콕 사람들이 좋다고 고른 책'에 쓰여요.</p>
+        </section>
+      )}
+
+      {likes.length > 0 && (
+        <section className="card">
+          <h2 className="h3">내가 좋아요 한 책 {likes.length}권</h2>
+          <div className="taste__liked">
+            {likes.map(([k, v]) => (
+              <a key={k} href={`/book/${encodeURIComponent(k)}`} className="taste__likeditem">
+                <Cover src={v.c} alt="" className="taste__likedcover" title={v.t} />
+                <small>{v.t}</small>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+// 홈: 책콕 사람들이 좋다고 고른 책 (최근 30일 좋아요 많은 순, 익명 집계)
+function TasteTop() {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    supabase.rpc('taste_top', { p_days: 30, p_limit: 10 }).then(({ data }) => setRows(data || []))
+  }, [])
+  const list = (rows || []).filter((r, i, a) => a.findIndex((x) => shortTitle(x.title) === shortTitle(r.title)) === i)
+  return (
+    <section className="card tastetop rise" style={{ animationDelay: '0.6s' }}>
+      <div className="card__head">
+        <div className="titlegroup">
+          <Eyebrow tone="spot">READERS' PICK</Eyebrow>
+          <h2 className="h2 display">책콕 사람들이 좋다고 고른 책</h2>
+        </div>
+        <a className="bk-more" href="/taste">
+          나도 고르기 →
+        </a>
+      </div>
+      <p className="sub">최근 30일 '내 취향 찾기'와 콕에서 좋아요를 많이 받은 책이에요.</p>
+      {rows === null && <Loading />}
+      {rows && list.length === 0 && (
+        <a className="tastetop__empty press" href="/taste">
+          <span>
+            <b>아직 모으는 중이에요. 첫 좋아요를 남겨 주세요</b>
+            <small>표지 몇 장만 고르면 내 취향 중 지금 뜨는 책도 찾아드려요</small>
+          </span>
+          {Icon.chev()}
+        </a>
+      )}
+      {list.length > 0 && (
+        <div className="tastetop__row">
+          {list.map((r, i) => (
+            <a key={r.isbn13} className="tastetop__item" href={`/book/${encodeURIComponent(r.isbn13)}`}>
+              <span className="tastetop__rank num">{i + 1}</span>
+              <Cover src={r.cover_url} alt="" className="tastetop__cover" title={r.title} />
+              <b>{shortTitle(r.title)}</b>
+              <small>
+                좋아요 <span className="num">{r.likes}</span>
+                {r.stage ? ` · ${r.stage}` : ''}
+              </small>
+            </a>
+          ))}
+        </div>
+      )}
+      <a className="tastetop__cta press" href="/taste">
+        <span>
+          <b>내 취향 찾기</b>
+          <small>표지를 보고 좋아요 {TASTE_NEED}권 → 내 취향 중 지금 뜨는 책</small>
+        </span>
+        {Icon.chev()}
+      </a>
+    </section>
+  )
+}
+
+// 책 상세: 마니아·다독자가 고른 책 (함께 빌린 책과 겹치는 책은 뺀다)
+function useBookRecs(isbn) {
+  const [recs, setRecs] = useState(null)
+  useEffect(() => {
+    let off = false
+    setRecs(null)
+    supabase.rpc('book_recs', { p_isbn: isbn }).then(({ data }) => !off && setRecs(data || {}))
+    return () => {
+      off = true
+    }
+  }, [isbn])
+  return recs
+}
+
+function DeepRecs({ recs, co }) {
+  const [tab, setTab] = useState('mania')
+  const coKeys = new Set(co.map((c) => shortTitle(c.title)))
+  const pick = (list) => {
+    const seen = new Set(coKeys)
+    return (list || []).filter((b) => b.title && !seen.has(shortTitle(b.title)) && seen.add(shortTitle(b.title))).slice(0, 8)
+  }
+  const lists = { mania: pick(recs?.mania), reader: pick(recs?.reader) }
+  const cur = lists[tab].length ? tab : lists.mania.length ? 'mania' : 'reader'
+  if (!lists.mania.length && !lists.reader.length) return null
+  return (
+    <section className="bk-sub bk-deep rise" style={{ animationDelay: '0.32s' }}>
+      <div className="card__head">
+        <h2 className="h2 display">깊게 읽는 사람들이 고른 책</h2>
+        <div className="bk-deep__tabs" role="tablist">
+          {lists.mania.length > 0 && (
+            <button role="tab" aria-selected={cur === 'mania'} className={cur === 'mania' ? 'is-on' : ''} onClick={() => setTab('mania')}>
+              마니아
+            </button>
+          )}
+          {lists.reader.length > 0 && (
+            <button role="tab" aria-selected={cur === 'reader'} className={cur === 'reader' ? 'is-on' : ''} onClick={() => setTab('reader')}>
+              다독자
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="sub">{cur === 'mania' ? '이 분야 책을 많이 빌리는 사람들이 이 책과 함께 고른 책' : '책을 아주 많이 빌리는 사람들이 이 책과 함께 고른 책'} · 도서관 정보나루</p>
+      <div className="bk-kwbooks">
+        {lists[cur].map((b) => (
+          <a key={b.isbn13 || b.title} href={`/book/${encodeURIComponent(b.isbn13)}`} className="bk-kwbook">
+            <Cover src={b.cover_url} alt="" className="bk-kwbook__cover" title={b.title} />
+            <b>{shortTitle(b.title)}</b>
+            <small>{cleanAuthor(b.author)}</small>
+          </a>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -4329,7 +4526,6 @@ function Wish({ wish, index, toggleWish, hits, alertState, push, base }) {
             </div>
           </div>
         </section>
-        <Duel base={base} />
         <section className="card card--list wishlist">
           {items.length === 0 && (
             <div className="empty">
@@ -4836,6 +5032,7 @@ export default function App() {
   }, [hits]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleWish = (b) => {
+    sendVote(b.isbn13, wish.some((w) => w.isbn13 === b.isbn13) ? 0 : 1, 'kok')
     setWish((list) =>
       list.some((w) => w.isbn13 === b.isbn13)
         ? list.filter((w) => w.isbn13 !== b.isbn13)
@@ -4864,6 +5061,7 @@ export default function App() {
           <Home feed={feed} keywords={keywords} loading={loading} error={error} upcoming={home.upcoming} hitStats={home.hitStats} unread={alertState.unread} libs={libs} />
         )}
         {route.name === 'hits' && <Hits stats={home.hitStats} index={index} />}
+        {route.name === 'taste' && <TastePage feed={feed} loading={loading} />}
         {route.name === 'draft' && <Drafts />}
         {route.name === 'trend' && (
           <Trend tab={trendTab} feed={feed} loading={loading} error={error} prefs={prefs} interests={interests} setInterests={setInterests} demo={demo} onOpenFilter={() => setSheet(true)} />

@@ -72,21 +72,51 @@ function setMeta(html, { title, description, url, image, jsonld, body }) {
   return html
 }
 
+// 화면(App.jsx cleanKeywords)과 같은 기준 + 뜻이 흐린 일반 낱말
+const TAG_SKIP = new Set(['올해', '수천', '과정', '방법', '시대', '오늘', '지금', '하나', '정도', '부분', '경우', '내용', '모든', '이번', '이유', '사실', '자신', '우리', '저자', '작가', '출간', '책', '시간', '하루', '생각', '마음'])
+
 async function bookPage(isbn) {
-  const [books, states] = await Promise.all([
-    sb(`books?isbn13=eq.${isbn}&select=title,author,publisher,class_name,cover_url,pub_year,addition_symbol,vol&limit=1`),
-    sb(`v_book_state_latest?isbn13=eq.${isbn}&select=stage,reason&limit=1`),
+  const [books, states, usages] = await Promise.all([
+    sb(`books?isbn13=eq.${isbn}&select=title,author,publisher,class_name,cover_url,pub_year,addition_symbol,vol,description&limit=1`),
+    sb(`v_book_state_latest?isbn13=eq.${isbn}&select=stage,reason,rank_now,rank_prev,cat&limit=1`),
+    sb(`book_usage?isbn13=eq.${isbn}&select=keywords,co_loan,loan_grps,mania_rec&limit=1`),
   ])
   const b = books?.[0]
   if (!b) return null
   const st = states?.[0]
+  const u = usages?.[0] || {}
   const vol = (b.vol || '').trim()
   const t = shortTitle(b.title) + (vol ? (/^\d+$/.test(vol) ? ` ${vol}권` : ` ${vol}`) : '') // 서리꽃 1권·2권 구분
   const author = cleanAuthor(b.author)
   const cat = (b.class_name || '').split('>').slice(0, 2).map((s) => s.trim()).filter(Boolean).join(' > ')
   const title = `${t}${author ? ` — ${author}` : ''} | 책콕`
   const why = st?.reason ? `${st.stage ? st.stage + ' · ' : ''}${st.reason}. ` : ''
-  const description = clip(`${why}『${t}』 대출 추이, 많이 빌린 연령대, 같이 빌린 책, 내 도서관 소장 여부를 책콕에서 확인하세요.`, 80)
+  const intro = (b.description || '').replace(/\s+/g, ' ').trim()
+
+  // 이 책만의 정보로 본문을 만든다 (같은 틀 문장만 있는 얇은 페이지가 되지 않게)
+  const grp = (u.loan_grps || []).slice().sort((x, y) => (y.loanCnt || 0) - (x.loanCnt || 0))[0]
+  const topGroup = grp?.age ? `${grp.age}${grp.gender ? ' ' + grp.gender : ''}` : ''
+  const words = [...new Set((u.keywords || []).map((k) => String(k.word || '').trim()))].filter((w) => w.length > 1 && w.length <= 12 && !TAG_SKIP.has(w) && w !== shortTitle(b.title)).slice(0, 8)
+  const seen = new Set([shortTitle(b.title)])
+  const pickBooks = (list, n) =>
+    (list || []).filter((c) => c?.isbn13 && c.isbn13 !== isbn && c.title && !seen.has(shortTitle(c.title)) && seen.add(shortTitle(c.title))).slice(0, n)
+  const co = pickBooks(u.co_loan, 8)
+  const mania = pickBooks(u.mania_rec, 5)
+  const rankLine =
+    st?.rank_now != null
+      ? `${st.cat ? st.cat + ' ' : ''}대출 순위 ${st.rank_now}위` + (st.rank_prev != null && st.rank_prev !== st.rank_now ? ` (지난번 ${st.rank_prev}위)` : '')
+      : ''
+
+  const descParts = [
+    why.trim().replace(/\.$/, ''),
+    rankLine,
+    topGroup ? `${topGroup}이 가장 많이 빌림` : '',
+    co.length ? `같이 빌린 책: ${co.slice(0, 2).map((c) => shortTitle(c.title)).join(', ')}` : '',
+  ].filter(Boolean)
+  const description = clip(
+    descParts.length ? `『${t}』 ${descParts.join(' · ')}` : intro ? `『${t}』 ${intro}` : `『${t}』 대출 추이, 많이 빌린 연령대, 같이 빌린 책, 내 도서관 소장 여부를 책콕에서 확인하세요.`,
+    110,
+  )
   const url = `${SITE}/book/${isbn}`
   const image = https(b.cover_url) || `${SITE}/og.png`
   const jsonld = {
@@ -98,10 +128,25 @@ async function bookPage(isbn) {
     ...(b.publisher ? { publisher: { '@type': 'Organization', name: b.publisher } } : {}),
     ...(/^\d{4}$/.test(b.pub_year || '') ? { datePublished: b.pub_year } : {}),
     ...(b.cover_url ? { image } : {}),
+    ...(intro ? { description: clip(intro, 300) } : {}),
+    ...(words.length ? { keywords: words.join(', ') } : {}),
     url,
     inLanguage: 'ko',
   }
-  const body = `<article style="padding:24px 20px;font-family:'Noto Sans KR',sans-serif"><h1 style="font-size:24px;margin:0 0 8px">${esc(t)}</h1><p style="margin:0;color:#6b7684">${esc([author, b.publisher, cat].filter(Boolean).join(' · '))}</p>${st?.reason ? `<p style="margin:12px 0 0">${esc(why.trim())}</p>` : ''}</article>`
+  const li = (c) => `<li><a href="/book/${esc(c.isbn13)}">${esc(shortTitle(c.title))}</a>${c.author ? ' · ' + esc(cleanAuthor(c.author)) : ''}</li>`
+  const sec = (h, inner) => `<section style="margin-top:18px"><h2 style="font-size:17px;margin:0 0 6px">${h}</h2>${inner}</section>`
+  const body =
+    `<article style="padding:24px 20px;font-family:'Noto Sans KR',sans-serif;line-height:1.6">` +
+    `<h1 style="font-size:24px;margin:0 0 8px">${esc(t)}</h1>` +
+    `<p style="margin:0;color:#6b7684">${esc([author, b.publisher, b.pub_year, cat].filter(Boolean).join(' · '))}</p>` +
+    (why || rankLine ? `<p style="margin:12px 0 0">${esc([why.trim(), rankLine].filter(Boolean).join(' '))}</p>` : '') +
+    (intro ? sec('책 소개', `<p style="margin:0">${esc(clip(intro, 400))}</p>`) : '') +
+    (topGroup ? sec('누가 빌렸나', `<p style="margin:0">도서관 대출 기록 기준 ${esc(topGroup)}이 가장 많이 빌렸어요.</p>`) : '') +
+    (words.length ? sec('이 책의 키워드', `<p style="margin:0">${words.map((w) => `<a href="/keyword/${encodeURIComponent(w)}">#${esc(w)}</a>`).join(' ')}</p>`) : '') +
+    (co.length ? sec('이 책을 빌린 사람들이 같이 빌린 책', `<ul style="margin:0;padding-left:18px">${co.map(li).join('')}</ul>`) : '') +
+    (mania.length ? sec('마니아 독자가 함께 고른 책', `<ul style="margin:0;padding-left:18px">${mania.map(li).join('')}</ul>`) : '') +
+    `<p style="margin:18px 0 0;color:#6b7684;font-size:13px">자료: 도서관 정보나루 대출 데이터 · <a href="/">책콕 홈</a> · <a href="/trend">요즘 뜨는 책</a></p>` +
+    `</article>`
   return { title, description, url, image, jsonld, body }
 }
 

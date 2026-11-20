@@ -662,7 +662,7 @@ p {
   background: var(--card);
   border-top: 1px solid var(--line);
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   z-index: 20;
 }
 .tabbar__item {
@@ -5614,7 +5614,8 @@ a.lib__info {
 .bk-main .bk-intro { order: 2; }
 .bk-main .bk-diag { order: 3; }
 .bk-main .bk-shelf { order: 4; }
-.bk-main .bk-kwsec { order: 5; }
+.bk-main .bk-kwsec { order: 6; }
+.bk-main .bk-deep { order: 5; }
 .bk-sub {
   min-width: 0;
 }
@@ -6069,3 +6070,55 @@ a.lib__info {
     transition: visibility 0s linear 0.5s;
   }
 }
+
+/* ===== 내 취향 찾기 · 사람들이 좋다고 고른 책 · 깊게 읽는 사람들 (2026-11-20) ===== */
+.taste { display: flex; flex-direction: column; gap: 16px; }
+.taste__deck { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px; }
+.taste__progress { width: 100%; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-soft); }
+.taste__progress b { color: var(--accent); font-size: 15px; }
+.taste__bar { flex: 1; height: 6px; border-radius: 99px; background: var(--accent-soft); overflow: hidden; }
+.taste__bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.3s ease; }
+.taste__card { display: flex; flex-direction: column; align-items: center; gap: 12px; animation: bkin 0.35s ease both; }
+.taste__cover { width: 180px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; box-shadow: var(--shadow-book, 0 10px 24px rgba(0,0,0,0.18)); background: #e9e8e4; }
+.taste__meta { text-align: center; display: flex; flex-direction: column; gap: 4px; max-width: 300px; }
+.taste__meta strong { font-family: var(--display); font-size: 18px; line-height: 1.35; }
+.taste__btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.taste__btn { border-radius: 99px; padding: 10px 18px; font-size: 14px; font-weight: 600; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; transition: transform 0.12s ease, background 0.15s ease; }
+.taste__btn:active { transform: scale(0.96); }
+.taste__btn--yes { background: var(--accent); border-color: var(--accent); color: #fff; }
+.taste__btn--no { color: var(--ink-soft); }
+.taste__btn--skip { color: var(--ink-soft); font-weight: 500; }
+.taste__keys { margin: 0; }
+.taste__acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.taste__acts .btn[disabled] { opacity: 0.55; cursor: default; }
+.taste__result { display: flex; flex-direction: column; gap: 10px; }
+.taste__h3 { margin-top: 10px; }
+.taste__recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.taste__rec { display: flex; gap: 12px; padding: 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: inherit; text-decoration: none; transition: border-color 0.15s ease; }
+.taste__rec:hover { border-color: var(--accent); }
+.taste__reccover { width: 54px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; flex: none; background: #e9e8e4; }
+.taste__recinfo { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.taste__recinfo b { font-size: 14px; line-height: 1.35; }
+.taste__recinfo small { color: var(--ink-soft); font-size: 12px; }
+.taste__via { font-size: 12px; color: var(--accent); }
+.taste__stage { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.taste__liked { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.taste__likeditem { flex: none; width: 72px; display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; }
+.taste__likedcover { width: 72px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 4px; background: #e9e8e4; }
+.taste__likeditem small { font-size: 11px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+.tastetop { display: flex; flex-direction: column; gap: 10px; }
+.tastetop__row { display: flex; gap: 14px; overflow-x: auto; padding: 4px 2px 8px; scroll-snap-type: x proximity; }
+.tastetop__item { position: relative; flex: none; width: 104px; display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; scroll-snap-align: start; }
+.tastetop__cover { width: 104px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 5px; box-shadow: 0 6px 14px rgba(20, 24, 60, 0.14); background: #e9e8e4; }
+.tastetop__rank { position: absolute; top: 6px; left: 6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.tastetop__item b { font-size: 13px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tastetop__item small { font-size: 11.5px; color: var(--ink-soft); }
+.tastetop__cta, .tastetop__empty { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+.tastetop__cta span, .tastetop__empty span { display: flex; flex-direction: column; gap: 2px; }
+.tastetop__cta small, .tastetop__empty small { color: var(--ink-soft); font-size: 12px; }
+.tastetop__empty { background: transparent; border: 1px dashed var(--accent); }
+
+.bk-deep__tabs { display: inline-flex; padding: 3px; border-radius: 99px; background: var(--accent-soft); gap: 2px; }
+.bk-deep__tabs button { border: 0; background: transparent; padding: 5px 12px; border-radius: 99px; font-size: 13px; color: var(--accent); cursor: pointer; }
+.bk-deep__tabs button.is-on { background: var(--card); font-weight: 700; box-shadow: 0 1px 3px rgba(20, 24, 60, 0.12); }

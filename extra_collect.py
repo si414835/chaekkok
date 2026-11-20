@@ -565,7 +565,9 @@ def pick_usage_targets():
     since = (datetime.now(timezone.utc) - timedelta(days=USAGE_REFRESH_DAYS)).isoformat()
     fresh = set()
     for i in range(0, len(targets), 200):
+        # 마니아·다독자 목록(2026-11-20 추가)이 아직 없는 책은 새로 받는다
         rows = (supabase.table("book_usage").select("isbn13").gte("updated_at", since)
+                .not_.is_("mania_rec", "null")
                 .in_("isbn13", targets[i:i + 200]).execute().data or [])
         fresh |= {r["isbn13"] for r in rows}
         # 최근에 '자료 없음'이었던 책도 건너뜀 (매일 같은 책을 다시 부르던 문제)
@@ -586,15 +588,21 @@ def parse_usage(data):
 
     keywords = [{"word": k.get("word"), "weight": to_int(k.get("weight"))}
                 for k in items("keywords", "keyword") if k.get("word")][:20]
-    co_loan = [{"isbn13": b.get("isbn13"), "title": (b.get("bookname") or "").strip(),
-                "author": b.get("authors"), "publisher": b.get("publisher")}
-               for b in items("coLoanBooks", "book") if b.get("bookname")][:10]
+    def book_list(key):
+        return [{"isbn13": b.get("isbn13"), "title": (b.get("bookname") or "").strip(),
+                 "author": b.get("authors"), "publisher": b.get("publisher")}
+                for b in items(key, "book") if b.get("bookname")][:10]
+
+    co_loan = book_list("coLoanBooks")
+    # 마니아·다독자 추천은 같은 응답에 들어 있어 추가 호출 없이 저장 (2026-11-20)
+    mania = book_list("maniaRecBooks")
+    reader = book_list("readerRecBooks")
     history = [{"month": h.get("month"), "loanCnt": to_int(h.get("loanCnt")),
                 "ranking": to_int(h.get("ranking"))} for h in items("loanHistory", "loan")]
     groups = [{"age": g.get("age"), "gender": g.get("gender"),
                "loanCnt": to_int(g.get("loanCnt")), "ranking": to_int(g.get("ranking"))}
               for g in items("loanGrps", "loanGrp")]
-    return keywords, co_loan, history, groups
+    return keywords, co_loan, history, groups, mania, reader
 
 
 def collect_usage():
@@ -608,9 +616,10 @@ def collect_usage():
     for isbn in targets:
         try:
             data = call("usageAnalysisList", {"isbn13": isbn}, retries=(5,))
-            keywords, co_loan, history, groups = parse_usage(data)
+            keywords, co_loan, history, groups, mania, reader = parse_usage(data)
             supabase.table("book_usage").upsert({
                 "isbn13": isbn, "keywords": keywords, "co_loan": co_loan,
+                "mania_rec": mania, "reader_rec": reader,
                 "loan_history": history, "loan_grps": groups,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }, on_conflict="isbn13").execute()
@@ -640,6 +649,11 @@ def collect_usage():
     note = [f"{len(nodata)}권 자료 없음(14일 뒤 다시 확인)"] if nodata else []
     if failed:
         note.insert(0, f"{failed}권 실패")
+    # 흔한 책 보정용 이웃 등장 횟수 새로 고침 (실패해도 수집은 계속)
+    try:
+        supabase.rpc("refresh_neighbor_freq").execute()
+    except Exception as e:
+        print(f"  [이웃 등장 횟수 새로 고침 실패] {safe_err(e)}")
     log_run("usage", status, ok, ", ".join(note) or None)
     print(f"[이용분석] {ok}/{len(targets)}권, 자료 없음 {len(nodata)}권, 실패 {failed}권")
     return ok
