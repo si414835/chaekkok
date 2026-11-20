@@ -5588,3 +5588,484 @@ a.lib__info {
     display: none;
   }
 }
+
+/* ================= 책 상세 v2 (2026-11-20): 3쪽 넘기기 · 진단 위로 · 선반 ================= */
+.bk-pages {
+  position: relative;
+}
+.bk-pages__track {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bk-page {
+  min-width: 0;
+  box-sizing: border-box;
+}
+.bk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.bk-main__left {
+  display: contents;
+}
+.bk-main .bk-stats { order: 1; }
+.bk-main .bk-intro { order: 2; }
+.bk-main .bk-diag { order: 3; }
+.bk-main .bk-shelf { order: 4; }
+.bk-main .bk-kwsec { order: 5; }
+.bk-sub {
+  min-width: 0;
+}
+.bk-sub .h2.display,
+.bk-shead .h2.display {
+  font-size: 19px;
+}
+.bk-pagehead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bk-pagehead h2 {
+  font-size: 22px;
+}
+.bk-page--data,
+.bk-page--get {
+  gap: 26px;
+}
+.bk-data2,
+.bk-get {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.bk-data2 > .bk-sub + .bk-sub {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.bk-page .rankcard--embedded {
+  margin: 0;
+}
+.bk-get .card {
+  margin: 0 !important;
+  box-shadow: none !important;
+  background: #f8f7f4;
+  border-radius: 18px;
+}
+.bk-buy {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bk-empty {
+  padding: 8px 0;
+}
+.bk-shelf {
+  padding: 0;
+}
+.bk-shelf .bk-shead {
+  padding: 0;
+}
+.bk-shelf__scroll {
+  padding: 0 0 18px;
+  margin: 0 -4px;
+}
+.bk-kwsec .card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+/* 선반: 윗면 · 앞면 · 그림자로 나무 선반처럼 */
+.bk-shelf__row {
+  position: relative;
+  z-index: 1;
+}
+.bk-shelf__cover {
+  box-shadow: 0 10px 12px -6px rgba(35, 32, 40, 0.38), 0 2px 4px rgba(35, 32, 40, 0.12);
+}
+.bk-shelf__plank {
+  position: relative;
+  height: 20px;
+  margin-top: -8px;
+  border-radius: 3px 3px 6px 6px;
+  background: linear-gradient(180deg, #f4efe6 0, #ece4d6 7px, #d3c6b0 8px, #c8b99f 19px, #b9a98e 20px);
+  box-shadow: 0 16px 20px -10px rgba(70, 52, 28, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.bk-shelf__plank::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 100%;
+  height: 10px;
+  background: radial-gradient(ellipse at top, rgba(70, 52, 28, 0.18), transparent 70%);
+}
+
+/* 책콕 진단 안 '왜 뜨나요'·예보: 둥근 흰 칸으로 */
+.bk-diag .why,
+.bk-diag .fc {
+  margin: 0;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 0 var(--line);
+}
+.bk-diag .fc {
+  padding: 16px;
+}
+.bk-diag__next {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+}
+.bk-diag__next:hover {
+  background: #dfe1f2;
+}
+
+/* 폰: 3쪽을 위에서 아래로 */
+@media (max-width: 1099px) {
+  .bk-pagehead h2 {
+    font-size: 20px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .bk-hero {
+    z-index: 2;
+    pointer-events: none;
+  }
+  .bk-hero__cover,
+  .bk-hero__text > * {
+    pointer-events: auto;
+  }
+  .bk-panel {
+    margin-top: 0 !important;
+  }
+  .bk-pages {
+    margin-top: -112px;
+    margin-bottom: 64px;
+  }
+  .bk-pages__view {
+    overflow-x: clip;
+    transition: height 0.35s ease;
+  }
+  .bk-pages__track {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0;
+    transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .bk-page {
+    flex: 0 0 100%;
+  }
+  .bk-pagehead {
+    margin-left: 348px;
+    min-height: 72px;
+  }
+  .bk-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    gap: 44px;
+    align-items: start;
+  }
+  .bk-main.is-single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bk-main__left {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    min-width: 0;
+  }
+  .bk-stats {
+    padding: 18px 0;
+  }
+  .bk-stats > div {
+    padding: 0 18px;
+  }
+  .bk-stats dd {
+    font-size: 22px;
+  }
+  .bk-diag {
+    gap: 18px;
+  }
+  .bk-data2 {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 40px;
+  }
+  .bk-data2 > .bk-sub + .bk-sub {
+    padding: 0 0 0 40px;
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+  .bk-get {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+  }
+  .bk-shelf__row {
+    gap: 22px;
+    padding: 0 18px;
+  }
+  .bk-shelf__item {
+    width: 104px;
+  }
+  .bk-shelf__cover {
+    width: 104px;
+    height: 152px;
+  }
+  .bk-shelf__plank {
+    width: calc(var(--n, 10) * 126px + 36px);
+  }
+  .bk-arrow {
+    position: absolute;
+    top: 236px;
+    z-index: 3;
+    width: 52px;
+    height: 52px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-shadow: 0 8px 22px rgba(40, 40, 50, 0.14);
+    transition: transform 0.15s, background 0.15s;
+  }
+  .bk-arrow:hover {
+    transform: scale(1.06);
+    background: var(--accent);
+    color: #fff;
+  }
+  .bk-arrow--next {
+    right: -26px;
+  }
+  .bk-arrow--prev {
+    left: -26px;
+  }
+  .bk-dots {
+    position: absolute;
+    left: 50%;
+    bottom: -52px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    padding: 5px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 0 var(--line), 0 6px 18px rgba(40, 40, 50, 0.06);
+    white-space: nowrap;
+  }
+  .bk-dots__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: none;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+  .bk-dots__item i {
+    font-style: normal;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--line-2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+  }
+  .bk-dots__item.is-on {
+    background: var(--accent);
+    color: #fff;
+  }
+  .bk-dots__item.is-on i {
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
+/* ================= 홈 갤러리: 제목 글씨체 · 탭 · 취향 설정 ================= */
+.gal__title {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.gal__tabs {
+  gap: 4px;
+  padding: 5px;
+  border-radius: 999px;
+  background: #eeece7;
+}
+.gal__tab {
+  padding: 9px 18px;
+  border-bottom: 0;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--ink-3);
+  transition: background 0.15s, color 0.15s;
+}
+.gal__tab:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+.gal__tab.is-on {
+  background: #fff;
+  color: var(--accent);
+  font-weight: 800;
+  box-shadow: 0 1px 4px rgba(40, 40, 50, 0.12);
+}
+.gal__cats {
+  gap: 8px;
+}
+.gal__cat {
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #f3f2ef;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.gal__cat:hover {
+  background: #eae8e3;
+}
+.gal__cat.is-on {
+  background: var(--accent);
+  color: #fff;
+}
+.gal__prefs {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 800;
+}
+.gal__prefs:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.gal__prefs.has-set {
+  background: var(--accent);
+  color: #fff;
+}
+.tabs__item.is-on {
+  color: var(--accent);
+}
+
+/* ================= 홈: 내 도서관 바로가기 ================= */
+.mylibs {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mylibs__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.mylibs__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mylibs__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f5f4f1;
+  color: var(--ink);
+}
+.mylibs__item span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mylibs__item b {
+  font-size: 15px;
+}
+.mylibs__item small {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.mylibs__item:hover {
+  background: var(--accent-soft);
+}
+.mylibs__item--empty {
+  background: var(--accent-soft);
+}
+.mylibs__item--empty b {
+  color: var(--accent);
+}
+.lib__more {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ================= 도서관 페이지: 머리를 한 장의 카드로 ================= */
+.libpage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.libpage__head {
+  padding: 10px 16px 22px;
+}
+.libpage__bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 -6px;
+}
+.libpage__titlebox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 6px 0;
+}
+.libpage .libpage__stack {
+  margin-top: 0;
+}
+@media (min-width: 1100px) {
+  .libpage__head {
+    border-radius: 24px;
+    padding: 16px 24px 28px;
+  }
+}
+@media (min-width: 1100px) {
+  .bk-page {
+    transition: visibility 0s linear 0s;
+  }
+  .bk-page[aria-hidden='true'] {
+    visibility: hidden;
+    transition: visibility 0s linear 0.5s;
+  }
+}

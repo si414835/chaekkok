@@ -813,6 +813,30 @@ function LocalRising({ libs }) {
           {gap != null && gap < 7 && <p className="sub small local__note">지역 기록을 모은 지 얼마 안 돼서 {gap}일 전과 비교했어요. 일주일이 지나면 7일 전과 비교해요.</p>}
         </>
       )}
+      <div className="mylibs">
+        <p className="mylibs__label">내 도서관</p>
+        {libs.length > 0 ? (
+          <div className="mylibs__list">
+            {libs.map((l) => (
+              <a key={l.libCode} className="mylibs__item press" href={`/library/${l.libCode}`}>
+                <span>
+                  <b>{l.name}</b>
+                  <small>이 도서관 인기 책 · 운영시간 보기</small>
+                </span>
+                {Icon.chev()}
+              </a>
+            ))}
+          </div>
+        ) : (
+          <a className="mylibs__item mylibs__item--empty press" href="/my">
+            <span>
+              <b>자주 가는 도서관을 찜해 보세요</b>
+              <small>그 도서관 인기 책·운영시간을 보고, 책마다 대출 가능 여부를 바로 확인해요</small>
+            </span>
+            {Icon.chev()}
+          </a>
+        )}
+      </div>
     </section>
   )
 }
@@ -1456,7 +1480,13 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
             </>
           )}
           <button className={`gal__prefs${prefs.on || interests.length ? ' has-set' : ''}`} onClick={() => setMenu(true)}>
-            내 취향 설정
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" />
+              <circle cx="16" cy="6" r="2" />
+              <circle cx="10" cy="12" r="2" />
+              <circle cx="18" cy="18" r="2" />
+            </svg>
+            {prefs.on || interests.length ? '내 취향 적용 중' : '내 취향 설정'}
           </button>
         </div>
         {menu && <PrefsSheet prefs={prefs} interests={interests} setInterests={setInterests} onOpenFilter={onOpenFilter} onClose={() => setMenu(false)} />}
@@ -1972,7 +2002,7 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
   )
 }
 
-function LoanChart({ history, motionKey }) {
+function LoanChart({ history, motionKey, bare }) {
   const p = useCountUp(motionKey)
   const rows = (history || []).filter((h) => h.loanCnt != null).slice(-12)
   if (rows.length < 2) return null
@@ -1981,8 +2011,8 @@ function LoanChart({ history, motionKey }) {
   const prev = rows[rows.length - 2]
   const diff = last.loanCnt - prev.loanCnt
   return (
-    <section className="card rise" style={{ animationDelay: '0.35s' }}>
-      <Eyebrow>LOAN TREND</Eyebrow>
+    <section className={`${bare ? 'bk-sub' : 'card'} rise`} style={{ animationDelay: '0.35s' }}>
+      {!bare && <Eyebrow>LOAN TREND</Eyebrow>}
       <h2 className="h2 display">월별 대출 추이</h2>
       <p className="sub">최근 {rows.length}개월 · 정보나루 참여 공공도서관</p>
       <div className="bigstat">
@@ -2326,7 +2356,7 @@ function BkShareIcon() {
 }
 
 // 누가 빌렸나: 연령대 비율 + 성별 비율 + '가장 많이 빌린 그룹 / 그룹 안 순위가 가장 높은 그룹'
-function WhoBorrowed({ groups }) {
+function WhoBorrowed({ groups, bare }) {
   const g = (groups || []).filter((x) => x.age && x.age.trim() && x.loanCnt > 0)
   const total = g.reduce((a, x) => a + x.loanCnt, 0)
   if (!total) return null
@@ -2346,7 +2376,7 @@ function WhoBorrowed({ groups }) {
   const mx = byAge[0].pct || 1
   const lab = (x) => `${x.age.replace('60대이상', '60대+')} ${x.gender}`
   return (
-    <section className="card bk-card rise" style={{ animationDelay: '0.4s' }}>
+    <section className={`${bare ? 'bk-sub' : 'card bk-card'} rise`} style={{ animationDelay: '0.4s' }}>
       <h2 className="h2 display">누가 빌렸나</h2>
       <p className="sub">최근 대출 {total.toLocaleString()}건 기준 연령·성별 비율</p>
       <div className="bk-ages">
@@ -2389,7 +2419,7 @@ function WhoBorrowed({ groups }) {
 }
 
 // 이 책의 키워드가 붙은 다른 책 (첫 키워드부터, 3권 이상 나오는 키워드)
-function KeywordBooks({ isbn, words }) {
+function KeywordBooks({ isbn, words, bare }) {
   const [res, setRes] = useState(null)
   const key = words.slice(0, 4).join('|')
   useEffect(() => {
@@ -2419,7 +2449,7 @@ function KeywordBooks({ isbn, words }) {
   }, [isbn, key])
   if (!res?.word) return null
   return (
-    <section className="card bk-card rise" style={{ animationDelay: '0.3s' }}>
+    <section className={`${bare ? 'bk-sub bk-kwsec' : 'card bk-card'} rise`} style={{ animationDelay: '0.3s' }}>
       <div className="card__head">
         <h2 className="h2 display">#{res.word} 키워드의 다른 책</h2>
         <a className="bk-more" href={keywordHref(res.word)}>
@@ -2459,6 +2489,19 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   const actRef = useRef(null)
   const [shared, setShared] = useState(false)
   const [barOn, setBarOn] = useState(false)
+  const [page, setPage] = useState(0)
+  const [pageH, setPageH] = useState(null)
+  const pageEls = useRef([])
+  const pagesRef = useRef(null)
+  useEffect(() => setPage(0), [isbn])
+  useEffect(() => {
+    const el = pageEls.current[page]
+    if (!wide || !el || typeof ResizeObserver === 'undefined') return setPageH(null)
+    const ro = new ResizeObserver(() => setPageH(el.offsetHeight))
+    ro.observe(el)
+    setPageH(el.offsetHeight)
+    return () => ro.disconnect()
+  }, [page, wide, isbn, !!book])
   useEffect(() => {
     const el = actRef.current
     if (!el || typeof IntersectionObserver === 'undefined') return
@@ -2532,9 +2575,22 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
       /* 공유 취소 */
     }
   }
-  const openLib = () => (wide ? libRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : setLibOpen(true))
-  const toBuy = () => buyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // 넓은 화면은 흰 박스를 3쪽(개요 → 데이터 → 빌리기·사기)으로 넘기고, 폰은 위에서 아래로 이어 붙인다
+  const goPage = (n) => {
+    setPage(n)
+    const el = pagesRef.current
+    if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const openLib = () => (wide ? goPage(2) : setLibOpen(true))
+  const toBuy = () => (wide ? goPage(2) : buyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   const stageIdx = st?.stage ? STAGES.indexOf(st.stage) : -1
+  const PAGES = ['한눈에', '데이터로 보기', '빌리기 · 사기']
+  const pageProps = (i) => ({
+    ref: (el) => (pageEls.current[i] = el),
+    'aria-hidden': wide && page !== i ? true : undefined,
+    inert: wide && page !== i ? '' : undefined,
+  })
+  const hasData = hist.length > 1 || (usage?.loan_grps || []).length > 0
 
   return (
     <div className="detail bk">
@@ -2589,184 +2645,223 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
         </div>
       </section>
 
-      <section className="bk-panel">
-        <div className="bk-actions" ref={actRef}>
-          <button className="bk-btn bk-btn--primary" onClick={openLib}>
-            도서관에서 빌리기 <span className="bk-btn__arrow" aria-hidden="true">↗</span>
-          </button>
-          <button className="bk-btn bk-btn--line" onClick={toBuy}>
-            구매하기
-          </button>
-          <span className="bk-actions__gap" />
-          <button className={`bk-round heartbtn${saved ? ' is-saved' : ''}`} onClick={onHeart} aria-pressed={saved} aria-label={saved ? '콕 해제' : '콕하기'}>
-            {saved && heartKey > 0 && (
-              <span className="sparks" key={'s' + heartKey} aria-hidden="true">
-                {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-                  <i key={i} style={{ '--a': `${i * 45}deg` }} />
-                ))}
-              </span>
-            )}
-            <span key={heartKey} className={heartKey ? 'heartpop' : ''}>
-              {Icon.ginkgo(saved, 22)}
-            </span>
-          </button>
-          <button className="bk-round bk-round--share" onClick={onShare} aria-label={shared ? '링크를 복사했어요' : '공유'}>
-            {shared ? <span className="bk-round__done">✓</span> : <BkShareIcon />}
-          </button>
-        </div>
-
-        {statItems.length > 0 && (
-          <dl className="bk-stats">
-            {statItems.map((s) => (
-              <div key={s.k}>
-                <dt>{s.k}</dt>
-                <dd className="num">{s.v}</dd>
-                {s.s && <dd className="bk-stats__sub">{s.s}</dd>}
-              </div>
+      <div className="bk-pages" ref={pagesRef}>
+        {wide && (
+          <nav className="bk-dots" aria-label="상세 페이지 넘기기">
+            {PAGES.map((t, i) => (
+              <button key={t} className={`bk-dots__item${page === i ? ' is-on' : ''}`} onClick={() => setPage(i)} aria-current={page === i ? 'page' : undefined}>
+                <i aria-hidden="true">{i + 1}</i>
+                {t}
+              </button>
             ))}
-          </dl>
+          </nav>
         )}
-
-        <div className={`bk-cols${st?.stage ? '' : ' is-single'}`}>
-          <div className="bk-intro">
-            {book.description ? (
-              <BookIntro text={book.description} key={'d' + isbn} />
-            ) : (
-              <p className="sub">{loading ? '책 소개를 불러오고 있어요…' : '아직 책 소개가 없어요.'}</p>
-            )}
-            {book.external && <p className="notice notice--box hero__ext">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>}
-          </div>
-          {st?.stage && (
-            <div className="bk-diag">
-              <div className="bk-diag__head">
-                <h2>책콕 진단</h2>
-                {st.snapshot_date && <span>{fmtDate(st.snapshot_date)} 기준</span>}
+        <div className="bk-pages__view" style={wide && pageH ? { height: pageH } : undefined}>
+          <div className="bk-pages__track" style={wide ? { transform: `translateX(-${page * 100}%)` } : undefined}>
+            {/* 1쪽: 한눈에 */}
+            <section className="bk-panel bk-page" {...pageProps(0)}>
+              <div className="bk-actions" ref={actRef}>
+                <button className="bk-btn bk-btn--primary" onClick={openLib}>
+                  도서관에서 빌리기 <span className="bk-btn__arrow" aria-hidden="true">↗</span>
+                </button>
+                <button className="bk-btn bk-btn--line" onClick={toBuy}>
+                  구매하기
+                </button>
+                <span className="bk-actions__gap" />
+                <button className={`bk-round heartbtn${saved ? ' is-saved' : ''}`} onClick={onHeart} aria-pressed={saved} aria-label={saved ? '콕 해제' : '콕하기'}>
+                  {saved && heartKey > 0 && (
+                    <span className="sparks" key={'s' + heartKey} aria-hidden="true">
+                      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                        <i key={i} style={{ '--a': `${i * 45}deg` }} />
+                      ))}
+                    </span>
+                  )}
+                  <span key={heartKey} className={heartKey ? 'heartpop' : ''}>
+                    {Icon.ginkgo(saved, 22)}
+                  </span>
+                </button>
+                <button className="bk-round bk-round--share" onClick={onShare} aria-label={shared ? '링크를 복사했어요' : '공유'}>
+                  {shared ? <span className="bk-round__done">✓</span> : <BkShareIcon />}
+                </button>
               </div>
-              <ol className="bk-track" aria-label={`트렌드 단계: ${st.stage}`}>
-                {STAGES.map((s, i) => (
-                  <li key={s} className={`${i <= stageIdx ? 'is-done' : ''}${i === stageIdx ? ' is-now' : ''}`}>
-                    <i aria-hidden="true" />
-                    <b>{s}</b>
-                    <small>{i === stageIdx ? '지금' : i === 0 && st.first_spotted ? fmtDate(st.first_spotted) : ''}</small>
-                  </li>
-                ))}
-              </ol>
-              <dl className="bk-diag__rows">
-                {st.reason && (
-                  <div>
-                    <dt>왜 이 단계인가요</dt>
-                    <dd>{st.reason}</dd>
+
+              <div className={`bk-main${st?.stage ? '' : ' is-single'}`}>
+                <div className="bk-main__left">
+                  {statItems.length > 0 && (
+                    <dl className="bk-stats">
+                      {statItems.map((s) => (
+                        <div key={s.k}>
+                          <dt>{s.k}</dt>
+                          <dd className="num">{s.v}</dd>
+                          {s.s && <dd className="bk-stats__sub">{s.s}</dd>}
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  <div className="bk-intro">
+                    {book.description ? (
+                      <BookIntro text={book.description} key={'d' + isbn} />
+                    ) : (
+                      <p className="sub">{loading ? '책 소개를 불러오고 있어요…' : '아직 책 소개가 없어요.'}</p>
+                    )}
+                    {book.external && <p className="notice notice--box hero__ext">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>}
                   </div>
+
+                  {co.length > 0 && (
+                    <section className="bk-shelf rise" style={{ animationDelay: '0.3s' }}>
+                      <div className="bk-shead">
+                        <h2 className="h2 display">이 책과 함께 빌린 책</h2>
+                        <p className="sub">이 책을 빌린 사람들이 같이 빌린 책 · 도서관 대출 기록 기준</p>
+                      </div>
+                      <div className="bk-shelf__scroll" style={{ '--n': co.length }}>
+                        <div className="bk-shelf__row">
+                          {co.map((c) => (
+                            <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`}>
+                              <Cover src={coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} alt="" className="bk-shelf__cover" title={c.title} />
+                            </a>
+                          ))}
+                        </div>
+                        <div className="bk-shelf__plank" aria-hidden="true" />
+                        <div className="bk-shelf__row bk-shelf__row--text">
+                          {co.map((c) => (
+                            <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`} tabIndex={-1}>
+                              <b>{shortTitle(c.title)}</b>
+                              <small>{cleanAuthor(c.author)}</small>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    </section>
+                  )}
+
+                  <KeywordBooks bare isbn={book.isbn13} words={keywords.map((k) => k.word)} />
+                </div>
+
+                {st?.stage && (
+                  <aside className="bk-diag">
+                    <div className="bk-diag__head">
+                      <h2>책콕 진단</h2>
+                      {st.snapshot_date && <span>{fmtDate(st.snapshot_date)} 기준</span>}
+                    </div>
+                    <ol className="bk-track" aria-label={`트렌드 단계: ${st.stage}`}>
+                      {STAGES.map((s, i) => (
+                        <li key={s} className={`${i <= stageIdx ? 'is-done' : ''}${i === stageIdx ? ' is-now' : ''}`}>
+                          <i aria-hidden="true" />
+                          <b>{s}</b>
+                          <small>{i === stageIdx ? '지금' : i === 0 && st.first_spotted ? fmtDate(st.first_spotted) : ''}</small>
+                        </li>
+                      ))}
+                    </ol>
+                    <dl className="bk-diag__rows">
+                      {st.reason && (
+                        <div>
+                          <dt>왜 이 단계인가요</dt>
+                          <dd>{st.reason}</dd>
+                        </div>
+                      )}
+                      {st.confidence && (
+                        <div>
+                          <dt>신뢰도</dt>
+                          <dd>{st.confidence}</dd>
+                        </div>
+                      )}
+                      {st.first_spotted && (
+                        <div>
+                          <dt>책콕이 처음 포착</dt>
+                          <dd>
+                            {fmtDate(st.first_spotted)} · {Math.max(0, dayDiff(st.first_spotted, kstToday()))}일 전
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                    {st.stage !== '스테디' && <WhyRising isbn={book.isbn13} />}
+                    <Forecast isbn={book.isbn13} st={st} />
+                    {wide && (
+                      <button className="bk-diag__next" onClick={() => goPage(1)}>
+                        순위 흐름 · 대출 데이터 보기 <span aria-hidden="true">→</span>
+                      </button>
+                    )}
+                  </aside>
                 )}
-                {st.confidence && (
-                  <div>
-                    <dt>신뢰도</dt>
-                    <dd>{st.confidence}</dd>
+              </div>
+            </section>
+
+            {/* 2쪽: 데이터로 보기 (순위 흐름 · 월별 대출 · 누가 빌렸나를 한 박스에) */}
+            <section className="bk-panel bk-page bk-page--data" {...pageProps(1)}>
+              <div className="bk-pagehead">
+                <h2 className="display">데이터로 보는 이 책</h2>
+                <p className="sub">순위 흐름 · 월별 대출 · 누가 빌렸나 · 도서관 정보나루 대출 기록</p>
+              </div>
+              <RankChart embedded isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
+              {hasData ? (
+                <div className="bk-data2">
+                  <LoanChart bare history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
+                  <WhoBorrowed bare groups={usage?.loan_grps} />
+                </div>
+              ) : (
+                !loading && <p className="sub bk-empty">월별 대출과 누가 빌렸는지는 상위권 책부터 매일 채워지고 있어요.</p>
+              )}
+            </section>
+
+            {/* 3쪽: 어디서 빌리고 살까 */}
+            <section className="bk-panel bk-page bk-page--get" {...pageProps(2)}>
+              <div className="bk-pagehead">
+                <h2 className="display">어디서 빌리고 살까요</h2>
+                <p className="sub">내 도서관에 있는지, 지금 빌릴 수 있는지 확인하고 서점과 비교해 보세요</p>
+              </div>
+              <div className="bk-get">
+                <div className="bk-lib" ref={libRef}>
+                  <LibraryStatusSheet inline book={book} libs={libs} setLibs={setLibs} onClose={() => {}} onPick={onPickLibrary} />
+                </div>
+                <div className="bk-buy" id="buy" ref={buyRef}>
+                  <h2 className="h2 display">어디서 살까요</h2>
+                  <p className="sub buy__lead">새 책은 도서정가제로 서점마다 가격이 거의 같아요. 배송·적립 혜택을 비교해 보세요.</p>
+                  <div className="buy__book">
+                    <Cover src={book.cover_url} alt="" className="buy__cover" title={book.title} />
+                    <span className="buy__info">
+                      <strong>{shortTitle(book.title)}</strong>
+                      <span className="num">ISBN {firstIsbn(book.isbn13)}</span>
+                    </span>
+                    <CopyIsbn isbn={firstIsbn(book.isbn13)} />
                   </div>
-                )}
-                {st.first_spotted && (
-                  <div>
-                    <dt>책콕이 처음 포착</dt>
-                    <dd>
-                      {fmtDate(st.first_spotted)} · {Math.max(0, dayDiff(st.first_spotted, kstToday()))}일 전
-                    </dd>
+                  <div className="shops">
+                    {shopLinks(book.isbn13).map((s, i) => (
+                      <a key={s.id} className="shop rise" style={delay(i, 0.05, 0.04)} href={s.url} target="_blank" rel="noopener noreferrer sponsored">
+                        <ShopLogo shop={s} />
+                        <span className="shop__text">
+                          <span className="shop__name">{s.name}</span>
+                        </span>
+                        <span className={`shop__tag${s.direct ? ' is-direct' : ''}`}>{s.direct ? '바로가기' : '검색'}</span>
+                        <span className="shop__chev">{Icon.chev()}</span>
+                      </a>
+                    ))}
                   </div>
-                )}
-              </dl>
-              {st.stage !== '스테디' && <WhyRising isbn={book.isbn13} />}
-              <Forecast isbn={book.isbn13} st={st} />
-            </div>
-          )}
-        </div>
-      </section>
-
-      <RankChart isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
-
-      {(hist.length > 1 || (usage?.loan_grps || []).length > 0) && (
-        <div className="bk-two">
-          <LoanChart history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
-          <WhoBorrowed groups={usage?.loan_grps} />
-        </div>
-      )}
-
-      {!loading && !usage && (
-        <section className="card bk-card">
-          <p className="sub">대출 추이와 같이 빌린 책은 상위권 책부터 매일 채워지고 있어요.</p>
-        </section>
-      )}
-
-      {co.length > 0 && (
-        <section className="bk-shelf rise" style={{ animationDelay: '0.3s' }}>
-          <div className="bk-shead">
-            <h2 className="display">이 책과 함께 빌린 책</h2>
-            <p className="sub">이 책을 빌린 사람들이 같이 빌린 책 · 도서관 대출 기록 기준</p>
+                  {COUPANG_BANNER && (
+                    <a className="adbanner" href={COUPANG_BANNER.href} target="_blank" rel="noopener sponsored" referrerPolicy="unsafe-url">
+                      <img src={COUPANG_BANNER.img} alt={COUPANG_BANNER.alt} width={COUPANG_BANNER.w} height={COUPANG_BANNER.h} loading="lazy" />
+                    </a>
+                  )}
+                  {COUPANG_AFFILIATE && <p className="notice notice--below">{AFFILIATE_NOTICE}</p>}
+                </div>
+              </div>
+            </section>
           </div>
-          <div className="bk-shelf__scroll" style={{ '--n': co.length }}>
-            <div className="bk-shelf__row">
-              {co.map((c) => (
-                <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`}>
-                  <Cover src={coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} alt="" className="bk-shelf__cover" title={c.title} />
-                </a>
-              ))}
-            </div>
-            <div className="bk-shelf__plank" aria-hidden="true" />
-            <div className="bk-shelf__row bk-shelf__row--text">
-              {co.map((c) => (
-                <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`} tabIndex={-1}>
-                  <b>{shortTitle(c.title)}</b>
-                  <small>{cleanAuthor(c.author)}</small>
-                </a>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      <div className="bk-two bk-two--lead">
-        <KeywordBooks isbn={book.isbn13} words={keywords.map((k) => k.word)} />
-        <div className="bk-lib" ref={libRef}>
-          <LibraryStatusSheet
-            inline
-            book={book}
-            libs={libs}
-            setLibs={setLibs}
-            onClose={() => {}}
-            onPick={onPickLibrary}
-            onBuy={toBuy}
-          />
         </div>
-      </div>
-
-      <section className="card bk-card" id="buy" ref={buyRef}>
-        <h2 className="h2 display">어디서 살까요</h2>
-        <p className="sub buy__lead">새 책은 도서정가제로 서점마다 가격이 거의 같아요. 배송·적립 혜택을 비교해 보세요.</p>
-        <div className="buy__book">
-          <Cover src={book.cover_url} alt="" className="buy__cover" title={book.title} />
-          <span className="buy__info">
-            <strong>{shortTitle(book.title)}</strong>
-            <span className="num">ISBN {firstIsbn(book.isbn13)}</span>
-          </span>
-          <CopyIsbn isbn={firstIsbn(book.isbn13)} />
-        </div>
-        <div className="shops">
-          {shopLinks(book.isbn13).map((s, i) => (
-            <a key={s.id} className="shop rise" style={delay(i, 0.05, 0.04)} href={s.url} target="_blank" rel="noopener noreferrer sponsored">
-              <ShopLogo shop={s} />
-              <span className="shop__text">
-                <span className="shop__name">{s.name}</span>
-              </span>
-              <span className={`shop__tag${s.direct ? ' is-direct' : ''}`}>{s.direct ? '바로가기' : '검색'}</span>
-              <span className="shop__chev">{Icon.chev()}</span>
-            </a>
-          ))}
-        </div>
-        {COUPANG_BANNER && (
-          <a className="adbanner" href={COUPANG_BANNER.href} target="_blank" rel="noopener sponsored" referrerPolicy="unsafe-url">
-            <img src={COUPANG_BANNER.img} alt={COUPANG_BANNER.alt} width={COUPANG_BANNER.w} height={COUPANG_BANNER.h} loading="lazy" />
-          </a>
+        {wide && page < 2 && (
+          <button className="bk-arrow bk-arrow--next" onClick={() => goPage(page + 1)} aria-label={`다음: ${PAGES[page + 1]}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         )}
-        {COUPANG_AFFILIATE && <p className="notice notice--below">{AFFILIATE_NOTICE}</p>}
-      </section>
+        {wide && page > 0 && (
+          <button className="bk-arrow bk-arrow--prev" onClick={() => goPage(page - 1)} aria-label={`이전: ${PAGES[page - 1]}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       <p className="bk-source">데이터: 도서관 정보나루{st?.snapshot_date ? ` · ${fmtDate(st.snapshot_date)} 수집` : ''}</p>
 
@@ -3845,7 +3940,8 @@ function LibraryPage({ libCode, libs, setLibs }) {
   const days = data?.days || []
   const topHour = hours.length ? hours.reduce((a, b) => (b.loan > a.loan ? b : a)) : null
   const topDay = days.length ? days.reduce((a, b) => (b.loan > a.loan ? b : a)) : null
-  const period = data?.periodDays === 30 ? '최근 30일' : data?.periodDays === 90 ? '최근 3개월' : data?.periodDays === 365 ? '최근 1년' : ''
+  const pd = data?.periodDays
+  const period = pd === 30 ? '최근 30일' : pd === 90 ? '최근 3개월' : pd === 365 ? '최근 1년' : pd ? `최근 ${pd}일` : ''
   const bookLink = (b) => (known.has(b.isbn13) ? { href: `/book/${b.isbn13}` } : b.url ? { href: b.url, target: '_blank', rel: 'noopener noreferrer' } : null)
   const BookLine = ({ b, i, meta }) => {
     const link = bookLink(b)
@@ -3868,20 +3964,18 @@ function LibraryPage({ libCode, libs, setLibs }) {
     )
   }
   return (
-    <>
-      <header className="detail__bar">
-        <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
+    <div className="libpage">
+      <section className="card libpage__head">
+        <div className="libpage__bar">
+          <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
+          {info && (
+            <button className={`pill pill--btn libpage__save${saved ? ' is-on' : ''}`} onClick={toggleSave} disabled={!saved && libs.length >= MAX_LIBS} aria-pressed={saved}>
+              {saved ? '내 도서관 ✓' : '도서관 찜하기'}
+            </button>
+          )}
+        </div>
         {info && (
-          <button className={`pill pill--btn libpage__save${saved ? ' is-on' : ''}`} onClick={toggleSave} disabled={!saved && libs.length >= MAX_LIBS} aria-pressed={saved}>
-            {saved ? '내 도서관 ✓' : '도서관 찜하기'}
-          </button>
-        )}
-      </header>
-      {loading && <section className="card"><Loading /></section>}
-      {error && <section className="card"><p className="state state--error">{error}</p></section>}
-      {info && (
-        <>
-          <header className="pagehead pagehead--tight">
+          <div className="libpage__titlebox">
             <Eyebrow>LIBRARY</Eyebrow>
             <h1 className="h1 display libpage__title">{info.name}</h1>
             <span className="sub">{info.address}</span>
@@ -3889,7 +3983,13 @@ function LibraryPage({ libCode, libs, setLibs }) {
               {info.closedToday && <span className="pill pill--warn">오늘 휴관</span>}
               {data.fresh && <span className="pill pill--up">최근 데이터 있음</span>}
             </span>
-          </header>
+          </div>
+        )}
+      </section>
+      {loading && <section className="card"><Loading /></section>}
+      {error && <section className="card"><p className="state state--error">{error}</p></section>}
+      {info && (
+        <>
           <div className="stack libpage__stack">
             <section className="card rise">
               <div className="libpage__acts">
@@ -3920,7 +4020,11 @@ function LibraryPage({ libCode, libs, setLibs }) {
 
             {!data.fresh && (
               <section className="card">
-                <p className="notice notice--box">이 도서관은 최근 대출 기록이 정보나루에 충분히 올라오지 않았어요. 아래 인기 책은 기간을 넓혀({period}) 보여드려요.</p>
+                <p className="notice notice--box">
+                  {data.popular?.length > 0
+                    ? `이 도서관은 최근 대출 기록이 정보나루에 충분히 올라오지 않았어요. 아래 인기 책은 기간을 넓혀${period ? `(${period})` : ''} 보여드려요.`
+                    : '이 도서관은 최근 대출 기록이 정보나루에 올라오지 않아서 인기 책을 보여드릴 수 없어요. 운영시간과 위치는 위에서 확인해 주세요.'}
+                </p>
               </section>
             )}
 
@@ -4013,7 +4117,7 @@ function LibraryPage({ libCode, libs, setLibs }) {
           </div>
         </>
       )}
-    </>
+    </div>
   )
 }
 
@@ -4065,6 +4169,7 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = fal
                 <a className="lib__info" href={`/library/${l.libCode}`}>
                   <strong>{l.name}</strong>
                   <span className="sub">{l.address}</span>
+                  <span className="lib__more">도서관 페이지 보기 →</span>
                 </a>
                 {state.loading ? <span className="pill">확인 중…</span> : <span className={`pill pill--${tone}`}>{label}</span>}
                 <a className="lib__go" href={`/library/${l.libCode}`} aria-label={`${l.name} 도서관 정보`}>
