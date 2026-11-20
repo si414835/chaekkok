@@ -840,6 +840,7 @@ function RiseList({ books }) {
         <li key={b.isbn13}>
           <a href={`/book/${encodeURIComponent(b.isbn13)}`}>
             <span className="plist__n num">{i + 1}</span>
+            <Cover src={b.cover_url} alt="" className="plist__cover" title={b.title} />
             <span className="plist__t">
               <b>{shortTitle(b.title)}</b>
               <small>

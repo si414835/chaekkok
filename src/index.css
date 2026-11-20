@@ -6558,3 +6558,6 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 .tcar__dots button.is-on { background: var(--ink); }
 @keyframes fadeup { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .tcar__card { transition: none; } .tcar__text { animation: none; } }
+/* 대출 급상승: 번호 · 작은 표지 · 제목 */
+.plist a { grid-template-columns: 26px 48px minmax(0, 1fr) auto; align-items: center; gap: 0 14px; padding: 12px 0; }
+.plist__cover { width: 48px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; border-radius: 2px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 10px -4px rgba(0, 0, 0, 0.25); }
