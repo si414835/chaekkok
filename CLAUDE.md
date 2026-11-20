@@ -25,6 +25,7 @@
 - 마니아·다독자 추천(book_usage.mania_rec·reader_rec)은 이용분석 응답에 같이 오는 것을 저장(추가 호출 없음). 하루 170권씩 채워지므로 처음 2주는 빈 책이 많다.
 - 흔한 책 보정: `mv_neighbor_freq`(이웃 목록 등장 수)를 extra_collect 이용분석 단계 끝에 `refresh_neighbor_freq()`로 새로 고침. `book_recs`·`taste_recs`가 ln(전체/(1+등장 수))로 순서를 낮춘다.
 - 취향 찾기(/taste): `taste_votes`(기기 번호·책마다 마지막 선택, RLS 잠김) ← `taste_vote` RPC만으로 기록. 콕 추가/해제도 source='kok'로 +1/0. 홈 '책콕 사람들이 좋다고 고른 책'은 `taste_top`(최근 30일). 비어 있으면 아직 투표가 없는 것.
+- '누가 빌렸나' 분야 비교는 `field_demo(대분류, 어린이여부)`: 그룹 8개 이상인 같은 분야 책들의 비율 평균. 책이 5권 미만이면 화면은 남녀 비율만 보여 준다 (loan_grps는 그 책이 순위에 든 그룹만 와서 전체 분포가 아님).
 - ISBN은 `isbn_util.py`로 13자리 하나만 저장 (API가 'ISBN1 ISBN2'로 줄 때가 있음).
 
 ## 주의

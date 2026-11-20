@@ -2226,64 +2226,114 @@ function BkShareIcon() {
 }
 
 // 누가 빌렸나: 연령대 비율 + 성별 비율 + '가장 많이 빌린 그룹 / 그룹 안 순위가 가장 높은 그룹'
-function WhoBorrowed({ groups, bare }) {
-  const g = (groups || []).filter((x) => x.age && x.age.trim() && x.loanCnt > 0)
+// 누가 빌렸나: 성별·연령 나비 그래프 + 가장 많이 빌린 그룹 1·2위 + 같은 분야와 비교
+const AGE_ORDER = ['영유아', '유아', '초등', '청소년', '20대', '30대', '40대', '50대', '60대이상']
+const ageLab = (a) => (a === '60대이상' ? '60대~' : a)
+const grpLab = (x) => `${ageLab(x.age)} ${x.gender}`
+
+function useFieldDemo(cat, child) {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    let off = false
+    setRows(null)
+    if (!cat) return
+    supabase.rpc('field_demo', { p_cat: cat, p_child: !!child }).then(({ data }) => !off && setRows(data || []))
+    return () => {
+      off = true
+    }
+  }, [cat, child])
+  return rows
+}
+
+function WhoBorrowed({ groups, bare, cat, child }) {
+  const field = useFieldDemo(cat, child)
+  const g = (groups || []).filter((x) => x.age && x.age.trim() && x.loanCnt > 0 && (x.gender === '남성' || x.gender === '여성'))
   const total = g.reduce((a, x) => a + x.loanCnt, 0)
   if (!total) return null
-  const byAge = Object.entries(
-    g.reduce((m, x) => {
-      m[x.age] = (m[x.age] || 0) + x.loanCnt
-      return m
-    }, {}),
-  )
-    .map(([age, n]) => ({ age: age.replace('60대이상', '60대+'), n, pct: Math.round((n * 100) / total) }))
-    .sort((a, b) => b.n - a.n)
-    .slice(0, 6)
+  const cell = (age, gender) => {
+    const r = g.find((x) => x.age === age && x.gender === gender)
+    return r ? (r.loanCnt * 100) / total : 0
+  }
+  // 어른 연령대는 늘 보이고, 어린이 연령대는 기록이 있을 때만
+  const ages = AGE_ORDER.filter((a) => ['청소년', '20대', '30대', '40대', '50대', '60대이상'].includes(a) || g.some((x) => x.age === a))
+  const rows = ages.map((a) => ({ age: a, m: cell(a, '남성'), f: cell(a, '여성') }))
+  const mx = Math.max(...rows.flatMap((r) => [r.m, r.f]), 1)
+  const fmt = (v) => (v >= 10 ? v.toFixed(1) : v > 0 ? v.toFixed(1) : '0')
+  const ranked = [...g].sort((a, b) => b.loanCnt - a.loanCnt)
+  const top = ranked[0]
+  const second = ranked[1]
   const fem = g.filter((x) => x.gender === '여성').reduce((a, x) => a + x.loanCnt, 0)
   const femPct = Math.round((fem * 100) / total)
-  const most = [...g].sort((a, b) => b.loanCnt - a.loanCnt)[0]
-  const best = g.filter((x) => x.ranking && x.loanCnt >= MIN_GROUP_LOANS).sort((a, b) => a.ranking - b.ranking)[0]
-  const mx = byAge[0].pct || 1
-  const lab = (x) => `${x.age.replace('60대이상', '60대+')} ${x.gender}`
+  const fieldOk = field && field.length && field[0].books >= 5
+  const fTop = fieldOk ? field[0] : null
+  const same = fTop && top && fTop.age === top.age && fTop.gender === top.gender
   return (
-    <section className={`${bare ? 'bk-sub' : 'card bk-card'} rise`} style={{ animationDelay: '0.4s' }}>
-      <h2 className="h2 display">누가 빌렸나</h2>
-      <p className="sub">최근 대출 {total.toLocaleString()}건 기준 연령·성별 비율</p>
-      <div className="bk-ages">
-        {byAge.map((a, i) => (
-          <div key={a.age} className={`bk-ages__row${i === 0 ? ' is-top' : ''}`}>
-            <span>{a.age}</span>
-            <span className="bk-ages__track">
-              <span className="barx" style={{ width: `${Math.max(3, (a.pct / mx) * 100)}%`, ...delay(i, 0.5, 0.06) }} />
+    <section className={`${bare ? 'bk-sub' : 'card bk-card'} bk-who rise`} style={{ animationDelay: '0.4s' }}>
+      <h2 className="h2 display">성별 · 연령별 인기 분포</h2>
+      <p className="sub">최근 대출 {total.toLocaleString()}건 기준 · 도서관 정보나루가 알려 준 그룹만 셈</p>
+      <div className="bk-who__grid">
+        <div className="bk-fly" role="table" aria-label="성별·연령별 대출 비율">
+          {rows.map((r, i) => (
+            <div key={r.age} className="bk-fly__row" role="row" aria-label={`${ageLab(r.age)} 남성 ${fmt(r.m)}%, 여성 ${fmt(r.f)}%`}>
+              <span className="bk-fly__side bk-fly__side--m">
+                <em className="num">{fmt(r.m)}</em>
+                <i style={{ width: `${r.m > 0 ? Math.max(2, (r.m / mx) * 100) : 0}%`, ...delay(i, 0.45, 0.05) }} />
+              </span>
+              <span className="bk-fly__age">{ageLab(r.age)}</span>
+              <span className="bk-fly__side bk-fly__side--f">
+                <i style={{ width: `${r.f > 0 ? Math.max(2, (r.f / mx) * 100) : 0}%`, ...delay(i, 0.45, 0.05) }} />
+                <em className="num">{fmt(r.f)}</em>
+              </span>
+            </div>
+          ))}
+          <div className="bk-fly__legend">
+            <span>
+              남성 <i className="dot dot--m" />
             </span>
-            <b className="num">{a.pct}%</b>
+            <span>
+              <i className="dot dot--f" /> 여성
+            </span>
+            <span className="bk-fly__unit">(단위: %)</span>
           </div>
-        ))}
+        </div>
+        <div className="bk-who__side">
+          <div className="bk-who__top">
+            <p>이 책을 가장 많이 빌린 사람</p>
+            <div>
+              {top && (
+                <span>
+                  <b>1위</b> {grpLab(top)}
+                </span>
+              )}
+              {second && (
+                <span>
+                  <b>2위</b> {grpLab(second)}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="bk-who__cmp">
+            {fTop && top ? (
+              same ? (
+                <p>
+                  <b>{cat} 분야</b>는 <b>{grpLab(fTop)}</b>이 가장 즐겨 보는데,
+                  <br />이 책도 <b>{grpLab(top)}</b>이 가장 많이 보고 있어요
+                </p>
+              ) : (
+                <p>
+                  <b>{cat} 분야</b>는 <b>{grpLab(fTop)}</b>이 가장 즐겨 보는데,
+                  <br />이 책은 <b>{grpLab(top)}</b>이 많이 보고 있어요
+                </p>
+              )
+            ) : (
+              <p>
+                여성 <b>{femPct}%</b> · 남성 <b>{100 - femPct}%</b>가 빌렸어요
+              </p>
+            )}
+            {fTop && <small>분야 기준: 책콕이 모은 {cat} 책 {fTop.books}권의 대출 비율 평균</small>}
+          </div>
+        </div>
       </div>
-      <div className="bk-gender" aria-label={`여성 ${femPct}%, 남성 ${100 - femPct}%`}>
-        <span className="bk-gender__bar">
-          <i style={{ width: `${femPct}%` }} />
-        </span>
-        <span className="bk-gender__lab">
-          <span>
-            여성 <b className="num">{femPct}%</b>
-          </span>
-          <span>
-            남성 <b className="num">{100 - femPct}%</b>
-          </span>
-        </span>
-      </div>
-      {most && (
-        <p className="bk-note">
-          <b>{lab(most)}</b>이 가장 많이 빌렸어요
-          {best && best !== most && (
-            <>
-              . 그 그룹이 빌린 책 중 순위로 보면 <b>{lab(best)}</b>에서 <b>{best.ranking.toLocaleString()}위</b>로 가장 높아요
-            </>
-          )}
-          .
-        </p>
-      )}
     </section>
   )
 }
@@ -2670,7 +2720,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               {hasData ? (
                 <div className="bk-data2">
                   <LoanChart bare history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
-                  <WhoBorrowed bare groups={usage?.loan_grps} />
+                  <WhoBorrowed bare groups={usage?.loan_grps} cat={(book.classNameFull || '').split('>')[0].trim()} child={isChildBook(book)} />
                 </div>
               ) : (
                 !loading && <p className="sub bk-empty">월별 대출과 누가 빌렸는지는 상위권 책부터 매일 채워지고 있어요.</p>
@@ -2813,10 +2863,17 @@ function TastePage({ feed, loading }) {
   const cur = queue[0]
   const likes = Object.entries(votes).filter(([, v]) => v.v === 1)
   const dislikes = Object.entries(votes).filter(([, v]) => v.v === -1)
-  const ready = likes.length >= TASTE_NEED
+  // 좋아요·별로로 5권을 분류하면 바로 결과를 보여 준다 (모르겠어요는 세지 않음, 좋아요가 1권은 있어야 함)
+  const sorted = likes.length + dislikes.length
+  const ready = sorted >= TASTE_NEED && likes.length > 0
+  const show = ready
   const [recs, setRecs] = useState(null)
-  const [show, setShow] = useState(ready)
   const resRef = useRef(null)
+  const wasReady = useRef(ready)
+  useEffect(() => {
+    if (ready && !wasReady.current) setTimeout(() => resRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
+    wasReady.current = ready
+  }, [ready])
 
   const vote = (v) => {
     if (!cur) return
@@ -2847,7 +2904,6 @@ function TastePage({ feed, loading }) {
   const reset = () => {
     setVotes({})
     setRecs(null)
-    setShow(false)
   }
   const seenT = new Set()
   const uniq = (recs || []).filter((r) => !seenT.has(shortTitle(r.title)) && seenT.add(shortTitle(r.title)))
@@ -2856,10 +2912,7 @@ function TastePage({ feed, loading }) {
   const rising = uniq.filter(isUp).slice(0, 8)
   const more = uniq.filter((r) => !isUp(r)).slice(0, 12)
   const viaTitle = (isbn) => votes[isbn]?.t
-  const openResults = () => {
-    setShow(true)
-    setTimeout(() => resRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
-  }
+
 
   const RecRow = ({ r }) => (
     <a className="taste__rec" href={`/book/${encodeURIComponent(r.isbn13)}`}>
@@ -2889,10 +2942,10 @@ function TastePage({ feed, loading }) {
       <section className="card taste__deck">
         <div className="taste__progress">
           <span>
-            좋아요 <b className="num">{Math.min(likes.length, TASTE_NEED)}</b> / {TASTE_NEED}
+            분류 <b className="num">{Math.min(sorted, TASTE_NEED)}</b> / {TASTE_NEED}
           </span>
           <span className="taste__bar">
-            <i style={{ width: `${Math.min(100, (likes.length / TASTE_NEED) * 100)}%` }} />
+            <i style={{ width: `${Math.min(100, (sorted / TASTE_NEED) * 100)}%` }} />
           </span>
         </div>
         {loading && !cur && <Loading />}
@@ -2923,9 +2976,18 @@ function TastePage({ feed, loading }) {
           !loading && <p className="state">준비한 표지를 다 봤어요. 아래 결과를 확인해 보세요.</p>
         )}
         <div className="taste__acts">
-          <button className="btn btn--primary" disabled={!ready && likes.length < 3} onClick={openResults}>
-            {ready ? '내 취향 결과 보기' : likes.length >= 3 ? '지금까지로 결과 보기' : `좋아요 ${TASTE_NEED - likes.length}권 더 골라 주세요`}
-          </button>
+          {!ready && (
+            <p className="sub small taste__hint">
+              {sorted >= TASTE_NEED && !likes.length
+                ? '좋아요가 한 권은 있어야 추천할 수 있어요. 끌리는 표지에 좋아요를 눌러 주세요.'
+                : `${TASTE_NEED - sorted}권 더 고르면 바로 추천이 나와요 · 모르겠어요는 세지 않아요`}
+            </p>
+          )}
+          {ready && (
+            <button className="btn btn--primary" onClick={() => resRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              추천 결과로 가기 ↓
+            </button>
+          )}
           {Object.keys(votes).length > 0 && (
             <button className="btn btn--soft" onClick={reset}>
               처음부터 다시
@@ -2937,7 +2999,7 @@ function TastePage({ feed, loading }) {
       {show && (
         <section className="card taste__result" ref={resRef}>
           <h2 className="h2 display">내 취향 중 지금 뜨는 책</h2>
-          <p className="sub">좋아한 책을 빌린 사람들이 함께 빌린 책 · 마니아와 다독자가 고른 책 가운데, 책콕이 지금 뜨고 있다고 본 책이에요.</p>
+          <p className="sub">좋아한 책을 빌린 사람들이 함께 빌린 책 · 마니아와 다독자가 고른 책 가운데, 책콕이 지금 뜨고 있다고 본 책이에요. 위에서 더 고를수록 결과가 바로 바뀌어요.</p>
           {recs === null && <Loading />}
           {recs && rising.length === 0 && <p className="state">지금 뜨는 책 중에는 아직 맞는 책이 없어요. 아래 추천을 먼저 보세요.</p>}
           <div className="taste__recs">
@@ -3025,7 +3087,7 @@ function TasteTop() {
       <a className="tastetop__cta press" href="/taste">
         <span>
           <b>내 취향 찾기</b>
-          <small>표지를 보고 좋아요 {TASTE_NEED}권 → 내 취향 중 지금 뜨는 책</small>
+          <small>표지 {TASTE_NEED}권만 고르면 바로 → 내 취향 중 지금 뜨는 책</small>
         </span>
         {Icon.chev()}
       </a>

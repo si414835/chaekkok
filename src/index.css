@@ -6122,3 +6122,36 @@ a.lib__info {
 .bk-deep__tabs { display: inline-flex; padding: 3px; border-radius: 99px; background: var(--accent-soft); gap: 2px; }
 .bk-deep__tabs button { border: 0; background: transparent; padding: 5px 12px; border-radius: 99px; font-size: 13px; color: var(--accent); cursor: pointer; }
 .bk-deep__tabs button.is-on { background: var(--card); font-weight: 700; box-shadow: 0 1px 3px rgba(20, 24, 60, 0.12); }
+
+/* ===== 누가 빌렸나: 성별·연령 나비 그래프 (2026-11-20) ===== */
+.bk-who__grid { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.bk-fly { padding: 18px 16px 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); display: flex; flex-direction: column; gap: 10px; }
+.bk-fly__row { display: grid; grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr); align-items: center; }
+.bk-fly__age { text-align: center; font-size: 13.5px; color: var(--ink); }
+.bk-fly__side { position: relative; display: flex; align-items: center; gap: 6px; height: 18px; border-radius: 99px; background: #f3f2ef; }
+.bk-fly__side--m { justify-content: flex-end; }
+.bk-fly__side i { display: block; height: 100%; border-radius: 99px; transform-origin: inherit; animation: barx 0.7s cubic-bezier(.2,.7,.2,1) both; }
+.bk-fly__side--m i { background: #8f97c6; transform-origin: right center; border-top-left-radius: 99px; border-bottom-left-radius: 99px; }
+.bk-fly__side--f i { background: #c98d6b; transform-origin: left center; }
+.bk-fly__side em { font-style: normal; font-size: 12px; color: var(--ink-3); flex: none; }
+.bk-fly__side--m em { order: 0; }
+.bk-fly__legend { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 4px; font-size: 12px; color: var(--ink-3); position: relative; }
+.bk-fly__legend span { display: inline-flex; align-items: center; gap: 5px; }
+.bk-fly__unit { position: absolute; right: 0; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.dot--m { background: #8f97c6; }
+.dot--f { background: #c98d6b; }
+.bk-who__side { display: flex; flex-direction: column; gap: 12px; }
+.bk-who__top { padding: 18px 16px; border: 1px solid var(--line); border-radius: 18px; text-align: center; }
+.bk-who__top p { margin: 0 0 10px; font-size: 14px; color: var(--ink-3); }
+.bk-who__top div { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 22px; font-size: 15.5px; }
+.bk-who__top b { margin-right: 8px; }
+.bk-who__cmp { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; padding: 22px 16px; border-radius: 18px; background: #f5f4f1; text-align: center; }
+.bk-who__cmp p { margin: 0; font-size: 15px; line-height: 1.7; color: var(--ink); }
+.bk-who__cmp small { font-size: 11.5px; color: var(--ink-3); }
+@media (min-width: 1100px) {
+  .bk-data2 { grid-template-columns: minmax(0, 1fr); }
+  .bk-data2 > .bk-sub + .bk-sub { padding: 28px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+  .bk-who__grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; }
+}
+.taste__hint { width: 100%; text-align: center; margin: 0; }
