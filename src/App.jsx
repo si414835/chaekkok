@@ -718,6 +718,106 @@ function Featured({ book }) {
   )
 }
 
+// 폰 홈: TOP 5가 돌아가며 나오는 회전 진열 (4초마다 넘어가고, 밀어서·눌러서도 넘김)
+function TopCarousel({ books }) {
+  const stateMap = useContext(StateCtx)
+  const n = books.length
+  const [idx, setIdx] = useState(0)
+  const [hold, setHold] = useState(false)
+  const start = useRef(null)
+  const swiped = useRef(false)
+  const move = (to) => setIdx(((to % n) + n) % n)
+  useEffect(() => {
+    if (n < 2 || hold) return
+    const t = setInterval(() => setIdx((i) => (i + 1) % n), 4000)
+    return () => clearInterval(t)
+  }, [n, hold])
+  if (n === 0) return null
+  const cur = books[Math.min(idx, n - 1)]
+  const st = stateMap.get(cur?.isbn13)
+  const href = `/book/${encodeURIComponent(cur.isbn13)}`
+  const onDown = (e) => {
+    start.current = e.clientX
+    swiped.current = false
+    setHold(true)
+  }
+  const onUp = (e) => {
+    if (start.current == null) return
+    const dx = e.clientX - start.current
+    start.current = null
+    if (Math.abs(dx) > 30) {
+      swiped.current = true
+      move(dx < 0 ? idx + 1 : idx - 1)
+    }
+  }
+  return (
+    <div className="tcar">
+      <div className="tcar__stage" onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={() => (start.current = null)}>
+        {books.map((b, i) => {
+          let o = (i - idx + n) % n
+          if (o > n / 2) o -= n
+          const a = Math.abs(o)
+          const scale = [1, 0.74, 0.56][Math.min(a, 2)]
+          const x = [0, 104, 172][Math.min(a, 2)] * Math.sign(o)
+          const onClick = () => {
+            if (swiped.current) {
+              swiped.current = false
+              return
+            }
+            if (o === 0) go(`/book/${encodeURIComponent(b.isbn13)}`)
+            else move(i)
+          }
+          return (
+            <button
+              key={b.isbn13}
+              className={`tcar__card${o === 0 ? ' is-center' : ''}`}
+              style={{ transform: `translateX(${x}px) scale(${scale})`, zIndex: 10 - a, opacity: a >= 2 ? 0.45 : a === 1 ? 0.85 : 1 }}
+              onClick={onClick}
+              aria-label={o === 0 ? `${i + 1}위 ${shortTitle(b.title)} 상세 보기` : `${i + 1}위 ${shortTitle(b.title)}`}
+            >
+              <Cover src={b.cover_url} alt="" className="tcar__cover" title={b.title} />
+            </button>
+          )
+        })}
+      </div>
+      <div className="tcar__text" key={idx}>
+        <p className="feat__label">
+          <span className="num">{String(idx + 1).padStart(2, '0')}</span> · {DATE_LABEL} {idx + 1}위{st?.stage ? <b> · {st.stage}</b> : null}
+        </p>
+        <h3 className="tcar__title">
+          <a href={href}>{shortTitle(cur.title)}</a>
+        </h3>
+        <p className="feat__by">
+          {cleanAuthor(cur.author)}
+          {cur.publisher ? ` · ${cur.publisher}` : ''}
+        </p>
+        {st?.reason && <p className="tcar__why">{st.reason}</p>}
+      </div>
+      <div className="tcar__nav">
+        <button onClick={() => (setHold(true), move(idx - 1))} aria-label="이전 책">
+          {Icon.chev('left')}
+        </button>
+        <div className="tcar__dots">
+          {books.map((b, i) => (
+            <button key={b.isbn13} className={i === idx ? 'is-on' : ''} onClick={() => (setHold(true), move(i))} aria-label={`${i + 1}위`} />
+          ))}
+        </div>
+        <button onClick={() => (setHold(true), move(idx + 1))} aria-label="다음 책">
+          {Icon.chev('right')}
+        </button>
+      </div>
+      <div className="feat__go">
+        <a className="pbtn pbtn--lib" href={href + '#lib'}>
+          도서관에서 빌리기
+        </a>
+        <a className="pbtn pbtn--shop" href={href + '#buy'}>
+          서점에서 사기
+        </a>
+      </div>
+    </div>
+  )
+}
+
 function ShelfItem({ book, num }) {
   const st = useBookState(book.isbn13)
   return (
@@ -885,6 +985,7 @@ function PlainKeyword({ keywords }) {
 }
 
 function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs }) {
+  const wide = useWide()
   const top5 = dedupeSame(feed.composite.filter((b) => !isChildBook(b))).slice(0, 5)
   const topKeys = new Set(top5.map((b) => shortTitle(b.title)))
   const rising = dedupeSame(feed.rising.filter((b) => !isChildBook(b) && !topKeys.has(shortTitle(b.title)))).slice(0, 5)
@@ -911,12 +1012,18 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
           <>
             <PlainKeyword keywords={keywords} />
             <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5">
-              <Featured book={top5[0]} />
-              <div className="shelfgrid ptop5__rest">
-                {top5.slice(1).map((b, i) => (
-                  <ShelfItem key={b.isbn13} book={b} num={i + 2} />
-                ))}
-              </div>
+              {wide ? (
+                <>
+                  <Featured book={top5[0]} />
+                  <div className="shelfgrid ptop5__rest">
+                    {top5.slice(1).map((b, i) => (
+                      <ShelfItem key={b.isbn13} book={b} num={i + 2} />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <TopCarousel books={top5} />
+              )}
             </PSec>
             <div className="phome__row phome__row--half">
               <PSec title="대출 급상승" note="지난주 대비" className="phome__rise">

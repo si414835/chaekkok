@@ -6543,3 +6543,18 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 @media (min-width: 1100px) {
   .ptop5__rest { grid-template-columns: repeat(4, minmax(0, 190px)); justify-content: space-between; }
 }
+/* 폰 홈 TOP 5 회전 진열 */
+.tcar__stage { position: relative; height: 300px; margin: 0 -20px; background: var(--paper); overflow: hidden; touch-action: pan-y; }
+.tcar__card { position: absolute; left: 50%; top: 34px; width: 154px; margin-left: -77px; padding: 0; border: 0; background: none; cursor: pointer; transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.4s; transform-origin: center bottom; }
+.tcar__cover { display: block; width: 154px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; border-radius: 2px; box-shadow: var(--shadow-book); }
+.tcar__card.is-center .tcar__cover { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 18px 30px -12px rgba(0, 0, 0, 0.4); }
+.tcar__text { padding-top: 20px; animation: fadeup 0.35s ease both; }
+.tcar__title { margin: 8px 0 4px; font-family: var(--display); font-size: 26px; font-weight: 700; letter-spacing: -0.04em; line-height: 1.25; }
+.tcar__why { margin: 10px 0 0; font-size: 14.5px; line-height: 1.6; color: var(--ink); }
+.tcar__nav { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; }
+.tcar__nav > button { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 2px; background: #fff; color: var(--ink); cursor: pointer; }
+.tcar__dots { display: flex; gap: 8px; }
+.tcar__dots button { width: 18px; height: 2px; padding: 0; border: 0; background: var(--line); cursor: pointer; }
+.tcar__dots button.is-on { background: var(--ink); }
+@keyframes fadeup { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tcar__card { transition: none; } .tcar__text { animation: none; } }
