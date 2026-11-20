@@ -324,9 +324,9 @@ const Icon = {
   ),
   // 콕(은행잎): 꺼짐 = 윤곽선, 켜짐 = 노랗게 차오름
   ginkgo: (on, size = 22) => (
-    <svg className={`ginkgo${on ? ' is-on' : ''}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={on ? '#C99A1E' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {on && <path className="ginkgo__fill" d={GINKGO_LEAF} fill="#ECBE48" stroke="none" />}
-      {on && <path className="ginkgo__veins" d="M12 14.4V7.4M12 14.2 6.6 7.6M12 14.2 17.4 7.6" stroke="#D9A82A" strokeWidth=".9" />}
+    <svg className={`ginkgo${on ? ' is-on' : ''}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={on ? '#A8341F' : 'currentColor'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {on && <path className="ginkgo__fill" d={GINKGO_LEAF} fill="#C2412D" stroke="none" />}
+      {on && <path className="ginkgo__veins" d="M12 14.4V7.4M12 14.2 6.6 7.6M12 14.2 17.4 7.6" stroke="#F2C9C0" strokeWidth=".9" />}
       <path d={GINKGO_LEAF} />
       <path d="M12 15.8C12.1 17.8 11.8 19.7 11.1 21.5" />
     </svg>
@@ -664,21 +664,238 @@ function TopGrid({ books }) {
   )
 }
 
+// ===== 홈 (단정한 서점, 2026-11-20) =====
+// 대표 책 1권 → 오늘의 서가 → 대출 급상승 → 도서관(초록)·서점(남색) → 키워드 · 취향 찾기 → 사람들이 고른 책
+function PSec({ title, note, more, children, className = '' }) {
+  return (
+    <section className={`psec ${className}`}>
+      <div className="psec__head">
+        <h2>{title}</h2>
+        {more ? (
+          <a href={more.href} className="psec__more">
+            {more.label}
+          </a>
+        ) : (
+          note && <span>{note}</span>
+        )}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function Featured({ book }) {
+  const st = useBookState(book.isbn13)
+  const href = `/book/${encodeURIComponent(book.isbn13)}`
+  const line = [st?.rank_now != null && st?.cat ? `${st.cat} 대출 순위 ${st.rank_now}위` : null, st?.reason].filter(Boolean).join(' · ')
+  return (
+    <section className="feat">
+      <a className="feat__stage" href={href}>
+        <Cover src={book.cover_url} alt={shortTitle(book.title)} className="feat__cover" title={book.title} />
+      </a>
+      <div className="feat__text">
+        <p className="feat__label">
+          {DATE_LABEL} · 오늘 가장 빠르게 뜨는 책{st?.stage ? <b> · {st.stage}</b> : null}
+        </p>
+        <h1 className="feat__title">
+          <a href={href}>{shortTitle(book.title)}</a>
+        </h1>
+        <p className="feat__by">
+          {cleanAuthor(book.author)}
+          {book.publisher ? ` · ${book.publisher}` : ''}
+        </p>
+        {line && <p className="feat__why">{line}</p>}
+        <div className="feat__go">
+          <a className="pbtn pbtn--lib" href={href + '#lib'}>
+            도서관에서 빌리기
+          </a>
+          <a className="pbtn pbtn--shop" href={href + '#buy'}>
+            서점에서 사기
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ShelfItem({ book, num }) {
+  const st = useBookState(book.isbn13)
+  return (
+    <a className="shelfi" href={`/book/${encodeURIComponent(book.isbn13)}`}>
+      <Cover src={book.cover_url} alt="" className="shelfi__cover" title={book.title} />
+      {num != null && <span className="shelfi__num num">{String(num).padStart(2, '0')}</span>}
+      <b className="shelfi__title">{shortTitle(book.title)}</b>
+      <span className="shelfi__by">
+        {cleanAuthor(book.author)}
+        {st?.stage ? ` · ${st.stage}` : book.categoryLabel ? ` · ${book.categoryLabel}` : ''}
+      </span>
+    </a>
+  )
+}
+
+function RiseList({ books }) {
+  return (
+    <ol className="plist">
+      {books.map((b, i) => (
+        <li key={b.isbn13}>
+          <a href={`/book/${encodeURIComponent(b.isbn13)}`}>
+            <span className="plist__n num">{i + 1}</span>
+            <span className="plist__t">
+              <b>{shortTitle(b.title)}</b>
+              <small>
+                {cleanAuthor(b.author)}
+                {b.categoryLabel ? ` · ${b.categoryLabel}` : ''}
+              </small>
+            </span>
+            {b.rank_diff > 0 && <span className="plist__up num">▲{b.rank_diff}</span>}
+          </a>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+// 도서관 면 (초록): 고른 지역 공공도서관에서 순위가 오른 책 + 내 도서관
+function LibPanel({ libs }) {
+  const [region, setRegion] = useStored('chaekkok.region', regionOfAddr(libs[0]?.address))
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    if (!region) return setRows(null)
+    let off = false
+    setRows(null)
+    supabase
+      .from('v_region_books')
+      .select('isbn13,rank,prev_rank,rank_diff,new_entry,region_count,region_total,snapshot_date,prev_date,title,author,cover_url,class_name,addition_symbol')
+      .eq('region', region)
+      .limit(100)
+      .then(({ data }) => !off && setRows(data || []))
+    return () => {
+      off = true
+    }
+  }, [region])
+  const name = REGION_LIST.find(([c]) => c === region)?.[1]
+  const picks = (rows || [])
+    .filter((b) => !(b.addition_symbol || '').startsWith('7') && (b.rank_diff > 0 || b.new_entry))
+    .sort((a, b) => (b.new_entry ? 100 - b.rank : b.rank_diff) - (a.new_entry ? 100 - a.rank : a.rank_diff))
+    .slice(0, 4)
+  return (
+    <section className="ppanel ppanel--lib">
+      <div className="ppanel__top">
+        <span className="ppanel__kind">도서관</span>
+        <label className="ppanel__select">
+          <span className="sr-only">지역</span>
+          <select value={region || ''} onChange={(e) => setRegion(e.target.value || null)}>
+            <option value="">지역 선택</option>
+            {REGION_LIST.map(([c, n]) => (
+              <option key={c} value={c}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <h3>{name ? `${name} 도서관에서 요즘 많이 빌리는 책` : '우리 동네 도서관에서 요즘 많이 빌리는 책'}</h3>
+      <p className="ppanel__sub">{name ? `${name} 공공도서관 인기대출 순위에서 지난번보다 오른 책` : '지역을 고르면 그 지역 공공도서관에서 순위가 오르는 책을 보여 드려요'}</p>
+      {region && rows === null && <p className="ppanel__sub">불러오는 중이에요…</p>}
+      {picks.length > 0 && (
+        <div className="ppanel__books">
+          {picks.map((b) => (
+            <a key={b.isbn13} href={`/book/${encodeURIComponent(b.isbn13)}`}>
+              <Cover src={b.cover_url} alt="" className="ppanel__cover" title={b.title} />
+              <b>{shortTitle(b.title)}</b>
+              <small>
+                {cleanAuthor(b.author)} · {b.new_entry ? 'NEW' : `▲${b.rank_diff}`}
+              </small>
+            </a>
+          ))}
+        </div>
+      )}
+      {region && rows && picks.length === 0 && <p className="ppanel__sub">아직 비교할 기록이 부족해요. 며칠 뒤에 다시 보여 드릴게요.</p>}
+      <div className="ppanel__foot">
+        {libs.length > 0 ? (
+          libs.slice(0, 3).map((l) => (
+            <a key={l.libCode} href={`/library/${l.libCode}`}>
+              {l.name} 인기 책 · 운영시간 →
+            </a>
+          ))
+        ) : (
+          <a href="/my">내 도서관 정하고 대출 가능 여부 보기 →</a>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// 서점 면 (남색): 요즘 뜨는 작가의 곧 나올 책 + 서점 비교
+function ShopPanel({ list: all }) {
+  const list = (all || []).filter((b) => daysUntil(b.publish_date) != null).slice(0, 4)
+  return (
+    <section className="ppanel ppanel--shop">
+      <div className="ppanel__top">
+        <span className="ppanel__kind">서점</span>
+      </div>
+      <h3>곧 서점에 나올 책</h3>
+      <p className="ppanel__sub">요즘 뜨는 책을 쓴 작가의 다음 책</p>
+      {list.length > 0 ? (
+        <ul className="ppanel__list">
+          {list.map((b) => (
+            <li key={b.isbn13}>
+              <a href={`/book/${encodeURIComponent(b.isbn13)}`}>
+                <span>
+                  <b>{shortTitle(b.title)}</b>
+                  <small> · {b.matched_author || cleanAuthor(b.author)}</small>
+                </span>
+                <span className="num">{fmtDate(b.publish_date)} 출간</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="ppanel__sub">지금은 출간을 앞둔 책이 없어요.</p>
+      )}
+      <div className="ppanel__foot">
+        <span>교보문고 · 알라딘 · YES24 · 쿠팡 · 네이버 도서 — 책마다 한 번에 비교해요</span>
+      </div>
+    </section>
+  )
+}
+
+function PlainKeyword({ keywords }) {
+  if (!keywords || !keywords.words.length) return null
+  const [top, ...rest] = keywords.words
+  return (
+    <PSec title={`${keywords.monthLabel}의 키워드`} note="요즘 뜨는 책 소개 기준" className="pkw">
+      <div className="pkw__body">
+        <a className="pkw__word" href={keywordHref(top.word)}>
+          {top.word}
+        </a>
+        <p>
+          요즘 뜨는 책{top.books ? ` ${top.books}권` : ''}의 소개에 가장 많이 나온 말이에요.
+          <br />
+          {rest.slice(0, 6).map((k, i) => (
+            <span key={k.word}>
+              {i > 0 && ' · '}
+              <a href={keywordHref(k.word)}>#{k.word}</a>
+            </span>
+          ))}
+        </p>
+      </div>
+    </PSec>
+  )
+}
+
 function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs }) {
-  const wide = useWide()
   const top5 = dedupeSame(feed.composite.filter((b) => !isChildBook(b))).slice(0, 5)
-  // 넓은 화면은 옆 칸(우리 동네)과 높이를 맞추려고 5권, 폰은 3권
   const topKeys = new Set(top5.map((b) => shortTitle(b.title)))
-  const rising3 = dedupeSame(feed.rising.filter((b) => !isChildBook(b) && !topKeys.has(shortTitle(b.title)))).slice(0, wide ? 5 : 3)
+  const rising = dedupeSame(feed.rising.filter((b) => !isChildBook(b) && !topKeys.has(shortTitle(b.title)))).slice(0, 5)
   return (
     <>
       <header className="topbar">
         <span className="logo">
           책콕
-          <i className="logo__dot blink" aria-hidden="true" />
+          <i className="logo__dot" aria-hidden="true" />
         </span>
         <span className="topbar__right">
-          <span className="sub num">{DATE_LABEL}</span>
           <a className={`iconbtn bellbtn${unread ? ' has-new' : ''}`} href="/alerts" aria-label={unread ? `새 알림 ${unread}개` : '알림'}>
             {Icon.bell(unread > 0)}
           </a>
@@ -687,36 +904,43 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
           </a>
         </span>
       </header>
-      <div className="stack home">
-        <div className="kwgroup">
-          <KeywordHero keywords={keywords} />
-          <HitTeaser stats={hitStats} />
-        </div>
-        {loading && <section className="card"><Loading /></section>}
-        {error && <section className="card"><p className="state state--error">데이터를 불러오지 못했어요: {error}</p></section>}
-        {!loading && !error && (
+      <div className="phome">
+        {loading && <Loading />}
+        {error && <p className="state state--error">데이터를 불러오지 못했어요: {error}</p>}
+        {!loading && !error && top5.length > 0 && (
           <>
-            {wide ? <TopGrid books={top5} /> : <Carousel books={top5} />}
-            <div className="home__pair">
-            <section className="card card--list rise" style={{ animationDelay: '0.65s' }}>
-              <div className="card__head">
-                <div className="titlegroup">
-                  <Eyebrow tone="up">RISING NOW</Eyebrow>
-                  <h2 className="h2 display">지금 뜨는 책</h2>
+            <Featured book={top5[0]} />
+            <div className="phome__row">
+              <PSec title="오늘의 서가" more={{ href: '/trend', label: '트렌드 전체 →' }} className="phome__shelf">
+                <div className="shelfgrid">
+                  {top5.slice(1).map((b, i) => (
+                    <ShelfItem key={b.isbn13} book={b} num={i + 2} />
+                  ))}
                 </div>
-                <span className="sub">대출순위 급상승</span>
-              </div>
-              {rising3.map((b, i) => (
-                <BookRow key={b.isbn13} rank={i + 1} order={i + 14} book={b} value={`▲${b.rank_diff ?? 0}`} valueTone="up" />
-              ))}
-              <a className="btn btn--soft btn--block" href="/trend">
-                트렌드 순위 전체 보기 {Icon.chev()}
-              </a>
-            </section>
-            <LocalRising libs={libs || []} />
+              </PSec>
+              <PSec title="대출 급상승" note="지난주 대비" className="phome__rise">
+                <RiseList books={rising} />
+              </PSec>
+            </div>
+            <div className="phome__panels">
+              <LibPanel libs={libs || []} />
+              <ShopPanel list={upcoming} />
+            </div>
+            <div className="phome__row phome__row--half">
+              <PlainKeyword keywords={keywords} />
+              <PSec title="내 취향 찾기" note="1분이면 돼요" className="ptaste">
+                <p>끌리는 표지 다섯 권을 고르면, 지금 뜨는 책 가운데 취향에 맞는 책을 골라 드려요.</p>
+                <a className="plink" href="/taste">
+                  시작하기 →
+                </a>
+              </PSec>
             </div>
             <TasteTop />
-            <Upcoming list={upcoming} />
+            {hitStats?.matured_total ? (
+              <a className="phit" href="/hits">
+                책콕이 먼저 알아본 책은 실제로 떴을까요? <b>적중 기록 보기 →</b>
+              </a>
+            ) : null}
           </>
         )}
       </div>
@@ -1580,7 +1804,7 @@ function useBook(isbn, index) {
 const DAY_MS = 86400000
 const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / DAY_MS)
-const STAGE_COLOR = { 포착: '#c99a1e', 떠오름: '#007a56', 확산: '#2f3b8e', 스테디: '#4e5968' }
+const STAGE_COLOR = { 포착: '#b9b9b5', 떠오름: '#8c8c89', 확산: '#141414', 스테디: '#555553' }
 
 // 콕한 날 (예전 기록은 'M/D'만 있어서 올해 날짜로 바꾼다)
 function savedOnOf(w) {
@@ -1841,7 +2065,7 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
           {changes.map((c) => (
             <circle key={c.snapshot_date} cx={x(c.i)} cy={y(c.rank_now)} r="5" fill={STAGE_COLOR[c.stage] || '#4e5968'} className="rankchart__dot" />
           ))}
-          {top10 && <circle cx={x(rows.indexOf(top10))} cy={y(top10.rank_now)} r="5" fill="#ecbe48" className="rankchart__dot" />}
+          {top10 && <circle cx={x(rows.indexOf(top10))} cy={y(top10.rank_now)} r="5" fill="#c2412d" className="rankchart__dot" />}
           <circle cx={x(lastIdx)} cy={y(last.rank_now)} r="6.5" className="rankchart__now" />
           <text x={x(lastIdx) + 11} y={y(last.rank_now) + 5} className="rankchart__nowlabel num">
             {last.rank_now}위
@@ -2490,6 +2714,17 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   const p = useCountUp(isbn)
   const stateMap = useContext(StateCtx)
   const back = () => (window.history.length > 1 ? window.history.back() : go('/'))
+  // 홈에서 '빌리기/사기'로 들어오면 그 칸으로 바로 내려간다
+  const jumpRef = useRef(false)
+  useEffect(() => {
+    if (jumpRef.current || !book) return
+    const h = window.location.hash
+    const el = h === '#lib' ? libRef.current : h === '#buy' ? buyRef.current : null
+    if (el) {
+      jumpRef.current = true
+      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
+    }
+  })
   if (!book) {
     return (
       <div className="detail">
@@ -2565,248 +2800,154 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   })
   const hasData = hist.length > 1 || (usage?.loan_grps || []).length > 0
 
+  const scrollTo = (r) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const facts = [
+    rankNow != null ? ['분야 순위', <>{cat} {rankNow}위{journey ? <span className="pd__dim"> · {journey.split(' · ')[1]}</span> : ev?.rank_prev ? <span className="pd__dim"> · 지난번 {ev.rank_prev}위</span> : null}</>] : ['분야 순위', <span className="pd__dim">인기대출 목록 밖</span>],
+    lastM ? [`${monthOf(lastM)}월 대출`, <>{lastM.loanCnt.toLocaleString()}회{prevM?.loanCnt ? <span className="pd__dim"> · {monthOf(prevM)}월보다 {Math.round((lastM.loanCnt / prevM.loanCnt - 1) * 100)}%</span> : null}</>] : null,
+    topGrp ? ['많이 빌린 독자', grpLab(topGrp)] : null,
+    st?.stage ? ['트렌드 단계', <>{st.stage}{st.reason ? <span className="pd__dim"> · {st.reason}</span> : null}</>] : null,
+    st?.first_spotted ? ['책콕이 처음 포착', fmtDate(st.first_spotted)] : null,
+  ].filter(Boolean)
+  const BuyList = (
+    <div className="pd__buy" id="buy" ref={buyRef}>
+      <p className="pd__kind">서점</p>
+      <h2 className="pd__h">새 책으로 사기</h2>
+      <p className="pd__note">도서정가제로 값은 같아요. 배송과 적립만 비교하세요.</p>
+      <div className="pd__shops">
+        {shopLinks(book.isbn13).map((sh) => (
+          <a key={sh.id} href={sh.url} target="_blank" rel="noopener noreferrer sponsored">
+            <span>{sh.name}</span>
+            <span className="pd__dim">{sh.direct ? '바로가기 →' : '검색 →'}</span>
+          </a>
+        ))}
+      </div>
+      <p className="pd__isbn">
+        ISBN {firstIsbn(book.isbn13)} <CopyIsbn isbn={firstIsbn(book.isbn13)} />
+      </p>
+      {COUPANG_BANNER && (
+        <a className="adbanner" href={COUPANG_BANNER.href} target="_blank" rel="noopener sponsored" referrerPolicy="unsafe-url">
+          <img src={COUPANG_BANNER.img} alt={COUPANG_BANNER.alt} width={COUPANG_BANNER.w} height={COUPANG_BANNER.h} loading="lazy" />
+        </a>
+      )}
+      {COUPANG_AFFILIATE && <p className="pd__fine">{AFFILIATE_NOTICE}</p>}
+    </div>
+  )
+
   return (
-    <div className="detail bk">
-      <header className="detail__bar bk-bar">
+    <div className="detail pd">
+      <header className="detail__bar pd__bar">
         <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
-        <nav className="bk-crumb" aria-label="위치">
-          <a href="/">트렌드</a>
-          <span aria-hidden="true">›</span>
-          <span>{cat}</span>
-          <span aria-hidden="true">›</span>
-          <b>{shortTitle(book.title)}</b>
-        </nav>
-        <button className="iconbtn bk-bar__share" onClick={onShare} aria-label={shared ? '링크를 복사했어요' : '공유'}>
+        <button className="iconbtn" onClick={onShare} aria-label={shared ? '링크를 복사했어요' : '공유'}>
           {shared ? <span className="bk-round__done">✓</span> : <BkShareIcon />}
         </button>
       </header>
 
-      <section className="bk-hero">
-        <span className="bk-hero__cover tilt" key={'c' + isbn}>
-          <Cover src={book.cover_url} alt={shortTitle(book.title)} className="bk-cover" title={book.title} />
-        </span>
-        <div className="bk-hero__text">
-          {(st?.stage || rankNow != null) && (
-            <span className="bk-eyebrow rise" style={{ animationDelay: '0.1s' }}>
-              {st?.stage && <span className="bk-pill">{st.stage}</span>}
-              <span className="bk-eyebrow__txt">{journey || (rankNow != null ? `${cat} ${rankNow}위` : '')}</span>
-            </span>
-          )}
-          <h1 className="bk-title display rise" style={{ animationDelay: '0.16s' }}>
-            {shortTitle(book.title)}
-          </h1>
-          {subtitle && (
-            <p className="bk-subtitle rise" style={{ animationDelay: '0.2s' }}>
-              {subtitle}
-            </p>
-          )}
-          <p className="bk-meta rise" style={{ animationDelay: '0.24s' }}>
-            <b>{cleanAuthor(book.author)}</b>
-            {pub && <span>{pub}</span>}
-            {year && <span>{year}</span>}
+      <div className="pd__grid">
+        <aside className="pd__side">
+          <div className="pd__stage">
+            <Cover src={book.cover_url} alt={shortTitle(book.title)} className="pd__cover" title={book.title} />
+          </div>
+          <div className="pd__acts" ref={actRef}>
+            <button className="pbtn pbtn--lib" onClick={() => scrollTo(libRef)}>
+              도서관에서 빌리기
+            </button>
+            <button className="pbtn pbtn--shop" onClick={() => scrollTo(buyRef)}>
+              서점에서 사기
+            </button>
+          </div>
+          <div className="pd__mini">
+            <button className={`pd__kok${saved ? ' is-on' : ''}`} onClick={onHeart} aria-pressed={saved}>
+              {Icon.ginkgo(saved, 18)}
+              {saved ? '콕 했어요' : '콕 하기'}
+            </button>
+            <button onClick={onShare}>{shared ? '링크 복사됨' : '공유'}</button>
+          </div>
+          {wide && BuyList}
+        </aside>
+
+        <div className="pd__main">
+          <p className="pd__crumb">
+            <a href="/trend">트렌드</a> / {cat}
+            {st?.stage && (
+              <>
+                {' '}/ <span className="pd__stagel">{st.stage} 단계</span>
+              </>
+            )}
+          </p>
+          <h1 className="pd__title">{shortTitle(book.title)}</h1>
+          {subtitle && <p className="pd__sub">{subtitle}</p>}
+          <p className="pd__by">
+            {cleanAuthor(book.author)}
+            {pub ? ` · ${pub}` : ''}
+            {year ? ` · ${year}` : ''}
           </p>
           {keywords.length > 0 && (
-            <nav className="bk-tags" aria-label="이 책의 키워드">
-              {keywords.slice(0, 4).map((k, i) => (
-                <a key={k.word} href={keywordHref(k.word)} className={`bk-tag pop${i < 2 ? ' is-strong' : ''}`} style={delay(i, 0.28, 0.05)}>
+            <p className="pd__tags">
+              {keywords.slice(0, 5).map((k) => (
+                <a key={k.word} href={keywordHref(k.word)}>
                   #{k.word}
                 </a>
               ))}
-            </nav>
+            </p>
           )}
-        </div>
-      </section>
 
-      <div className="bk-pages" ref={pagesRef}>
-        {wide && (
-          <nav className="bk-dots" aria-label="상세 페이지 넘기기">
-            {PAGES.map((t, i) => (
-              <button key={t} className={`bk-dots__item${page === i ? ' is-on' : ''}`} onClick={() => setPage(i)} aria-current={page === i ? 'page' : undefined}>
-                <i aria-hidden="true">{i + 1}</i>
-                {t}
-              </button>
-            ))}
-          </nav>
-        )}
-        <div className="bk-pages__view" style={wide && pageH ? { height: pageH } : undefined}>
-          <div className="bk-pages__track" style={wide ? { transform: `translateX(-${page * 100}%)` } : undefined}>
-            {/* 1쪽: 한눈에 */}
-            <section className="bk-panel bk-page" {...pageProps(0)}>
-              <div className="bk-actions" ref={actRef}>
-                <button className="bk-btn bk-btn--primary" onClick={openLib}>
-                  도서관에서 빌리기 <span className="bk-btn__arrow" aria-hidden="true">↗</span>
-                </button>
-                <button className="bk-btn bk-btn--line" onClick={toBuy}>
-                  구매하기
-                </button>
-                <span className="bk-actions__gap" />
-                <button className={`bk-round heartbtn${saved ? ' is-saved' : ''}`} onClick={onHeart} aria-pressed={saved} aria-label={saved ? '콕 해제' : '콕하기'}>
-                  {saved && heartKey > 0 && (
-                    <span className="sparks" key={'s' + heartKey} aria-hidden="true">
-                      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-                        <i key={i} style={{ '--a': `${i * 45}deg` }} />
-                      ))}
-                    </span>
-                  )}
-                  <span key={heartKey} className={heartKey ? 'heartpop' : ''}>
-                    {Icon.ginkgo(saved, 22)}
-                  </span>
-                </button>
-                <button className="bk-round bk-round--share" onClick={onShare} aria-label={shared ? '링크를 복사했어요' : '공유'}>
-                  {shared ? <span className="bk-round__done">✓</span> : <BkShareIcon />}
-                </button>
+          <div className="pd__two">
+            <section className="pd__intro">
+              <div className="psec__head">
+                <h2>책 소개</h2>
               </div>
-
-              <div className={`bk-main${st?.stage ? '' : ' is-single'}`}>
-                <div className="bk-main__left">
-                  {statItems.length > 0 && (
-                    <dl className="bk-stats">
-                      {statItems.map((s) => (
-                        <div key={s.k}>
-                          <dt>{s.k}</dt>
-                          <dd className={s.text ? 'bk-stats__txt' : 'num'}>{s.v}</dd>
-                          {s.s && <dd className="bk-stats__sub">{s.s}</dd>}
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                  <div className="bk-intro">
-                    {book.description ? (
-                      <BookIntro text={book.description} key={'d' + isbn} />
-                    ) : (
-                      <p className="sub">{loading ? '책 소개를 불러오고 있어요…' : '아직 책 소개가 없어요.'}</p>
-                    )}
-                    {book.external && <p className="notice notice--box hero__ext">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>}
-                  </div>
-
-                  <NextReads isbn={book.isbn13} co={co} recs={recs} words={keywords.map((k) => k.word)} coverOf={(c) => c.cover_url || coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} />
-                </div>
-
-                {st?.stage && (
-                  <aside className="bk-diag">
-                    <div className="bk-diag__head">
-                      <h2>책콕 진단</h2>
-                      {st.snapshot_date && <span>{fmtDate(st.snapshot_date)} 기준</span>}
-                    </div>
-                    <ol className="bk-track" aria-label={`트렌드 단계: ${st.stage}`}>
-                      {STAGES.map((s, i) => (
-                        <li key={s} className={`${i <= stageIdx ? 'is-done' : ''}${i === stageIdx ? ' is-now' : ''}`}>
-                          <i aria-hidden="true" />
-                          <b>{s}</b>
-                          <small>{i === stageIdx ? '지금' : i === 0 && st.first_spotted ? fmtDate(st.first_spotted) : ''}</small>
-                        </li>
-                      ))}
-                    </ol>
-                    {st.reason && (
-                      <p className="bk-diag__why">
-                        <b>지금 {st.stage}</b> · {st.reason}
-                      </p>
-                    )}
-                    {st.stage !== '스테디' && <WhyRising isbn={book.isbn13} />}
-                    <Forecast st={st} compact />
-                    {(st.first_spotted || st.confidence) && (
-                      <p className="bk-diag__foot">
-                        {st.first_spotted && <>책콕이 처음 포착 {fmtDate(st.first_spotted)} ({Math.max(0, dayDiff(st.first_spotted, kstToday()))}일 전)</>}
-                        {st.first_spotted && st.confidence && ' · '}
-                        {st.confidence && <>신뢰도 {st.confidence}</>}
-                      </p>
-                    )}
-                    {wide && (
-                      <button className="bk-diag__next" onClick={() => goPage(1)}>
-                        순위 흐름 · 대출 데이터 보기 <span aria-hidden="true">→</span>
-                      </button>
-                    )}
-                  </aside>
-                )}
-              </div>
-            </section>
-
-            {/* 2쪽: 데이터로 보기 (순위 흐름 · 월별 대출 · 누가 빌렸나를 한 박스에) */}
-            <section className="bk-panel bk-page bk-page--data" {...pageProps(1)}>
-              <div className="bk-pagehead">
-                <h2 className="display">데이터로 보는 이 책</h2>
-                <p className="sub">도서관 정보나루 대출 기록</p>
-              </div>
-              <RankChart embedded isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
-              {hasData ? (
-                <div className="bk-data2">
-                  <LoanChart bare history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />
-                  <WhoBorrowed bare groups={usage?.loan_grps} cat={(book.classNameFull || '').split('>')[0].trim()} child={isChildBook(book)} />
-                </div>
+              {book.description ? (
+                <BookIntro text={book.description} key={'d' + isbn} />
               ) : (
-                !loading && <p className="sub bk-empty">월별 대출과 누가 빌렸는지는 상위권 책부터 매일 채워지고 있어요.</p>
+                <p className="pd__dim">{loading ? '책 소개를 불러오고 있어요…' : '아직 책 소개가 없어요.'}</p>
               )}
+              {book.external && <p className="pd__fine">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>}
             </section>
-
-            {/* 3쪽: 어디서 빌리고 살까 */}
-            <section className="bk-panel bk-page bk-page--get" {...pageProps(2)}>
-              <div className="bk-pagehead">
-                <h2 className="display">어디서 빌리고 살까요</h2>
-                <p className="sub">내 도서관에 있는지, 지금 빌릴 수 있는지 확인하고 서점과 비교해 보세요</p>
-              </div>
-              <div className="bk-get">
-                <div className="bk-lib" ref={libRef}>
-                  <LibraryStatusSheet inline book={book} libs={libs} setLibs={setLibs} onClose={() => {}} onPick={onPickLibrary} />
-                </div>
-                <div className="bk-buy" id="buy" ref={buyRef}>
-                  <h2 className="h2 display">어디서 살까요</h2>
-                  <p className="sub buy__lead">새 책은 도서정가제로 서점마다 가격이 거의 같아요. 배송·적립 혜택을 비교해 보세요.</p>
-                  <div className="buy__book">
-                    <Cover src={book.cover_url} alt="" className="buy__cover" title={book.title} />
-                    <span className="buy__info">
-                      <strong>{shortTitle(book.title)}</strong>
-                      <span className="num">ISBN {firstIsbn(book.isbn13)}</span>
-                    </span>
-                    <CopyIsbn isbn={firstIsbn(book.isbn13)} />
+            <section className="pd__facts">
+              <dl>
+                {facts.map(([k, v]) => (
+                  <div key={k}>
+                    <dt>{k}</dt>
+                    <dd>{v}</dd>
                   </div>
-                  <div className="shops">
-                    {shopLinks(book.isbn13).map((s, i) => (
-                      <a key={s.id} className="shop rise" style={delay(i, 0.05, 0.04)} href={s.url} target="_blank" rel="noopener noreferrer sponsored">
-                        <ShopLogo shop={s} />
-                        <span className="shop__text">
-                          <span className="shop__name">{s.name}</span>
-                        </span>
-                        <span className={`shop__tag${s.direct ? ' is-direct' : ''}`}>{s.direct ? '바로가기' : '검색'}</span>
-                        <span className="shop__chev">{Icon.chev()}</span>
-                      </a>
-                    ))}
-                  </div>
-                  {COUPANG_BANNER && (
-                    <a className="adbanner" href={COUPANG_BANNER.href} target="_blank" rel="noopener sponsored" referrerPolicy="unsafe-url">
-                      <img src={COUPANG_BANNER.img} alt={COUPANG_BANNER.alt} width={COUPANG_BANNER.w} height={COUPANG_BANNER.h} loading="lazy" />
-                    </a>
-                  )}
-                  {COUPANG_AFFILIATE && <p className="notice notice--below">{AFFILIATE_NOTICE}</p>}
-                </div>
-              </div>
+                ))}
+              </dl>
+              {st?.stage && st.stage !== '스테디' && <WhyRising isbn={book.isbn13} />}
+              <Forecast st={st} compact />
             </section>
           </div>
+
+          <div className="pd__two pd__data">
+            <RankChart embedded isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
+            {hist.length > 1 && <LoanChart bare history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />}
+          </div>
+          {(usage?.loan_grps || []).length > 0 && <WhoBorrowed bare groups={usage?.loan_grps} cat={(book.classNameFull || '').split('>')[0].trim()} child={isChildBook(book)} />}
+          {!hasData && !loading && <p className="pd__fine">월별 대출과 누가 빌렸는지는 상위권 책부터 매일 채워지고 있어요.</p>}
+
+          <NextReads isbn={book.isbn13} co={co} recs={recs} words={keywords.map((k) => k.word)} coverOf={(c) => c.cover_url || coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} />
+
+          <section className="pd__lib" id="lib" ref={libRef}>
+            <div className="pd__libhead">
+              <p className="pd__kind">도서관</p>
+              <h2 className="pd__h">내 도서관에 있을까요?</h2>
+              <p className="pd__note">자주 가는 도서관을 정하면 소장 여부와 지금 대출 가능한지 보여 드려요.</p>
+            </div>
+            <div className="pd__libbody">
+              <LibraryStatusSheet inline book={book} libs={libs} setLibs={setLibs} onClose={() => {}} onPick={onPickLibrary} />
+            </div>
+          </section>
+          {!wide && BuyList}
+          <p className="pd__source">자료: 도서관 정보나루{st?.snapshot_date ? ` · ${fmtDate(st.snapshot_date)} 수집` : ''}</p>
         </div>
-        {wide && page < 2 && (
-          <button className="bk-arrow bk-arrow--next" onClick={() => goPage(page + 1)} aria-label={`다음: ${PAGES[page + 1]}`}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        )}
-        {wide && page > 0 && (
-          <button className="bk-arrow bk-arrow--prev" onClick={() => goPage(page - 1)} aria-label={`이전: ${PAGES[page - 1]}`}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M15 5l-7 7 7 7" />
-            </svg>
-          </button>
-        )}
       </div>
 
-      <p className="bk-source">데이터: 도서관 정보나루{st?.snapshot_date ? ` · ${fmtDate(st.snapshot_date)} 수집` : ''}</p>
-
       {!wide && (
-        <div className={`actionbar bk-actionbar${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
-          <button className="bk-btn bk-btn--line" onClick={toBuy} tabIndex={barOn ? 0 : -1}>
-            구매하기
-          </button>
-          <button className="bk-btn bk-btn--primary" onClick={() => setLibOpen(true)} tabIndex={barOn ? 0 : -1}>
+        <div className={`actionbar pd__bar2${barOn ? ' is-on' : ''}`} aria-hidden={!barOn}>
+          <button className="pbtn pbtn--lib" onClick={() => scrollTo(libRef)} tabIndex={barOn ? 0 : -1}>
             도서관에서 빌리기
+          </button>
+          <button className="pbtn pbtn--shop" onClick={() => scrollTo(buyRef)} tabIndex={barOn ? 0 : -1}>
+            서점에서 사기
           </button>
         </div>
       )}
@@ -3057,45 +3198,25 @@ function TasteTop() {
   useEffect(() => {
     supabase.rpc('taste_top', { p_days: 30, p_limit: 10 }).then(({ data }) => setRows(data || []))
   }, [])
-  const list = (rows || []).filter((r, i, a) => a.findIndex((x) => shortTitle(x.title) === shortTitle(r.title)) === i)
+  const list = (rows || []).filter((r, i, a) => a.findIndex((x) => shortTitle(x.title) === shortTitle(r.title)) === i).slice(0, 6)
   return (
-    <section className="card tastetop rise" style={{ animationDelay: '0.6s' }}>
-      <div className="card__head">
-        <div className="titlegroup">
-          <Eyebrow tone="spot">READERS' PICK</Eyebrow>
-          <h2 className="h2 display">책콕 사람들이 좋다고 고른 책</h2>
-        </div>
-        <a className="bk-more" href="/taste">
-          나도 고르기 →
-        </a>
-      </div>
-      <p className="sub">최근 30일 좋아요를 많이 받은 책</p>
+    <PSec title="책콕 사람들이 좋다고 고른 책" more={{ href: '/taste', label: '나도 고르기 →' }} className="tastetop">
       {rows === null && <Loading />}
-      {rows && list.length === 0 && (
-        <a className="tastetop__empty press" href="/taste">
-          <span>
-            <b>아직 모으는 중이에요. 첫 좋아요를 남겨 주세요</b>
-            <small>표지 몇 장만 고르면 내 취향 중 지금 뜨는 책도 찾아드려요</small>
-          </span>
-          {Icon.chev()}
-        </a>
-      )}
+      {rows && list.length === 0 && <p className="psec__empty">아직 모으는 중이에요. 취향 찾기에서 첫 좋아요를 남겨 주세요.</p>}
       {list.length > 0 && (
-        <div className="tastetop__row">
-          {list.map((r, i) => (
-            <a key={r.isbn13} className="tastetop__item" href={`/book/${encodeURIComponent(r.isbn13)}`}>
-              <span className="tastetop__rank num">{i + 1}</span>
-              <Cover src={r.cover_url} alt="" className="tastetop__cover" title={r.title} />
-              <b>{shortTitle(r.title)}</b>
-              <small>
-                좋아요 <span className="num">{r.likes}</span>
-                {r.stage ? ` · ${r.stage}` : ''}
-              </small>
+        <div className="shelfgrid shelfgrid--6">
+          {list.map((r) => (
+            <a key={r.isbn13} className="shelfi" href={`/book/${encodeURIComponent(r.isbn13)}`}>
+              <Cover src={r.cover_url} alt="" className="shelfi__cover" title={r.title} />
+              <b className="shelfi__title">{shortTitle(r.title)}</b>
+              <span className="shelfi__by">
+                <span className="shelfi__like">♥ {r.likes}</span> · {cleanAuthor(r.author)}
+              </span>
             </a>
           ))}
         </div>
       )}
-    </section>
+    </PSec>
   )
 }
 
