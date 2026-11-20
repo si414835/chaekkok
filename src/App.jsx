@@ -657,7 +657,7 @@ function TopGrid({ books }) {
       </div>
       <div className="topgrid__list">
         {books.map((b, i) => (
-          <GalleryItem key={b.isbn13} book={b} rank={i + 1} value={[b.score != null ? `${b.score}점` : '']} />
+          <GalleryItem key={b.isbn13} book={b} rank={i + 1} value={['']} />
         ))}
       </div>
     </section>
@@ -668,7 +668,8 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
   const wide = useWide()
   const top5 = dedupeSame(feed.composite.filter((b) => !isChildBook(b))).slice(0, 5)
   // 넓은 화면은 옆 칸(우리 동네)과 높이를 맞추려고 5권, 폰은 3권
-  const rising3 = dedupeSame(feed.rising.filter((b) => !isChildBook(b))).slice(0, wide ? 5 : 3)
+  const topKeys = new Set(top5.map((b) => shortTitle(b.title)))
+  const rising3 = dedupeSame(feed.rising.filter((b) => !isChildBook(b) && !topKeys.has(shortTitle(b.title)))).slice(0, wide ? 5 : 3)
   return (
     <>
       <header className="topbar">
@@ -696,7 +697,6 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
         {!loading && !error && (
           <>
             {wide ? <TopGrid books={top5} /> : <Carousel books={top5} />}
-            <TasteTop />
             <div className="home__pair">
             <section className="card card--list rise" style={{ animationDelay: '0.65s' }}>
               <div className="card__head">
@@ -715,6 +715,7 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
             </section>
             <LocalRising libs={libs || []} />
             </div>
+            <TasteTop />
             <Upcoming list={upcoming} />
           </>
         )}
@@ -1077,10 +1078,22 @@ function HitCalibration() {
 /* ================= 예보 ================= */
 
 // 책 상세: 2주 뒤 순위가 20% 넘게 오를 확률(예보)
-function Forecast({ st }) {
+function Forecast({ st, compact }) {
   const f = st?.forecast != null ? Number(st.forecast) : null
   if (f == null || !st?.rank_now) return null
   const target = Math.floor(st.rank_now * 0.8)
+  if (compact)
+    return (
+      <div className="fc fc--compact" title="같은 점수대였던 책이 실제로 오른 비율이에요">
+        <span>
+          2주 뒤 <b>{target}위 안</b>에 들 확률
+        </span>
+        <span className="fc__track" aria-hidden="true">
+          <i style={{ width: `${Math.min(100, f)}%` }} />
+        </span>
+        <strong className="num">{Math.round(f)}%</strong>
+      </div>
+    )
   return (
     <div className="fc rise" style={{ animationDelay: '0.29s' }}>
       <div className="fc__head">
@@ -1275,8 +1288,7 @@ function GalleryItem({ book, rank, value }) {
           </span>
         )}
         <span className={`gitem__stage gitem__stage--${STAGE_TONE[st?.stage] || 'none'}`}>
-          {st?.stage ? `${st.stage} · ` : ''}
-          {value[0]}
+          {[st?.stage, value[0]].filter(Boolean).join(' · ')}
         </span>
       </span>
     </a>
@@ -1867,7 +1879,7 @@ function RankChart({ isbn, firstSpotted, hit, embedded }) {
             </span>
           ))}
       </div>
-      {!flat && <p className="sub small">점은 트렌드 단계가 바뀐 날이에요. 그래프를 누르면 그날 순위가 보여요. 선이 끊긴 곳은 그날 분야 순위 목록에 없던 날이에요.</p>}
+      {!flat && <p className="sub small">점: 단계가 바뀐 날 · 그래프를 누르면 그날 순위</p>}
     </Wrap>
   )
 }
@@ -2270,7 +2282,7 @@ function WhoBorrowed({ groups, bare, cat, child }) {
   return (
     <section className={`${bare ? 'bk-sub' : 'card bk-card'} bk-who rise`} style={{ animationDelay: '0.4s' }}>
       <h2 className="h2 display">성별 · 연령별 인기 분포</h2>
-      <p className="sub">최근 대출 {total.toLocaleString()}건 기준 · 도서관 정보나루가 알려 준 그룹만 셈</p>
+      <p className="sub">최근 대출 {total.toLocaleString()}건 기준</p>
       <div className="bk-who__grid">
         <div className="bk-fly" role="table" aria-label="성별·연령별 대출 비율">
           {rows.map((r, i) => (
@@ -2339,7 +2351,7 @@ function WhoBorrowed({ groups, bare, cat, child }) {
 }
 
 // 이 책의 키워드가 붙은 다른 책 (첫 키워드부터, 3권 이상 나오는 키워드)
-function KeywordBooks({ isbn, words, bare }) {
+function useKeywordBooks(isbn, words) {
   const [res, setRes] = useState(null)
   const key = words.slice(0, 4).join('|')
   useEffect(() => {
@@ -2359,33 +2371,72 @@ function KeywordBooks({ isbn, words, bare }) {
         for (const w of ws) {
           const seen = new Set()
           const list = (data || []).filter((r) => r.word === w && !isChildBook({ additionSymbol: r.addition_symbol }) && !seen.has(shortTitle(r.title)) && seen.add(shortTitle(r.title)))
-          if (list.length >= 3) return setRes({ word: w, list: list.slice(0, 5) })
+          if (list.length >= 3) return setRes({ word: w, list: list.slice(0, 8) })
         }
         setRes({ word: null, list: [] })
       })
     return () => {
       off = true
     }
-  }, [isbn, key])
-  if (!res?.word) return null
+  }, [isbn, key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return res
+}
+
+// 다음에 읽을 책: 함께 빌린 · 깊게 읽는 독자 · #키워드를 선반 하나에 탭으로 (책결처럼 한 번에 하나만)
+function NextReads({ isbn, co, coverOf, recs, words }) {
+  const kw = useKeywordBooks(isbn, words)
+  const [tab, setTab] = useState('co')
+  useEffect(() => setTab('co'), [isbn])
+  const coKeys = new Set(co.map((c) => shortTitle(c.title)))
+  const deepSeen = new Set(coKeys)
+  const deep = [...(recs?.mania || []), ...(recs?.reader || [])].filter((b) => b.title && !deepSeen.has(shortTitle(b.title)) && deepSeen.add(shortTitle(b.title))).slice(0, 8)
+  const tabs = [
+    co.length && { id: 'co', label: '함께 빌린 책', note: '이 책을 빌린 사람들이 같이 빌린 책', list: co.slice(0, 8).map((c) => ({ ...c, cover_url: coverOf(c) })) },
+    deep.length && { id: 'deep', label: '깊게 읽는 독자', note: '이 분야를 많이 읽는 사람들이 함께 고른 책', list: deep },
+    kw?.word && { id: 'kw', label: `#${kw.word}`, note: '같은 키워드 책 중 요즘 뜨는 순', list: kw.list, more: keywordHref(kw.word) },
+  ].filter(Boolean)
+  if (!tabs.length) return null
+  const cur = tabs.find((t) => t.id === tab) || tabs[0]
   return (
-    <section className={`${bare ? 'bk-sub bk-kwsec' : 'card bk-card'} rise`} style={{ animationDelay: '0.3s' }}>
-      <div className="card__head">
-        <h2 className="h2 display">#{res.word} 키워드의 다른 책</h2>
-        <a className="bk-more" href={keywordHref(res.word)}>
-          전체 →
-        </a>
+    <section className="bk-shelf bk-next rise" style={{ animationDelay: '0.3s' }}>
+      <div className="bk-next__head">
+        <h2 className="h2 display">다음에 읽을 책</h2>
+        <div className="bk-deep__tabs" role="tablist">
+          {tabs.map((t) => (
+            <button key={t.id} role="tab" aria-selected={cur.id === t.id} className={cur.id === t.id ? 'is-on' : ''} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <p className="sub">이 키워드가 붙은 책 중 요즘 뜨는 순</p>
-      <div className="bk-kwbooks">
-        {res.list.map((b) => (
-          <a key={b.isbn13} href={`/book/${encodeURIComponent(b.isbn13)}`} className="bk-kwbook">
-            <Cover src={b.cover_url} alt="" className="bk-kwbook__cover" title={b.title} />
-            <b>{shortTitle(b.title)}</b>
-            <small>{cleanAuthor(b.author)}</small>
-            {b.stage && <StageBadge stage={b.stage} />}
-          </a>
-        ))}
+      <p className="sub">
+        {cur.note}
+        {cur.more && (
+          <>
+            {' · '}
+            <a className="bk-more" href={cur.more}>
+              전체 보기 →
+            </a>
+          </>
+        )}
+      </p>
+      <div className="bk-shelf__scroll" style={{ '--n': cur.list.length }} key={cur.id}>
+        <div className="bk-shelf__row">
+          {cur.list.map((c) => (
+            <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`}>
+              <Cover src={c.cover_url} alt="" className="bk-shelf__cover" title={c.title} />
+            </a>
+          ))}
+        </div>
+        <div className="bk-shelf__plank" aria-hidden="true" />
+        <div className="bk-shelf__row bk-shelf__row--text">
+          {cur.list.map((c) => (
+            <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`} tabIndex={-1}>
+              <b>{shortTitle(c.title)}</b>
+              <small>{cleanAuthor(c.author)}</small>
+            </a>
+          ))}
+        </div>
       </div>
     </section>
   )
@@ -2459,15 +2510,15 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   const subtitle = subtitleOf(book.title)
   const pub = base?.publisher || book.publisher
   const year = base?.pub_year || book.pub_year
-  const kdc = base?.class_no
   const hist = (usage?.loan_history || []).filter((h) => h.loanCnt != null)
   const lastM = hist[hist.length - 1]
   const prevM = hist[hist.length - 2]
   const monthOf = (m) => Number((m?.month?.match(/(\d+)월/) || [])[1])
   const journey = rankJourney(rankHist)
+  const topGrp = [...(usage?.loan_grps || [])].filter((x) => x.age && x.gender && x.loanCnt > 0).sort((a, b) => b.loanCnt - a.loanCnt)[0]
   const statItems = [
     rankNow != null
-      ? { k: `${cat} 순위`, v: `${rankNow}위`, s: [ev?.list_size && `${ev.list_size}권 중`, ev?.rank_prev && `지난주 ${ev.rank_prev}위`].filter(Boolean).join(' · ') }
+      ? { k: `${cat} 순위`, v: `${rankNow}위`, s: ev?.rank_prev ? `지난주 ${ev.rank_prev}위` : '' }
       : { k: '분야 순위', v: '순위 밖', s: '인기대출 목록에 없어요' },
     lastM
       ? {
@@ -2478,8 +2529,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
       : book.loan_count != null
         ? { k: '30일 대출', v: `${Math.round(book.loan_count * p).toLocaleString()}회`, s: '' }
         : null,
-    ev?.regions ? { k: '인기 지역', v: `${ev.regions}곳`, s: '지역별 인기대출 목록' } : null,
-    ev?.demo_groups ? { k: '인기 그룹', v: `${ev.demo_groups}개`, s: '연령·성별 인기대출 목록' } : null,
+    topGrp ? { k: '많이 빌린 사람', v: grpLab(topGrp), s: '', text: true } : ev?.regions ? { k: '인기 지역', v: `${ev.regions}곳`, s: '' } : null,
   ].filter(Boolean)
   const onHeart = () => {
     toggleWish(book)
@@ -2554,11 +2604,10 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             <b>{cleanAuthor(book.author)}</b>
             {pub && <span>{pub}</span>}
             {year && <span>{year}</span>}
-            {kdc && <span className="bk-meta__kdc">KDC {kdc}</span>}
           </p>
           {keywords.length > 0 && (
             <nav className="bk-tags" aria-label="이 책의 키워드">
-              {keywords.map((k, i) => (
+              {keywords.slice(0, 4).map((k, i) => (
                 <a key={k.word} href={keywordHref(k.word)} className={`bk-tag pop${i < 2 ? ' is-strong' : ''}`} style={delay(i, 0.28, 0.05)}>
                   #{k.word}
                 </a>
@@ -2615,7 +2664,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                       {statItems.map((s) => (
                         <div key={s.k}>
                           <dt>{s.k}</dt>
-                          <dd className="num">{s.v}</dd>
+                          <dd className={s.text ? 'bk-stats__txt' : 'num'}>{s.v}</dd>
                           {s.s && <dd className="bk-stats__sub">{s.s}</dd>}
                         </div>
                       ))}
@@ -2630,35 +2679,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                     {book.external && <p className="notice notice--box hero__ext">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>}
                   </div>
 
-                  {co.length > 0 && (
-                    <section className="bk-shelf rise" style={{ animationDelay: '0.3s' }}>
-                      <div className="bk-shead">
-                        <h2 className="h2 display">이 책과 함께 빌린 책</h2>
-                        <p className="sub">이 책을 빌린 사람들이 같이 빌린 책 · 어디에나 끼는 베스트셀러는 뒤로 미뤘어요</p>
-                      </div>
-                      <div className="bk-shelf__scroll" style={{ '--n': co.length }}>
-                        <div className="bk-shelf__row">
-                          {co.map((c) => (
-                            <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`}>
-                              <Cover src={c.cover_url || coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} alt="" className="bk-shelf__cover" title={c.title} />
-                            </a>
-                          ))}
-                        </div>
-                        <div className="bk-shelf__plank" aria-hidden="true" />
-                        <div className="bk-shelf__row bk-shelf__row--text">
-                          {co.map((c) => (
-                            <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`} tabIndex={-1}>
-                              <b>{shortTitle(c.title)}</b>
-                              <small>{cleanAuthor(c.author)}</small>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    </section>
-                  )}
-
-                  <DeepRecs recs={recs} co={co} />
-                  <KeywordBooks bare isbn={book.isbn13} words={keywords.map((k) => k.word)} />
+                  <NextReads isbn={book.isbn13} co={co} recs={recs} words={keywords.map((k) => k.word)} coverOf={(c) => c.cover_url || coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} />
                 </div>
 
                 {st?.stage && (
@@ -2676,30 +2697,20 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                         </li>
                       ))}
                     </ol>
-                    <dl className="bk-diag__rows">
-                      {st.reason && (
-                        <div>
-                          <dt>왜 이 단계인가요</dt>
-                          <dd>{st.reason}</dd>
-                        </div>
-                      )}
-                      {st.confidence && (
-                        <div>
-                          <dt>신뢰도</dt>
-                          <dd>{st.confidence}</dd>
-                        </div>
-                      )}
-                      {st.first_spotted && (
-                        <div>
-                          <dt>책콕이 처음 포착</dt>
-                          <dd>
-                            {fmtDate(st.first_spotted)} · {Math.max(0, dayDiff(st.first_spotted, kstToday()))}일 전
-                          </dd>
-                        </div>
-                      )}
-                    </dl>
+                    {st.reason && (
+                      <p className="bk-diag__why">
+                        <b>지금 {st.stage}</b> · {st.reason}
+                      </p>
+                    )}
                     {st.stage !== '스테디' && <WhyRising isbn={book.isbn13} />}
-                    <Forecast st={st} />
+                    <Forecast st={st} compact />
+                    {(st.first_spotted || st.confidence) && (
+                      <p className="bk-diag__foot">
+                        {st.first_spotted && <>책콕이 처음 포착 {fmtDate(st.first_spotted)} ({Math.max(0, dayDiff(st.first_spotted, kstToday()))}일 전)</>}
+                        {st.first_spotted && st.confidence && ' · '}
+                        {st.confidence && <>신뢰도 {st.confidence}</>}
+                      </p>
+                    )}
                     {wide && (
                       <button className="bk-diag__next" onClick={() => goPage(1)}>
                         순위 흐름 · 대출 데이터 보기 <span aria-hidden="true">→</span>
@@ -2714,7 +2725,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             <section className="bk-panel bk-page bk-page--data" {...pageProps(1)}>
               <div className="bk-pagehead">
                 <h2 className="display">데이터로 보는 이 책</h2>
-                <p className="sub">순위 흐름 · 월별 대출 · 누가 빌렸나 · 도서관 정보나루 대출 기록</p>
+                <p className="sub">도서관 정보나루 대출 기록</p>
               </div>
               <RankChart embedded isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
               {hasData ? (
@@ -3058,7 +3069,7 @@ function TasteTop() {
           나도 고르기 →
         </a>
       </div>
-      <p className="sub">최근 30일 '내 취향 찾기'와 콕에서 좋아요를 많이 받은 책이에요.</p>
+      <p className="sub">최근 30일 좋아요를 많이 받은 책</p>
       {rows === null && <Loading />}
       {rows && list.length === 0 && (
         <a className="tastetop__empty press" href="/taste">
@@ -3084,18 +3095,11 @@ function TasteTop() {
           ))}
         </div>
       )}
-      <a className="tastetop__cta press" href="/taste">
-        <span>
-          <b>내 취향 찾기</b>
-          <small>표지 {TASTE_NEED}권만 고르면 바로 → 내 취향 중 지금 뜨는 책</small>
-        </span>
-        {Icon.chev()}
-      </a>
     </section>
   )
 }
 
-// 책 상세: 마니아·다독자가 고른 책 (함께 빌린 책과 겹치는 책은 뺀다)
+// 책 한 권의 함께 빌린 · 마니아 · 다독자 목록 (흔한 책 보정 순)
 function useBookRecs(isbn) {
   const [recs, setRecs] = useState(null)
   useEffect(() => {
@@ -3107,47 +3111,6 @@ function useBookRecs(isbn) {
     }
   }, [isbn])
   return recs
-}
-
-function DeepRecs({ recs, co }) {
-  const [tab, setTab] = useState('mania')
-  const coKeys = new Set(co.map((c) => shortTitle(c.title)))
-  const pick = (list) => {
-    const seen = new Set(coKeys)
-    return (list || []).filter((b) => b.title && !seen.has(shortTitle(b.title)) && seen.add(shortTitle(b.title))).slice(0, 8)
-  }
-  const lists = { mania: pick(recs?.mania), reader: pick(recs?.reader) }
-  const cur = lists[tab].length ? tab : lists.mania.length ? 'mania' : 'reader'
-  if (!lists.mania.length && !lists.reader.length) return null
-  return (
-    <section className="bk-sub bk-deep rise" style={{ animationDelay: '0.32s' }}>
-      <div className="card__head">
-        <h2 className="h2 display">깊게 읽는 사람들이 고른 책</h2>
-        <div className="bk-deep__tabs" role="tablist">
-          {lists.mania.length > 0 && (
-            <button role="tab" aria-selected={cur === 'mania'} className={cur === 'mania' ? 'is-on' : ''} onClick={() => setTab('mania')}>
-              마니아
-            </button>
-          )}
-          {lists.reader.length > 0 && (
-            <button role="tab" aria-selected={cur === 'reader'} className={cur === 'reader' ? 'is-on' : ''} onClick={() => setTab('reader')}>
-              다독자
-            </button>
-          )}
-        </div>
-      </div>
-      <p className="sub">{cur === 'mania' ? '이 분야 책을 많이 빌리는 사람들이 이 책과 함께 고른 책' : '책을 아주 많이 빌리는 사람들이 이 책과 함께 고른 책'} · 도서관 정보나루</p>
-      <div className="bk-kwbooks">
-        {lists[cur].map((b) => (
-          <a key={b.isbn13 || b.title} href={`/book/${encodeURIComponent(b.isbn13)}`} className="bk-kwbook">
-            <Cover src={b.cover_url} alt="" className="bk-kwbook__cover" title={b.title} />
-            <b>{shortTitle(b.title)}</b>
-            <small>{cleanAuthor(b.author)}</small>
-          </a>
-        ))}
-      </div>
-    </section>
-  )
 }
 
 /* ================= 검색 ================= */

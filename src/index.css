@@ -6155,3 +6155,18 @@ a.lib__info {
   .bk-who__grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; }
 }
 .taste__hint { width: 100%; text-align: center; margin: 0; }
+
+/* ===== 단순화 (2026-11-20): 다음에 읽을 책 하나로 · 진단 한 줄 · 예보 한 줄 ===== */
+.bk-next__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.bk-next > .sub { margin: 4px 0 6px; }
+.bk-next .bk-deep__tabs { overflow-x: auto; max-width: 100%; }
+.bk-next .bk-deep__tabs button { white-space: nowrap; }
+.bk-stats__txt { font-family: var(--display); font-size: 17px !important; font-weight: 700; color: var(--ink); line-height: 1.3; margin: 2px 0 0; }
+.bk-diag__why { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink); }
+.bk-diag__why b { color: var(--accent); }
+.bk-diag__foot { margin: 0; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+.fc.fc--compact { display: grid; grid-template-columns: auto minmax(40px, 1fr) auto; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+.fc--compact b { color: var(--ink); }
+.fc--compact strong { font-size: 16px; color: var(--accent); }
+.fc--compact .fc__track { height: 6px; border-radius: 99px; background: var(--accent-soft); overflow: hidden; display: block; }
+.fc--compact .fc__track i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
