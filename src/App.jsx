@@ -664,19 +664,71 @@ function TopGrid({ books }) {
   )
 }
 
-// 책콕 고양이: 책 위에 엎드려 자며 꼬리를 살랑인다 (화면 구석 장식, 스크린리더에는 숨김)
-function KokCat({ className = '', book = '#1f4a38' }) {
+// 책냥이: 책콕 고양이. 삐뚤빼뚤 쌓인 책 위에 엎드려 자며 꼬리를 살랑인다.
+// svg 아래 끝 = 맨 아래 책의 바닥이라, 선 위에 bottom 0으로 놓으면 책이 선에 딱 붙는다.
+function KokCat({ className = '' }) {
   return (
-    <svg className={`kokcat ${className}`} viewBox="0 0 200 118" aria-hidden="true" focusable="false">
-      <rect x="6" y="90" width="176" height="24" rx="3" fill={book} />
-      <rect x="18" y="99" width="152" height="2" fill="#fff" opacity=".35" />
+    <svg className={`kokcat ${className}`} viewBox="0 0 200 156" role="img" aria-label="책 위에서 자는 책냥이" focusable="false">
+      <rect x="6" y="139" width="188" height="17" rx="3" fill="#1c2b48" />
+      <rect x="18" y="146" width="164" height="2" fill="#fff" opacity=".3" />
+      <rect x="20" y="124" width="160" height="15" rx="3" fill="#fff" stroke="#141414" strokeWidth="2.5" transform="rotate(-1.6 100 131)" />
+      <rect x="12" y="107" width="172" height="17" rx="3" fill="#1f4a38" transform="rotate(1.8 98 115)" />
+      <rect x="24" y="114" width="148" height="2" fill="#fff" opacity=".3" transform="rotate(1.8 98 115)" />
+      <rect x="28" y="91" width="148" height="16" rx="3" fill="#d7d7d4" transform="rotate(-2.4 102 99)" />
+      <path d="M148 98 L148 128 L153 123 L158 128 L158 97 Z" fill="#c2412d" />
       <path className="kokcat__tail" d="M154 84 C186 88 196 66 180 54" fill="none" stroke="#141414" strokeWidth="11" strokeLinecap="round" />
       <g className="kokcat__body">
-        <path d="M20 91 C12 55 48 29 92 31 C136 33 164 57 160 91 Z" fill="#141414" />
+        <path d="M20 93 C12 55 48 29 92 31 C136 33 164 57 160 93 Z" fill="#141414" />
         <circle cx="42" cy="57" r="28" fill="#141414" />
         <path d="M20 41 L22 11 L40 33 Z M48 31 L64 9 L66 41 Z" fill="#141414" />
         <path d="M28 61 q6 6 12 0 M46 61 q6 6 12 0" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
       </g>
+    </svg>
+  )
+}
+
+// 홈의 책냥이: 노란 스탠드 불빛(가끔 깜빡) 아래 책 더미 위에서 자고, 옆 머그잔에서 김이 모락모락
+function KokCatScene({ className = '' }) {
+  return (
+    <svg className={`kokscene ${className}`} viewBox="30 100 520 420" role="img" aria-label="스탠드 불빛 아래 책 더미 위에서 자는 책냥이" focusable="false">
+      <defs>
+        <linearGradient id="kokLight" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffd666" stopOpacity=".75" />
+          <stop offset="1" stopColor="#ffe9a8" stopOpacity=".25" />
+        </linearGradient>
+      </defs>
+      <g className="kokscene__light">
+        <polygon points="250,178 330,178 470,520 110,520" fill="url(#kokLight)" />
+        <ellipse cx="290" cy="184" rx="34" ry="7" fill="#ffd23f" />
+      </g>
+      <rect x="60" y="508" width="90" height="12" rx="6" fill="#141414" />
+      <path d="M105 508 L150 300 L262 168" fill="none" stroke="#141414" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="150" cy="300" r="9" fill="#141414" />
+      <path d="M236 128 L344 128 L366 186 L214 186 Z" fill="#1f4a38" />
+      <rect x="270" y="112" width="40" height="18" rx="4" fill="#1f4a38" />
+      <rect x="190" y="472" width="250" height="48" rx="4" fill="#1c2b48" />
+      <rect x="204" y="482" width="222" height="3" fill="#fff" opacity=".35" />
+      <rect x="206" y="428" width="222" height="44" rx="4" fill="#fff" stroke="#141414" strokeWidth="3" transform="rotate(-1.5 317 450)" />
+      <rect x="222" y="440" width="30" height="20" fill="#e4e4e2" transform="rotate(-1.5 317 450)" />
+      <rect x="182" y="388" width="236" height="40" rx="4" fill="#1f4a38" transform="rotate(1.6 300 408)" />
+      <rect x="196" y="398" width="208" height="3" fill="#fff" opacity=".35" transform="rotate(1.6 300 408)" />
+      <rect x="214" y="352" width="196" height="36" rx="4" fill="#d7d7d4" transform="rotate(-2 312 370)" />
+      <path d="M372 356 L372 446 L380 438 L388 446 L388 354 Z" fill="#c2412d" />
+      <path className="kokscene__tail" d="M376 344 C404 348 412 330 398 318" fill="none" stroke="#141414" strokeWidth="12" strokeLinecap="round" />
+      <g className="kokscene__body">
+        <path d="M240 354 C232 316 268 290 312 292 C356 294 384 318 380 354 Z" fill="#141414" />
+        <circle cx="262" cy="318" r="28" fill="#141414" />
+        <path d="M240 302 L242 272 L260 294 Z M268 292 L284 270 L286 302 Z" fill="#141414" />
+        <path d="M248 322 q6 6 12 0 M266 322 q6 6 12 0" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+      </g>
+      <g className="kokscene__z">
+        <text x="300" y="262" fontFamily="'Noto Serif KR', serif" fontSize="26" fill="#8c8c89">z</text>
+        <text x="322" y="236" fontFamily="'Noto Serif KR', serif" fontSize="20" fill="#b9b9b5">z</text>
+      </g>
+      <rect x="452" y="456" width="56" height="64" rx="8" fill="#fff" stroke="#141414" strokeWidth="3" />
+      <path d="M508 472 c22 0 22 30 0 30" fill="none" stroke="#141414" strokeWidth="3" />
+      <path className="kokscene__steam" d="M470 444 c-8 -12 8 -18 0 -30" fill="none" stroke="#b9b9b5" strokeWidth="3" strokeLinecap="round" />
+      <path className="kokscene__steam kokscene__steam--2" d="M490 444 c-8 -12 8 -18 0 -30" fill="none" stroke="#b9b9b5" strokeWidth="3" strokeLinecap="round" />
     </svg>
   )
 }
@@ -1027,13 +1079,16 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
       <div className="phome">
         {loading && <Loading />}
         {error && <p className="state state--error">데이터를 불러오지 못했어요: {error}</p>}
-        <p className="phome__slogan">
-          도서관과 서점 사이, <b>책콕</b>
-        </p>
+        <div className="phome__top">
+          <p className="phome__slogan">
+            도서관과 서점 사이, <b>책콕</b>
+          </p>
+          <KokCatScene className="phome__scene" />
+        </div>
         {!loading && !error && top5.length > 0 && (
           <>
             <PlainKeyword keywords={keywords} />
-            <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5" cat>
+            <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5">
               {wide ? (
                 <>
                   <Featured book={top5[0]} />
@@ -2973,7 +3028,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
         <aside className="pd__side">
           <div className="pd__stage">
             <Cover src={book.cover_url} alt={shortTitle(book.title)} className="pd__cover" title={book.title} />
-            <KokCat className="kokcat--stage" book="#1c2b48" />
+            <KokCat className="kokcat--stage" />
           </div>
           <div className="pd__acts" ref={actRef}>
             <button className="pbtn pbtn--lib" onClick={() => scrollTo(libRef)}>
@@ -3216,11 +3271,11 @@ function TastePage({ feed, loading }) {
       <header className="pagehead">
         <Eyebrow>MY TASTE</Eyebrow>
         <h1 className="h1 display">내 취향 찾기</h1>
-        <KokCat className="kokcat--page" />
         <span className="sub">표지를 보고 끌리면 좋아요, 아니면 별로를 눌러 주세요. 읽지 않은 책도 괜찮아요.</span>
       </header>
 
       <section className="card taste__deck">
+        <KokCat className="kokcat--deck" />
         <div className="taste__progress">
           <span>
             분류 <b className="num">{Math.min(sorted, TASTE_NEED)}</b> / {TASTE_NEED}

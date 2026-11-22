@@ -6528,13 +6528,11 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 .pd__bar2 { transform: translate(-50%, 110%); transition: transform 0.28s ease; }
 .pd__bar2.is-on { transform: translate(-50%, 0); }
 /* 홈: 키워드를 맨 위로, TOP 5는 한 구역 (1위 크게 + 2~5위) */
-.phome .pkw { padding-top: 24px; }
 .phome .pkw .psec__head { margin-bottom: 14px; }
 .ptop5 .feat__stage { margin: 0 -20px; }
 .ptop5 .feat__text { padding: 22px 0 0; }
 .ptop5__rest { margin-top: 36px; }
 @media (min-width: 1100px) {
-  .phome .pkw { padding-top: 48px; }
   .ptop5 .feat { padding-top: 0; }
   .ptop5 .feat__stage { margin: 0; }
   .ptop5 .feat__text { padding: 0 0 0 64px; }
@@ -6562,38 +6560,44 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 .plist a { grid-template-columns: 26px 48px minmax(0, 1fr) auto; align-items: center; gap: 0 14px; padding: 12px 0; }
 .plist__cover { width: 48px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; border-radius: 2px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 10px -4px rgba(0, 0, 0, 0.25); }
 
-/* ---- 책콕 고양이 (2026-11-22): 책 위에 엎드려 꼬리를 살랑 ---- */
-.kokcat { display: block; overflow: visible; pointer-events: none; }
+/* ---- 책냥이 (2026-11-22): 책 위에 엎드려 꼬리를 살랑. svg 바닥 = 맨 아래 책 바닥 ---- */
+.kokcat, .kokscene { display: block; overflow: visible; pointer-events: none; }
 .kokcat__tail { transform-origin: 154px 84px; animation: kokcat-tail 2.8s ease-in-out infinite; }
-.kokcat__body { transform-origin: 90px 91px; animation: kokcat-breathe 3.6s ease-in-out infinite; }
-@keyframes kokcat-tail {
-  0%, 100% { transform: rotate(0deg); }
-  30% { transform: rotate(-18deg); }
-  55% { transform: rotate(6deg); }
-  75% { transform: rotate(-10deg); }
-}
-@keyframes kokcat-breathe {
-  0%, 100% { transform: scale(1, 1); }
-  50% { transform: scale(1.012, 1.035); }
-}
-@media (prefers-reduced-motion: reduce) { .kokcat__tail, .kokcat__body { animation: none; } }
-/* 홈 'TOP 5' 제목 선 위에 엎드림 */
-.psec__head { position: relative; }
-.kokcat--head { position: absolute; right: 92px; bottom: 100%; width: 72px; margin-bottom: -1px; }
-/* 상세: 회색 판 오른쪽 아래 구석, 작은 책 위 */
+.kokcat__body { transform-origin: 90px 93px; animation: kokcat-breathe 3.6s ease-in-out infinite; }
+.kokscene__tail { transform-origin: 376px 344px; animation: kokcat-tail 2.8s ease-in-out infinite; }
+.kokscene__body { transform-origin: 310px 354px; animation: kokcat-breathe 3.6s ease-in-out infinite; }
+.kokscene__light { animation: kok-flicker 7s linear infinite; }
+.kokscene__steam { animation: kok-steam 2.6s ease-out infinite; }
+.kokscene__steam--2 { animation-delay: 1.3s; }
+.kokscene__z { animation: kok-z 3.6s ease-in-out infinite; }
+@keyframes kokcat-tail { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(-18deg); } 55% { transform: rotate(6deg); } 75% { transform: rotate(-10deg); } }
+@keyframes kokcat-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, 1.035); } }
+/* 대부분 켜져 있다가 가끔 깜빡깜빡 */
+@keyframes kok-flicker { 0%, 84%, 100% { opacity: 1; } 85% { opacity: 0.35; } 86% { opacity: 1; } 87.5% { opacity: 0.25; } 89% { opacity: 0.95; } 90% { opacity: 0.6; } 91% { opacity: 1; } }
+@keyframes kok-steam { 0% { transform: translateY(8px); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateY(-22px); opacity: 0; } }
+@keyframes kok-z { 0%, 100% { transform: translateY(0); opacity: 0.9; } 50% { transform: translateY(-6px); opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .kokcat__tail, .kokcat__body, .kokscene__tail, .kokscene__body, .kokscene__light, .kokscene__steam, .kokscene__z { animation: none; } }
+
+/* 홈: 슬로건 오른쪽, 키워드 구역 검정 선 위에 책 더미가 딱 서게 */
+.phome__top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 10px 20px 0; }
+.phome__top .phome__slogan { padding: 0 0 12px; }
+.phome__scene { flex: none; width: 170px; height: auto; margin-bottom: -1px; }
+.phome .pkw { padding-top: 0; }
+/* 상세: 회색 판 바닥에 책이 딱 붙게 */
 .pd__stage { position: relative; }
-.kokcat--stage { position: absolute; right: 14px; bottom: 0; width: 66px; }
-/* 취향 찾기 제목 옆 */
-.taste .pagehead { position: relative; }
-.kokcat--page { position: absolute; right: 20px; top: 18px; width: 70px; }
-/* 빈 화면 */
+.kokcat--stage { position: absolute; right: 14px; bottom: 0; width: 70px; }
+/* 취향 찾기: 덱 위 검정 선에 책이 딱 붙게 */
+.taste__deck { position: relative; overflow: visible !important; }
+.kokcat--deck { position: absolute; right: 12px; bottom: 100%; width: 74px; margin-bottom: -1px; }
 .kokcat--empty { width: 96px; margin: 0 auto 14px; }
 @media (min-width: 1100px) {
-  .kokcat--head { right: 120px; width: 84px; }
-  .kokcat--stage { right: 18px; width: 78px; }
-  .kokcat--page { right: 0; top: 10px; width: 84px; }
+  .phome__top { padding: 24px 0 0; }
+  .phome__scene { width: 230px; }
+  .kokcat--stage { right: 18px; width: 84px; }
+  .kokcat--deck { width: 88px; }
 }
 /* 슬로건 */
-.phome__slogan { margin: 0; padding: 6px 20px 0; font-family: var(--display); font-size: 15px; color: var(--ink-soft); letter-spacing: -0.02em; }
+.phome__slogan { margin: 0; padding: 6px 0 0; font-family: var(--display); font-size: 15px; color: var(--ink-soft); letter-spacing: -0.02em; }
 .phome__slogan b { color: var(--ink); font-weight: 700; }
-@media (min-width: 1100px) { .phome__slogan { padding: 40px 0 0; font-size: 17px; } .phome .pkw { padding-top: 22px; } }
+@media (min-width: 1100px) { .phome__slogan { font-size: 17px; } }
+@media (max-width: 1099px) { .taste .pagehead .sub { display: block; padding-right: 80px; } }
