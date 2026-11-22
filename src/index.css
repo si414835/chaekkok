@@ -6593,3 +6593,7 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
   .kokcat--stage { right: 18px; width: 78px; }
   .kokcat--page { right: 0; top: 10px; width: 84px; }
 }
+/* 슬로건 */
+.phome__slogan { margin: 0; padding: 6px 20px 0; font-family: var(--display); font-size: 15px; color: var(--ink-soft); letter-spacing: -0.02em; }
+.phome__slogan b { color: var(--ink); font-weight: 700; }
+@media (min-width: 1100px) { .phome__slogan { padding: 40px 0 0; font-size: 17px; } .phome .pkw { padding-top: 22px; } }

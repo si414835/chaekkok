@@ -1027,6 +1027,9 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
       <div className="phome">
         {loading && <Loading />}
         {error && <p className="state state--error">데이터를 불러오지 못했어요: {error}</p>}
+        <p className="phome__slogan">
+          도서관과 서점 사이, <b>책콕</b>
+        </p>
         {!loading && !error && top5.length > 0 && (
           <>
             <PlainKeyword keywords={keywords} />
