@@ -118,7 +118,7 @@ async function bookPage(isbn) {
     110,
   )
   const url = `${SITE}/book/${isbn}`
-  const image = https(b.cover_url) || `${SITE}/og.png?v=20261122`
+  const image = https(b.cover_url) || `${SITE}/og.png?v=20261122b`
   const jsonld = {
     '@context': 'https://schema.org',
     '@type': 'Book',
