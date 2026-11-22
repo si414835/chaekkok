@@ -6578,11 +6578,6 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 @keyframes kok-z { 0%, 100% { transform: translateY(0); opacity: 0.9; } 50% { transform: translateY(-6px); opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .kokcat__tail, .kokcat__body, .kokscene__tail, .kokscene__body, .kokscene__light, .kokscene__steam, .kokscene__z { animation: none; } }
 
-/* 홈: 슬로건 오른쪽, 키워드 구역 검정 선 위에 책 더미가 딱 서게 */
-.phome__top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 10px 20px 0; }
-.phome__top .phome__slogan { padding: 0 0 12px; }
-.phome__scene { flex: none; width: 170px; height: auto; margin-bottom: -1px; }
-.phome .pkw { padding-top: 0; }
 /* 상세: 회색 판 바닥에 책이 딱 붙게 */
 .pd__stage { position: relative; }
 .kokcat--stage { position: absolute; right: 14px; bottom: 0; width: 70px; }
@@ -6591,13 +6586,62 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 .kokcat--deck { position: absolute; right: 12px; bottom: 100%; width: 74px; margin-bottom: -1px; }
 .kokcat--empty { width: 96px; margin: 0 auto 14px; }
 @media (min-width: 1100px) {
-  .phome__top { padding: 24px 0 0; }
-  .phome__scene { width: 230px; }
   .kokcat--stage { right: 18px; width: 84px; }
   .kokcat--deck { width: 88px; }
 }
 /* 슬로건 */
-.phome__slogan { margin: 0; padding: 6px 0 0; font-family: var(--display); font-size: 15px; color: var(--ink-soft); letter-spacing: -0.02em; }
+.phome__slogan { margin: 0; padding: 10px 20px 0; font-family: var(--display); font-size: 15px; color: var(--ink-soft); letter-spacing: -0.02em; }
 .phome__slogan b { color: var(--ink); font-weight: 700; }
-@media (min-width: 1100px) { .phome__slogan { font-size: 17px; } }
+@media (min-width: 1100px) { .phome__slogan { padding: 36px 0 0; font-size: 17px; } }
 @media (max-width: 1099px) { .taste .pagehead .sub { display: block; padding-right: 80px; } }
+
+/* 홈: 키워드 줄 오른쪽, 'TOP 5' 검정 선 위에 책냥이 장면 */
+.kokscene--head { position: absolute; right: 0; bottom: 100%; width: 128px; height: auto; margin-bottom: -1px; }
+.phome .pkw .pkw__body p { padding-right: 132px; }
+@media (min-width: 1100px) {
+  .kokscene--head { width: 240px; right: 24px; }
+  .phome .pkw .pkw__body p { padding-right: 0; max-width: 520px; }
+}
+
+/* ---- 키워드 페이지: 걸어오는 책냥이 ---- */
+.gal__bar, .kwpage__head { position: relative; }
+.kwpage__head { border-bottom: 1px solid var(--ink); margin: 0 20px; padding-left: 0; padding-right: 0; }
+.catwalk { position: absolute; left: 0; right: 0; bottom: 0; height: 0; pointer-events: none; }
+.catwalk__scene { position: absolute; right: 0; bottom: 0; width: 132px; height: auto; }
+.catwalk__lane { position: absolute; left: 34%; right: 86px; bottom: 0; height: 0; }
+.catwalk__walker { position: absolute; bottom: -1px; left: 0; width: 52px; animation: cw-move 10s linear both; }
+.catwalk__svg { display: block; width: 100%; height: auto; overflow: visible; }
+.cw-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.cw-leg--a { animation: cw-leg 0.5s ease-in-out infinite alternate; }
+.cw-leg--b { animation: cw-leg 0.5s ease-in-out infinite alternate-reverse; }
+.cw-bob { animation: cw-bob 0.25s ease-in-out infinite alternate; }
+.cw-walk { animation: cw-walkvis 10s steps(1, end) both; }
+.cw-stretch { animation: cw-stretchvis 10s steps(1, end) both; }
+@keyframes cw-move {
+  0% { left: 0; opacity: 0; } 3% { opacity: 1; }
+  38% { left: 38%; } 54% { left: 38%; }
+  86% { left: calc(100% - 52px); opacity: 1; } 92%, 100% { left: calc(100% - 52px); opacity: 0; }
+}
+@keyframes cw-walkvis { 0% { opacity: 1; } 38% { opacity: 0; } 54% { opacity: 1; } }
+@keyframes cw-stretchvis { 0% { opacity: 0; } 38% { opacity: 1; } 54% { opacity: 0; } }
+@keyframes cw-leg { from { transform: rotate(-22deg); } to { transform: rotate(22deg); } }
+@keyframes cw-bob { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
+@keyframes kok-appear { from { opacity: 0; } to { opacity: 1; } }
+.catwalk .kokscene__body { animation: kokcat-breathe 3.6s ease-in-out infinite, kok-appear 0.6s ease 8.9s both; }
+.catwalk .kokscene__tail { animation: kokcat-tail 2.8s ease-in-out infinite, kok-appear 0.6s ease 8.9s both; }
+.catwalk .kokscene__z { animation: kok-z 3.6s ease-in-out infinite, kok-appear 0.6s ease 9.4s both; }
+@media (min-width: 1100px) {
+  .catwalk__scene { width: 220px; }
+  .catwalk__lane { left: 30%; right: 150px; }
+  .catwalk__walker { width: 74px; }
+  @keyframes cw-move {
+    0% { left: 0; opacity: 0; } 3% { opacity: 1; }
+    38% { left: 38%; } 54% { left: 38%; }
+    86% { left: calc(100% - 74px); opacity: 1; } 92%, 100% { left: calc(100% - 74px); opacity: 0; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .catwalk__walker { display: none; }
+  .catwalk .kokscene__body, .catwalk .kokscene__tail, .catwalk .kokscene__z { animation: none; opacity: 1; }
+}
+.psec__head { position: relative; }

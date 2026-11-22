@@ -733,13 +733,52 @@ function KokCatScene({ className = '' }) {
   )
 }
 
+// 키워드 페이지: 책냥이가 도도하게 걸어오다 기지개를 켜고, 끝의 스탠드 아래 책 더미로 가서 자리 잡는다 (한 번만)
+function CatWalk() {
+  return (
+    <div className="catwalk" aria-hidden="true">
+      <div className="catwalk__lane">
+        <div className="catwalk__walker">
+          <svg viewBox="0 0 124 84" className="catwalk__svg">
+            <g className="cw-walk">
+              <path className="cw-tail" d="M32 40 C14 34 12 14 22 4" fill="none" stroke="#141414" strokeWidth="8" strokeLinecap="round" />
+              <rect className="cw-leg cw-leg--a" x="30" y="48" width="7" height="34" rx="3.5" fill="#141414" />
+              <rect className="cw-leg cw-leg--b" x="41" y="48" width="7" height="34" rx="3.5" fill="#141414" />
+              <rect className="cw-leg cw-leg--b" x="73" y="48" width="7" height="34" rx="3.5" fill="#141414" />
+              <rect className="cw-leg cw-leg--a" x="84" y="48" width="7" height="34" rx="3.5" fill="#141414" />
+              <g className="cw-bob">
+                <ellipse cx="58" cy="44" rx="32" ry="15" fill="#141414" />
+                <circle cx="94" cy="30" r="14" fill="#141414" />
+                <path d="M84 21 L86 4 L96 17 Z M98 17 L107 3 L108 22 Z" fill="#141414" />
+                <ellipse cx="100" cy="28" rx="2.6" ry="3.3" fill="#fff" />
+              </g>
+            </g>
+            <g className="cw-stretch">
+              <path d="M30 34 C20 22 24 6 36 2" fill="none" stroke="#141414" strokeWidth="8" strokeLinecap="round" />
+              <rect x="30" y="38" width="7" height="44" rx="3.5" fill="#141414" />
+              <rect x="40" y="38" width="7" height="44" rx="3.5" fill="#141414" />
+              <ellipse cx="60" cy="50" rx="33" ry="13" fill="#141414" transform="rotate(16 60 50)" />
+              <path d="M84 66 L118 80" stroke="#141414" strokeWidth="7" strokeLinecap="round" />
+              <path d="M80 70 L112 82" stroke="#141414" strokeWidth="7" strokeLinecap="round" />
+              <circle cx="96" cy="62" r="13" fill="#141414" />
+              <path d="M86 54 L86 38 L96 50 Z M100 50 L108 37 L109 56 Z" fill="#141414" />
+              <path d="M95 63 q4 4 8 0" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
+            </g>
+          </svg>
+        </div>
+      </div>
+      <KokCatScene className="catwalk__scene" />
+    </div>
+  )
+}
+
 // ===== 홈 (단정한 서점, 2026-11-20) =====
 // 대표 책 1권 → 오늘의 서가 → 대출 급상승 → 도서관(초록)·서점(남색) → 키워드 · 취향 찾기 → 사람들이 고른 책
 function PSec({ title, note, more, children, className = '', cat }) {
   return (
     <section className={`psec ${className}`}>
       <div className="psec__head">
-        {cat && <KokCat className="kokcat--head" />}
+        {cat && <KokCatScene className="kokscene--head" />}
         <h2>{title}</h2>
         {more ? (
           <a href={more.href} className="psec__more">
@@ -1079,16 +1118,13 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
       <div className="phome">
         {loading && <Loading />}
         {error && <p className="state state--error">데이터를 불러오지 못했어요: {error}</p>}
-        <div className="phome__top">
-          <p className="phome__slogan">
-            도서관과 서점 사이, <b>책콕</b>
-          </p>
-          <KokCatScene className="phome__scene" />
-        </div>
+        <p className="phome__slogan">
+          도서관과 서점 사이, <b>책콕</b>
+        </p>
         {!loading && !error && top5.length > 0 && (
           <>
             <PlainKeyword keywords={keywords} />
-            <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5">
+            <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5" cat>
               {wide ? (
                 <>
                   <Featured book={top5[0]} />
@@ -3697,6 +3733,7 @@ function KeywordPage({ word, index }) {
             </h1>
             <p className="sub gal__desc">{res.loading ? '관련 책을 모으는 중이에요' : n ? `관련 책 ${n}권 · 요즘 뜨는 순서` : '아직 관련 책이 없어요'}</p>
           </div>
+          <CatWalk key={word} />
         </div>
         {res.related.length > 0 && (
           <div className="gal__cats kwgal__related">
@@ -3737,7 +3774,8 @@ function KeywordPage({ word, index }) {
       <header className="detail__bar">
         <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
       </header>
-      <header className="pagehead pagehead--tight">
+      <header className="pagehead pagehead--tight kwpage__head">
+        <CatWalk key={word} />
         <Eyebrow>KEYWORD</Eyebrow>
         <h1 className="h1 display kwpage__title">
           <span className="tag__hash">#</span>
