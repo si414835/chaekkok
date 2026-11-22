@@ -664,12 +664,30 @@ function TopGrid({ books }) {
   )
 }
 
+// 책콕 고양이: 책 위에 엎드려 자며 꼬리를 살랑인다 (화면 구석 장식, 스크린리더에는 숨김)
+function KokCat({ className = '', book = '#1f4a38' }) {
+  return (
+    <svg className={`kokcat ${className}`} viewBox="0 0 200 118" aria-hidden="true" focusable="false">
+      <rect x="6" y="90" width="176" height="24" rx="3" fill={book} />
+      <rect x="18" y="99" width="152" height="2" fill="#fff" opacity=".35" />
+      <path className="kokcat__tail" d="M154 84 C186 88 196 66 180 54" fill="none" stroke="#141414" strokeWidth="11" strokeLinecap="round" />
+      <g className="kokcat__body">
+        <path d="M20 91 C12 55 48 29 92 31 C136 33 164 57 160 91 Z" fill="#141414" />
+        <circle cx="42" cy="57" r="28" fill="#141414" />
+        <path d="M20 41 L22 11 L40 33 Z M48 31 L64 9 L66 41 Z" fill="#141414" />
+        <path d="M28 61 q6 6 12 0 M46 61 q6 6 12 0" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+      </g>
+    </svg>
+  )
+}
+
 // ===== 홈 (단정한 서점, 2026-11-20) =====
 // 대표 책 1권 → 오늘의 서가 → 대출 급상승 → 도서관(초록)·서점(남색) → 키워드 · 취향 찾기 → 사람들이 고른 책
-function PSec({ title, note, more, children, className = '' }) {
+function PSec({ title, note, more, children, className = '', cat }) {
   return (
     <section className={`psec ${className}`}>
       <div className="psec__head">
+        {cat && <KokCat className="kokcat--head" />}
         <h2>{title}</h2>
         {more ? (
           <a href={more.href} className="psec__more">
@@ -1012,7 +1030,7 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
         {!loading && !error && top5.length > 0 && (
           <>
             <PlainKeyword keywords={keywords} />
-            <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5">
+            <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5" cat>
               {wide ? (
                 <>
                   <Featured book={top5[0]} />
@@ -2952,6 +2970,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
         <aside className="pd__side">
           <div className="pd__stage">
             <Cover src={book.cover_url} alt={shortTitle(book.title)} className="pd__cover" title={book.title} />
+            <KokCat className="kokcat--stage" book="#1c2b48" />
           </div>
           <div className="pd__acts" ref={actRef}>
             <button className="pbtn pbtn--lib" onClick={() => scrollTo(libRef)}>
@@ -3194,6 +3213,7 @@ function TastePage({ feed, loading }) {
       <header className="pagehead">
         <Eyebrow>MY TASTE</Eyebrow>
         <h1 className="h1 display">내 취향 찾기</h1>
+        <KokCat className="kokcat--page" />
         <span className="sub">표지를 보고 끌리면 좋아요, 아니면 별로를 눌러 주세요. 읽지 않은 책도 괜찮아요.</span>
       </header>
 
@@ -4781,8 +4801,9 @@ function Wish({ wish, index, toggleWish, hits, alertState, push, base }) {
         <section className="card card--list wishlist">
           {items.length === 0 && (
             <div className="empty">
+              <KokCat className="kokcat--empty" />
               <p>아직 콕한 책이 없어요.</p>
-              <p className="sub">책 상세에서 오른쪽 위 은행잎을 누르면 여기에 모여요.</p>
+              <p className="sub">책 상세에서 '콕 하기'를 누르면 여기에 모여요.</p>
               <a className="btn btn--soft" href="/trend">트렌드 보러 가기</a>
             </div>
           )}
