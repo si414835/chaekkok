@@ -30,6 +30,7 @@
 - 정보나루 하루 500건(IP 미등록 키) 나눠 쓰기 (`supabase/sql/api_budget.sql`, 2026-11-23): 수집은 `add_batch_calls`로 batch 400회, 화면(book-exist·library-info)은 `spend_edge_call`로 하루 90회, 전체 495회. 막힌 요청은 세지 않음. `api_usage.edge_calls`가 화면 몫.
 - 검색 로봇(구글 렌더러 등)은 화면·함수 둘 다 정보나루를 안 부른다(App.jsx `IS_BOT`, 함수의 `isBot`). 11/23에 구글 로봇이 책 상세를 그리며 하루 400회를 써서 수집·소장 확인이 다 막혔었다.
 - 화면용 캐시 (`supabase/sql/cache_views.sql`, 2026-11-23): `v_feed`·`v_home_keywords`·`v_hit_stats`는 `cache` 스키마의 materialized view를 읽는 뷰다(계산식은 `*_live`). 새로 고침은 수집 워크플로 '화면용 캐시 새로 고침' 단계 + pg_cron 매시 17분(`refresh_cached_views()`). 수집 스크립트는 `v_feed_live`를 읽는다. 홈 첫 로딩의 DB 시간이 v_feed 0.2~0.9초 → 2ms.
+- 최근 7일 인기대출(`loan_week`, 2026-11-23): 30일 순위에 들기 전 새 책을 빨리 들이려고 문학 200위·사회과학·철학·총류·역사·기술과학 100위를 매일 받는다(collect.py `collect_loan_week`, 하루 7회). trend_scores와 섞지 않음. 이용분석은 이 목록의 '아직 이용분석 없는 책'을 하루 40권까지 먼저 받는다(USAGE_LIMIT 170→160).
 - 정보나루가 막혀도 도서관 이름·주소·전화·홈페이지는 `libraries` 테이블에서 보여 준다(도서관 페이지, 소장 확인 줄의 '홈페이지').
 
 ## 책냥이

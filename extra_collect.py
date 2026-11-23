@@ -44,7 +44,7 @@ AGE_GROUPS = [("all", None, None), ("10", 10, 19), ("20", 20, 29), ("30", 30, 39
 # 성별: 정보나루 gender 코드 그대로 저장 ('all'은 전체). 화면에서 남/여로 바꿔 보여준다.
 GENDERS = ["all", "0", "1"]
 DEMO_PAGE_SIZE = 50
-USAGE_LIMIT = 170          # 하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수
+USAGE_LIMIT = 160          # 하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수 (11-23: 170→160, 7일 인기대출 7회에 양보)
 USAGE_REFRESH_DAYS = 14    # 이 기간 안에 받은 책은 건너뜀 (월별 데이터라 2주면 충분)
 COLOAN_LIMIT = 30          # 같이 빌린 책 중 책콕에 없는 책을 하루에 몇 권 정식으로 등록할지
 DETAIL_LIMIT = 50          # 도서 상세로 분류·책 소개를 하루에 몇 권 채울지 (화면에 보이는 책부터)
@@ -551,6 +551,19 @@ def pick_usage_targets():
     """상세 데이터를 받을 책: ① 오늘 단계가 붙은 책(모멘텀 순) ② 종합 상위 ③ 급상승 ④ 분야별 인기 상위.
     최근 USAGE_REFRESH_DAYS 안에 받은 책은 건너뛴다."""
     targets = []
+    # ⓪ 최근 7일 순위에 처음 보이는 새 책 (아직 이용분석이 없는 책): 30일 순위에 들기 전에 미리 자료를 받아 둔다
+    try:
+        wk = supabase.table("loan_week").select("snapshot_date").order("snapshot_date", desc=True).limit(1).execute().data
+        if wk:
+            rows = (supabase.table("loan_week").select("isbn13").eq("snapshot_date", wk[0]["snapshot_date"])
+                    .order("rank").limit(300).execute().data or [])
+            ids = list(dict.fromkeys(r["isbn13"] for r in rows))
+            known = set()
+            for i in range(0, len(ids), 200):
+                known |= {r["isbn13"] for r in supabase.table("book_usage").select("isbn13").in_("isbn13", ids[i:i + 200]).execute().data or []}
+            targets += [i for i in ids if i not in known][:40]
+    except Exception as e:
+        print(f"  [7일 순위 새 책 조회 실패] {safe_err(e)}")
     latest = supabase.table("book_state").select("snapshot_date").order("snapshot_date", desc=True).limit(1).execute().data
     if latest:
         d = latest[0]["snapshot_date"]

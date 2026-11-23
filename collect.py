@@ -172,11 +172,11 @@ PAGE_SIZE = 100
 PAGES_PER_KDC = 2
 
 
-def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None, from_age=20, to_age=99, snapshot=None):
-    # snapshot 날짜 기준 '전날까지 30일' 인기대출. snapshot을 주면 지난 날짜도 다시 만들 수 있다.
+def fetch_loan_items(page_no: int, page_size: int = 30, kdc=None, from_age=20, to_age=99, snapshot=None, days=30):
+    # snapshot 날짜 기준 '전날까지 days일' 인기대출. snapshot을 주면 지난 날짜도 다시 만들 수 있다.
     base = datetime.strptime(snapshot, "%Y-%m-%d") if snapshot else kst_today()
     end_dt = (base - timedelta(days=1)).strftime("%Y-%m-%d")
-    start_dt = (base - timedelta(days=30)).strftime("%Y-%m-%d")
+    start_dt = (base - timedelta(days=days)).strftime("%Y-%m-%d")
     params = {
         "authKey": DATA4LIBRARY_KEY,
         "format": "json",
@@ -296,6 +296,55 @@ def backfill_shallow_days(max_days=2):
             break
 
 
+# ---------- 2-1. 최근 7일 인기대출 (새 책을 빨리 찾기) ----------
+# 30일 순위는 한 달 동안 꾸준히 빌린 책이 위에 머물러, 새 책이 들어오기까지 몇 주 걸린다.
+# 최근 7일 순위를 주요 분야만 따로 받아 새 책을 1~3주 빨리 책콕에 들인다 (loan_week 테이블, trend_scores와 섞지 않음).
+# 호출 수: 문학 2쪽 + 사회과학·철학·총류·역사·기술과학 1쪽 = 하루 7회
+WEEK_PARTS = [(8, 2), (3, 1), (1, 1), (0, 1), (9, 1), (5, 1)]
+
+
+def collect_loan_week(snapshot_date=None):
+    snapshot_date = snapshot_date or kst_today_str()
+    done = supabase.table("loan_week").select("isbn13").eq("snapshot_date", snapshot_date).limit(1).execute().data
+    if done:
+        print("[7일 인기대출] 오늘 이미 받아서 건너뜀")
+        return 0
+    total, new_books = 0, 0
+    for kdc, pages in WEEK_PARTS:
+        docs = []
+        try:
+            for page in range(1, pages + 1):
+                data = fetch_loan_items(page_no=page, page_size=PAGE_SIZE, kdc=kdc, from_age=14, to_age=99,
+                                        snapshot=snapshot_date, days=7)
+                got = data.get("response", {}).get("docs", [])
+                docs += got
+                if len(got) < PAGE_SIZE:
+                    break
+                time.sleep(1)
+            if not docs:
+                raise RuntimeError("응답에 도서가 0건")
+            book_rows = [book_row_from_doc(it.get("doc", {})) for it in docs if it.get("doc", {}).get("isbn13")]
+            isbns = [b["isbn13"] for b in book_rows]
+            have = set()
+            for i in range(0, len(isbns), 200):
+                have |= {r["isbn13"] for r in supabase.table("books").select("isbn13").in_("isbn13", isbns[i:i + 200]).execute().data or []}
+            new_books += len(set(isbns) - have)
+            bulk_upsert("books", book_rows, "isbn13", ["isbn13"])
+            rows = [{"isbn13": it["doc"]["isbn13"], "snapshot_date": snapshot_date, "kdc": str(kdc),
+                     "rank": it["doc"].get("ranking"), "loan_count": it["doc"].get("loan_count")}
+                    for it in docs if it.get("doc", {}).get("isbn13")]
+            total += bulk_upsert("loan_week", rows, "snapshot_date,kdc,isbn13", ["snapshot_date", "kdc", "isbn13"])
+            log_run("popular7", str(kdc), "ok", len(rows))
+        except BudgetExceeded:
+            raise
+        except Exception as e:
+            log_run("popular7", str(kdc), "failed", 0, e)
+            print(f"::warning::7일 인기대출 {kdc} 실패: {e}")
+        time.sleep(1)
+    print(f"[7일 인기대출] {total}건 저장, 책콕에 처음 들어온 책 {new_books}권")
+    return total
+
+
 def main():
     import sys
     # 예: python collect.py --backfill 2026-10-27 2026-10-28  -> 그 날짜들만 200위까지 다시 받기
@@ -324,6 +373,10 @@ def main():
     except BudgetExceeded as e:
         print(f"::warning::인기대출 수집 중단 - {e}")
         return
+    try:
+        collect_loan_week()
+    except BudgetExceeded as e:
+        print(f"::warning::7일 인기대출 수집 중단 - {e}")
     try:
         backfill_shallow_days()
     except Exception as e:
