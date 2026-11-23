@@ -28,32 +28,37 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
   return v;
 }
 
-// 정보나루 하루 호출 수를 수집 스크립트와 같이 센다 (IP 미등록 키는 하루 500건 넘으면 막힘)
-const DAILY_LIMIT = 495;
+// 정보나루 하루 호출 수: 화면(Edge Function) 몫은 하루 90회, 전체는 495회까지 (supabase/sql/api_budget.sql)
+// 한도에 닿으면 정보나루를 부르지 않고 '모름'으로 돌려준다. 막힌 요청은 세지 않는다.
 async function spend(): Promise<boolean> {
   try {
-    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/add_api_calls`, {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/spend_edge_call`, {
       method: "POST",
       headers: {
         apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
         Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ n: 1 }),
+      body: "{}",
       signal: AbortSignal.timeout(4000),
     });
-    const total = await res.json();
-    return typeof total !== "number" || total <= DAILY_LIMIT;
+    return (await res.json()) !== false;
   } catch (_e) {
     return true; // 세는 데 실패해도 화면 기능은 막지 않는다
   }
 }
 
+// 검색엔진 로봇(구글이 화면을 그려 볼 때 등)은 정보나루를 부르지 않게 한다.
+// 2026-11-23: 구글 로봇이 책 상세를 그리며 하루 400회를 써서 수집과 소장 확인이 막혔다.
+const BOT = /bot|crawl|spider|slurp|yeti|daum|bingpreview|facebookexternalhit|headlesschrome|lighthouse|google-inspectiontool|petalbot/i;
+const isBot = (req: Request) => BOT.test(req.headers.get("user-agent") ?? "");
+
+let hitLimit = false; // 이번 요청에서 오늘 한도에 닿았는지 (화면 안내용)
 // deno-lint-ignore no-explicit-any
 async function api(path: string, params: Record<string, string | number>): Promise<any | null> {
   const q = new URLSearchParams({ authKey: KEY, format: "json", ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])) });
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (!(await spend())) return null; // 오늘 한도에 닿으면 '모름'으로
+    if (!(await spend())) { hitLimit = true; return null; } // 오늘 한도에 닿으면 '모름'으로
     try {
       const res = await fetch(`${BASE}${path}?${q}`, { signal: AbortSignal.timeout(12000) });
       const data = await res.json();
@@ -157,7 +162,7 @@ async function nearby(body: Record<string, unknown>) {
     }
     return { libs: out, total };
   });
-  if (!all) return json({ error: "정보나루 응답 없음", libs: [], total: 0, region }, 200);
+  if (!all) return json({ error: "정보나루 응답 없음", libs: [], total: 0, region, limit: hitLimit }, 200);
 
   let libs = all.libs.map((l) => ({ ...l, distanceKm: hasPos && l.lat && l.lng ? Math.round(km([lat, lng], [l.lat, l.lng]) * 10) / 10 : null }));
   if (hasPos) libs.sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999));
@@ -219,7 +224,7 @@ async function library(body: Record<string, unknown>) {
       checkedAt: ymd(new Date(Date.now() + 9 * 3600 * 1000)),
     };
   });
-  if (!out) return json({ error: "정보나루 응답 없음" }, 200);
+  if (!out) return json({ error: "정보나루 응답 없음", limit: hitLimit }, 200);
   return json(out);
 }
 
@@ -293,6 +298,7 @@ async function books(body: Record<string, unknown>) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  if (isBot(req)) return json({ error: "bot" }, 200);
   if (!KEY) return json({ error: "server key missing" }, 500);
   let body: Record<string, unknown>;
   try {
@@ -300,6 +306,7 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: "bad json" }, 400);
   }
+  hitLimit = false;
   if (body.action === "nearby") return nearby(body);
   if (body.action === "library") return library(body);
   if (body.action === "books") return books(body);

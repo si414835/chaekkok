@@ -6645,3 +6645,6 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
   .catwalk .kokscene__body, .catwalk .kokscene__tail, .catwalk .kokscene__z { animation: none; opacity: 1; }
 }
 .psec__head { position: relative; }
+
+/* 도서관 홈페이지 바로가기 (소장 확인 줄) */
+.lib__hp { white-space: nowrap; text-decoration: none; align-self: center; display: inline-flex; align-items: center; }

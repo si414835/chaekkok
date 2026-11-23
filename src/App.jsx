@@ -113,6 +113,17 @@ function cleanAuthor(a) {
 function firstIsbn(isbn) {
   return (isbn || '').split(/\s+/)[0]
 }
+// 검색엔진 로봇(구글이 화면을 그려 볼 때 등)이면 정보나루를 쓰는 함수를 부르지 않는다.
+// 2026-11-23: 구글 로봇이 책 상세를 그리며 하루 정보나루 호출을 다 써서 수집·소장 확인이 막혔다.
+const IS_BOT =
+  typeof navigator !== 'undefined' &&
+  (/bot|crawl|spider|slurp|yeti|daum|bingpreview|facebookexternalhit|headlesschrome|lighthouse|google-inspectiontool|petalbot/i.test(navigator.userAgent || '') || navigator.webdriver === true)
+// 정보나루 홈페이지 값 중 http가 빠진 것이 있어 링크가 책콕 안 주소로 잘못 열리는 것을 막는다
+function hpUrl(u) {
+  const v = (u || '').trim()
+  if (!v) return ''
+  return /^https?:\/\//i.test(v) ? v : `http://${v.replace(/^\/+/, '')}`
+}
 function demoLabel(prefs) {
   const age = AGE_OPTIONS.find((a) => a.id === prefs.age)?.label ?? ''
   const g = prefs.gender === 'all' ? '' : ` ${GENDER_LABEL[prefs.gender]}`
@@ -1971,7 +1982,7 @@ function useBook(isbn, index) {
       // 책 소개를 아직 받아 본 적 없는 책도 함께 묻는다 (library-info가 받아서 books에 저장해 두므로 처음 한 번만)
       const needDesc = base && !base.desc_checked_at
       const need = [...((base && !needDesc) || (!base && index.get(isbn)) ? [] : [isbn]), ...coIsbns.filter((i) => !coCovers[i] && !index.get(i)?.cover_url)]
-      if (need.length) {
+      if (need.length && !IS_BOT) {
         const { data } = await supabase.functions.invoke('library-info', { body: { action: 'books', isbns: need.slice(0, 12) } })
         for (const b of data?.books || []) {
           if (!b.found) continue
@@ -4298,7 +4309,12 @@ function NearbyLibraries({ book, libs, setLibs }) {
       })
       .then(({ data, error }) => {
         if (off) return
-        if (error || !data || data.error) return setRes({ loading: false, data: null, error: '지금은 도서관 정보를 불러올 수 없어요. 잠시 뒤 다시 시도해 주세요.' })
+        if (error || !data || data.error)
+          return setRes({
+            loading: false,
+            data: null,
+            error: data?.limit ? '오늘은 정보나루 조회 횟수를 다 써서 근처 도서관을 찾을 수 없어요. 내일 다시 시도해 주세요.' : '지금은 도서관 정보를 불러올 수 없어요. 잠시 뒤 다시 시도해 주세요.',
+          })
         if (pos && data.region && data.region !== region) setRegion(data.region)
         setRes({ loading: false, data, error: null })
       })
@@ -4409,9 +4425,20 @@ function useLibraryInfo(libCode) {
   useEffect(() => {
     let off = false
     setRes({ loading: true, data: null, error: null })
+    if (IS_BOT) {
+      setRes({ loading: false, data: null, error: null })
+      return
+    }
     supabase.functions.invoke('library-info', { body: { action: 'library', libCode } }).then(({ data, error }) => {
       if (off) return
-      if (error || !data || data.error) return setRes({ loading: false, data: null, error: '도서관 정보를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.' })
+      if (error || !data || data.error)
+        return setRes({
+          loading: false,
+          data: null,
+          error: data?.limit
+            ? '오늘은 정보나루 조회 횟수를 다 써서 운영시간·인기 책을 불러오지 못했어요. 내일 다시 보여 드릴게요.'
+            : '운영시간·인기 책을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+        })
       setRes({ loading: false, data, error: null })
     })
     return () => {
@@ -4419,6 +4446,38 @@ function useLibraryInfo(libCode) {
     }
   }, [libCode])
   return res
+}
+
+// 도서관 기본 정보(이름·주소·전화·홈페이지)는 책콕 DB에도 있어서, 정보나루가 막혀도 보여 줄 수 있다
+function useLibraryRow(libCode) {
+  const [row, setRow] = useState(null)
+  useEffect(() => {
+    let off = false
+    supabase
+      .from('libraries')
+      .select('lib_code,name,address,tel,homepage,latitude,longitude')
+      .eq('lib_code', libCode)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (off || !data) return
+        setRow({
+          libCode: data.lib_code,
+          name: data.name,
+          address: data.address,
+          tel: data.tel || '',
+          homepage: data.homepage || '',
+          lat: data.latitude ? Number(data.latitude) : null,
+          lng: data.longitude ? Number(data.longitude) : null,
+          operatingTime: '',
+          closed: '',
+          closedToday: null,
+        })
+      })
+    return () => {
+      off = true
+    }
+  }, [libCode])
+  return row
 }
 
 // 우리 DB에 있는 책은 책콕 상세로, 없는 책은 정보나루 상세로
@@ -4482,13 +4541,14 @@ function Accordion({ open, children }) {
 
 function LibraryPage({ libCode, libs, setLibs }) {
   const { loading, data, error } = useLibraryInfo(libCode)
+  const row = useLibraryRow(libCode)
   const [noKids, setNoKids] = useState(true)
   const [more, setMore] = useState(false)
   const pop = (data?.popular || []).filter((b) => !noKids || !b.kids)
   const news = (data?.newBooks || []).filter((b) => !noKids || !b.kids)
   const known = useKnownIsbns([...pop.slice(0, 30), ...news.slice(0, 10)].map((b) => b.isbn13).filter(Boolean))
   const saved = libs.some((x) => x.libCode === libCode)
-  const info = data?.info
+  const info = data?.info ? { ...data.info, homepage: data.info.homepage || row?.homepage || '' } : loading ? null : row
   useEffect(() => {
     if (info?.name) setPageMeta(`${info.name} | 책콕`, `/library/${libCode}`)
   }, [info?.name, libCode])
@@ -4546,13 +4606,13 @@ function LibraryPage({ libCode, libs, setLibs }) {
             <span className="sub">{info.address}</span>
             <span className="lib__badges">
               {info.closedToday && <span className="pill pill--warn">오늘 휴관</span>}
-              {data.fresh && <span className="pill pill--up">최근 데이터 있음</span>}
+              {data?.fresh && <span className="pill pill--up">최근 데이터 있음</span>}
             </span>
           </div>
         )}
       </section>
       {loading && <section className="card"><Loading /></section>}
-      {error && <section className="card"><p className="state state--error">{error}</p></section>}
+      {error && !info && <section className="card"><p className="state state--error">{error}</p></section>}
       {info && (
         <>
           <div className="stack libpage__stack">
@@ -4560,8 +4620,9 @@ function LibraryPage({ libCode, libs, setLibs }) {
               <div className="libpage__acts">
                 <a className="btn btn--soft" href={mapLink(info)} target="_blank" rel="noopener noreferrer">지도 보기</a>
                 {info.tel && <a className="btn btn--soft" href={`tel:${info.tel.replace(/[^\d-]/g, '')}`}>전화하기</a>}
-                {info.homepage && <a className="btn btn--soft" href={info.homepage} target="_blank" rel="noopener noreferrer">홈페이지</a>}
+                {info.homepage && <a className="btn btn--soft" href={hpUrl(info.homepage)} target="_blank" rel="noopener noreferrer">홈페이지</a>}
               </div>
+              {error && <p className="notice notice--box">{error}</p>}
               {info.operatingTime && (
                 <div className="libpage__row">
                   <span className="label">운영시간</span>
@@ -4574,7 +4635,7 @@ function LibraryPage({ libCode, libs, setLibs }) {
                   <p>{info.closed}</p>
                 </div>
               )}
-              {data.bookCount != null && (
+              {data?.bookCount != null && (
                 <div className="libpage__row">
                   <span className="label">장서</span>
                   <p className="num">{data.bookCount.toLocaleString()}권</p>
@@ -4583,7 +4644,7 @@ function LibraryPage({ libCode, libs, setLibs }) {
               <p className="sub small">운영 정보는 정보나루에 등록된 내용이에요. 공휴일·임시 휴관은 도서관 홈페이지에서 확인해 주세요.</p>
             </section>
 
-            {!data.fresh && (
+            {data && !data.fresh && (
               <section className="card">
                 <p className="notice notice--box">
                   {data.popular?.length > 0
@@ -4623,7 +4684,7 @@ function LibraryPage({ libCode, libs, setLibs }) {
               </section>
             )}
 
-            {data.popular?.length > 0 && (
+            {data?.popular?.length > 0 && (
               <section className="card card--list rise" style={{ animationDelay: '0.15s' }}>
                 <div className="card__head">
                   <div className="titlegroup">
@@ -4678,7 +4739,7 @@ function LibraryPage({ libCode, libs, setLibs }) {
                 ))}
               </section>
             )}
-            <p className="foot">데이터 출처: 도서관 정보나루 · {fmtDate(data.checkedAt)} 확인</p>
+            {data && <p className="foot">데이터 출처: 도서관 정보나루 · {fmtDate(data.checkedAt)} 확인</p>}
           </div>
         </>
       )}
@@ -4688,24 +4749,47 @@ function LibraryPage({ libCode, libs, setLibs }) {
 
 // 이 책이 내 도서관에 있는지, 지금 빌릴 수 있는지 (Edge Function book-exist -> 정보나루 bookExist)
 function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = false, onBuy }) {
-  const [state, setState] = useState({ loading: libs.length > 0, results: {}, error: null })
+  const [state, setState] = useState({ loading: libs.length > 0 && !IS_BOT, results: {}, error: null })
   useEffect(() => {
-    if (libs.length === 0) return
+    if (libs.length === 0 || IS_BOT) return
     let off = false
     supabase.functions
       .invoke('book-exist', { body: { isbn13: firstIsbn(book.isbn13), libCodes: libs.map((l) => l.libCode) } })
       .then(({ data, error }) => {
         if (off) return
-        if (error || !data?.results) return setState({ loading: false, results: {}, error: '지금은 확인할 수 없어요. 잠시 후 다시 시도해 주세요.' })
-        setState({ loading: false, results: Object.fromEntries(data.results.map((r) => [r.libCode, r])), error: null })
+        if (error || !data?.results) return setState({ loading: false, results: {}, error: '지금은 소장 여부를 확인할 수 없어요. 도서관 홈페이지에서 검색해 주세요.' })
+        setState({
+          loading: false,
+          results: Object.fromEntries(data.results.map((r) => [r.libCode, r])),
+          error: data.limit ? '오늘은 정보나루 확인 횟수를 다 써서 소장 여부를 볼 수 없어요. 도서관 홈페이지에서 검색해 주세요(내일 다시 돼요).' : null,
+        })
       })
     return () => {
       off = true
     }
   }, [book.isbn13, libs])
+  // 예전에 찜한 도서관은 홈페이지 주소가 없을 수 있어 책콕 DB에서 채운다
+  const [homes, setHomes] = useState({})
+  const libKey = libs.map((l) => l.libCode).join(',')
+  useEffect(() => {
+    const codes = libs.filter((l) => !l.homepage).map((l) => l.libCode)
+    if (!codes.length) return
+    let off = false
+    supabase
+      .from('libraries')
+      .select('lib_code,homepage')
+      .in('lib_code', codes)
+      .then(({ data }) => {
+        if (!off) setHomes(Object.fromEntries((data || []).map((r) => [r.lib_code, r.homepage])))
+      })
+    return () => {
+      off = true
+    }
+  }, [libKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const homeOf = (l) => hpUrl(l.homepage || homes[l.libCode])
 
   const status = (r) => {
-    if (!r || r.error) return ['확인 실패', 'muted']
+    if (!r || r.error) return [r?.limit ? '확인 못 함' : '확인 실패', 'muted']
     if (!r.hasBook) return ['소장 안 함', 'muted']
     if (r.loanAvailable == null) return ['소장 중', 'up']
     return r.loanAvailable ? ['대출 가능', 'up'] : ['대출 중', 'warn']
@@ -4737,9 +4821,15 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = fal
                   <span className="lib__more">도서관 페이지 보기 →</span>
                 </a>
                 {state.loading ? <span className="pill">확인 중…</span> : <span className={`pill pill--${tone}`}>{label}</span>}
-                <a className="lib__go" href={`/library/${l.libCode}`} aria-label={`${l.name} 도서관 정보`}>
-                  {Icon.chev()}
-                </a>
+                {homeOf(l) ? (
+                  <a className="pill pill--btn lib__hp" href={homeOf(l)} target="_blank" rel="noopener noreferrer" aria-label={`${l.name} 홈페이지 (새 창)`}>
+                    홈페이지
+                  </a>
+                ) : (
+                  <a className="lib__go" href={`/library/${l.libCode}`} aria-label={`${l.name} 도서관 정보`}>
+                    {Icon.chev()}
+                  </a>
+                )}
               </div>
             )
           })}
@@ -4755,8 +4845,8 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = fal
             </span>
             {Icon.chev()}
           </a>
-          {libs[0]?.homepage && (
-            <a className="alt__item press" href={libs[0].homepage} target="_blank" rel="noopener noreferrer">
+          {libs[0] && homeOf(libs[0]) && (
+            <a className="alt__item press" href={homeOf(libs[0])} target="_blank" rel="noopener noreferrer">
               <span>
                 <b>희망도서 바로대출</b>
                 <small>없는 신간을 동네 서점에서 바로 빌리기</small>

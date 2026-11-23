@@ -4,11 +4,13 @@
 정보나루는 서버 IP를 등록하지 않은 키를 하루 500건에서 막는다
 (실제 응답: "1일 500건 이상 요청 시 IP 등록이 필요합니다", 2026-11-03 확인).
 GitHub Actions·Supabase는 IP가 매번 바뀌어 등록할 수 없으므로,
-수집 스크립트는 하루 합계 BATCH_LIMIT(기본 400)까지만 쓰고 나머지는 화면(도서관 조회)에 남겨 둔다.
+수집 스크립트는 수집분(batch) BATCH_LIMIT(기본 400)까지만 쓰고, 화면(Edge Function)은 따로 하루 90회까지만 쓴다
+(supabase/sql/api_budget.sql: add_batch_calls · spend_edge_call). 전체 합계는 TOTAL_LIMIT(495)를 넘지 않는다.
 """
 import os
 
 BATCH_LIMIT = int(os.environ.get("API_DAILY_BATCH_LIMIT", "400"))
+TOTAL_LIMIT = 495
 
 
 class BudgetExceeded(Exception):
@@ -28,11 +30,14 @@ def spend():
     if _sb is None:
         return
     try:
-        total = _sb.rpc("add_api_calls", {"n": 1}).execute().data
+        r = _sb.rpc("add_batch_calls", {"n": 1}).execute().data or {}
     except Exception as e:  # 카운터 기록이 안 되면 안전하게 멈춘다
         raise BudgetExceeded(f"호출 수 기록 실패: {type(e).__name__}")
-    if isinstance(total, int) and total > BATCH_LIMIT:
+    batch, total = r.get("batch"), r.get("total")
+    if isinstance(batch, int) and batch > BATCH_LIMIT:
         raise BudgetExceeded(f"오늘 정보나루 호출이 수집 한도 {BATCH_LIMIT}회에 닿음")
+    if isinstance(total, int) and total > TOTAL_LIMIT:
+        raise BudgetExceeded(f"오늘 정보나루 호출이 하루 전체 한도 {TOTAL_LIMIT}회에 닿음")
 
 
 def is_limit_error(msg):

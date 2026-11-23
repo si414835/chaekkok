@@ -12,26 +12,30 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
-// 정보나루 하루 호출 수를 수집 스크립트와 같이 센다 (IP 미등록 키는 하루 500건 넘으면 막힘)
-const DAILY_LIMIT = 495;
+// 정보나루 하루 호출 수: 화면(Edge Function) 몫은 하루 90회, 전체는 495회까지 (supabase/sql/api_budget.sql)
+// 한도에 닿으면 정보나루를 부르지 않고 '모름'으로 돌려준다. 막힌 요청은 세지 않는다.
 async function spend(): Promise<boolean> {
   try {
-    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/add_api_calls`, {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/spend_edge_call`, {
       method: "POST",
       headers: {
         apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
         Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ n: 1 }),
+      body: "{}",
       signal: AbortSignal.timeout(4000),
     });
-    const total = await res.json();
-    return typeof total !== "number" || total <= DAILY_LIMIT;
+    return (await res.json()) !== false;
   } catch (_e) {
     return true; // 세는 데 실패해도 화면 기능은 막지 않는다
   }
 }
+
+// 검색엔진 로봇(구글이 화면을 그려 볼 때 등)은 정보나루를 부르지 않게 한다.
+// 2026-11-23: 구글 로봇이 책 상세를 그리며 하루 400회를 써서 수집과 소장 확인이 막혔다.
+const BOT = /bot|crawl|spider|slurp|yeti|daum|bingpreview|facebookexternalhit|headlesschrome|lighthouse|google-inspectiontool|petalbot/i;
+const isBot = (req: Request) => BOT.test(req.headers.get("user-agent") ?? "");
 
 // 같은 도서관·같은 책은 30분 동안 기억해 호출을 아낀다
 const cache = new Map<string, { at: number; v: unknown }>();
@@ -75,6 +79,7 @@ async function check(libCode: string, isbn13: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  if (isBot(req)) return json({ error: "bot" }, 200);
   if (!KEY) return json({ error: "DATA4LIBRARY_KEY 비밀값이 설정되지 않았어요" }, 500);
   let body: { isbn13?: string; libCodes?: string[] };
   try {
@@ -89,5 +94,6 @@ Deno.serve(async (req) => {
     return json({ error: "도서관은 1~5곳까지 조회할 수 있어요" }, 400);
   }
   const results = await Promise.all(libCodes.map((c) => check(c, isbn13)));
-  return json({ results });
+  // limit: 오늘 화면 몫 호출을 다 써서 확인하지 못함 → 화면이 도서관 홈페이지로 안내
+  return json({ results, limit: results.some((r) => (r as { limit?: boolean }).limit) });
 });
