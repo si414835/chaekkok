@@ -72,6 +72,13 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python compute_composite.py
 
+      - name: 화면용 캐시 새로 고침 (v_feed·키워드·적중 통계)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python -c "import os; from supabase import create_client; print('새로 고침', create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_KEY']).rpc('refresh_cached_views').execute().data)"
+
       - name: 블로그 글 초안 만들기
         if: always()
         env:

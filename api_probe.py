@@ -96,7 +96,7 @@ def main():
     probe("loanItemSrch", "20~29세 여성(1)", {**period, "from_age": 20, "to_age": 29, "gender": 1})
 
     # 3) 도서별 이용분석: 오늘 종합 상위 3권으로 같이 빌린 책 구조 확인
-    top = (supabase.table("v_feed").select("isbn13,title").eq("trend_type", "composite")
+    top = (supabase.table("v_feed_live").select("isbn13,title").eq("trend_type", "composite")
            .order("score", desc=True).limit(3).execute().data or [])
     for i, b in enumerate(top):
         probe("usageAnalysisList", b["title"][:40], {"isbn13": b["isbn13"]}, keep_sample=(i == 0))

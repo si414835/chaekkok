@@ -1,8 +1,31 @@
 {
   "rewrites": [
-    { "source": "/book/:isbn", "destination": "/api/page?type=book&id=:isbn" },
-    { "source": "/keyword/:word", "destination": "/api/page?type=keyword&id=:word" },
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
-    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+    {
+      "source": "/book/:isbn",
+      "destination": "/api/page?type=book&id=:isbn"
+    },
+    {
+      "source": "/keyword/:word",
+      "destination": "/api/page?type=keyword&id=:word"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
+      "source": "/((?!api/|assets/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
   ]
 }

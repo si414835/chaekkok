@@ -2115,19 +2115,36 @@ function useWishHits(wish) {
   return map
 }
 
+// 같은 화면에서 여러 칸이 같은 데이터를 부를 때 한 번만 받는다 (5분 동안 기억)
+const _shared = new Map()
+function shared(key, fn) {
+  const hit = _shared.get(key)
+  if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.p
+  const p = Promise.resolve(fn()).catch((e) => {
+    _shared.delete(key)
+    throw e
+  })
+  _shared.set(key, { at: Date.now(), p })
+  if (_shared.size > 200) _shared.delete(_shared.keys().next().value)
+  return p
+}
+
 function useRankHistory(isbn) {
   const [rows, setRows] = useState(null)
   useEffect(() => {
     let off = false
     setRows(null)
-    supabase
-      .from('book_state')
-      .select('snapshot_date,rank_now,stage,list_size,cat')
-      .eq('isbn13', isbn)
-      .order('snapshot_date', { ascending: false })
-      .limit(45)
-      .then(({ data }) => {
-        if (!off) setRows((data || []).reverse())
+    shared(`hist:${isbn}`, () =>
+      supabase
+        .from('book_state')
+        .select('snapshot_date,rank_now,stage,list_size,cat')
+        .eq('isbn13', isbn)
+        .order('snapshot_date', { ascending: false })
+        .limit(45)
+        .then(({ data }) => data || []),
+    )
+      .then((data) => {
+        if (!off) setRows([...data].reverse())
       })
     return () => {
       off = true
@@ -2586,12 +2603,14 @@ function useEvidence(isbn) {
   const [ev, setEv] = useState(null)
   useEffect(() => {
     let off = false
-    supabase
-      .from('v_book_state_latest')
-      .select('rank_now,rank_prev,rank_mid,rank_change_ratio,new_entry,hot_diff,rise_steady,loan_growth,regions,demo_groups,librarian,yt_spike,gt_spike,cat,sources,list_size')
-      .eq('isbn13', isbn)
-      .maybeSingle()
-      .then(({ data }) => !off && setEv(data || null))
+    shared(`ev:${isbn}`, () =>
+      supabase
+        .from('v_book_state_latest')
+        .select('rank_now,rank_prev,rank_mid,rank_change_ratio,new_entry,hot_diff,rise_steady,loan_growth,regions,demo_groups,librarian,yt_spike,gt_spike,cat,sources,list_size')
+        .eq('isbn13', isbn)
+        .maybeSingle()
+        .then(({ data }) => data || null),
+    ).then((data) => !off && setEv(data))
     return () => {
       off = true
     }

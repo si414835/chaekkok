@@ -558,7 +558,7 @@ def pick_usage_targets():
                   .order("momentum", desc=True).limit(600).execute().data or [])
         targets += [r["isbn13"] for r in staged]
     for ttype, order, limit, desc in [("composite", "score", 150, True), ("rising", "rank_diff", 60, True), ("popular", "rank", 400, False)]:
-        res = (supabase.table("v_feed").select("isbn13").eq("trend_type", ttype)
+        res = (supabase.table("v_feed_live").select("isbn13").eq("trend_type", ttype)
                .order(order, desc=desc).limit(limit).execute())
         targets += [r["isbn13"] for r in (res.data or [])]
     targets = list(dict.fromkeys(t for t in targets if t))
