@@ -2803,6 +2803,29 @@ function bookOneLiner({ cat, rankNow, journey, stage, lastM, prevM, monthOf, top
   return `${lead}으로, ${tail}.`
 }
 
+// 책 상세: 4단계(포착 → 떠오름 → 확산 → 스테디) 한 줄 그래프에 지금 단계 표시 (2026-11-24)
+const STAGE_NOTE = { 포착: '대출이 막 오르기 시작', 떠오름: '순위가 빠르게 오르는 중', 확산: '여러 지역·독자층으로 퍼지는 중', 스테디: '오래 꾸준히 빌리는 책' }
+function StageLine({ stage }) {
+  const i = STAGES.indexOf(stage)
+  if (i < 0) return null
+  return (
+    <div className="stline" role="img" aria-label={`트렌드 단계 ${STAGES.join(', ')} 가운데 지금 ${stage} 단계`}>
+      <div className="stline__track" style={{ '--p': i / (STAGES.length - 1) }}>
+        <i className="stline__fill" aria-hidden="true" />
+        {STAGES.map((s, k) => (
+          <div key={s} className={`stline__step${k < i ? ' is-past' : ''}${k === i ? ' is-now' : ''}`}>
+            <i className="stline__dot" aria-hidden="true" />
+            <span>{s}</span>
+          </div>
+        ))}
+      </div>
+      <p className="stline__note">
+        지금 <b>{stage}</b> 단계 · {STAGE_NOTE[stage]}
+      </p>
+    </div>
+  )
+}
+
 function BkShareIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
@@ -3282,12 +3305,11 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                   ))}
                 </p>
               )}
-              {oneLiner && <p className="pd__oneline">{oneLiner}</p>}
             </div>
             {videos.length > 0 && <BookVideo key={isbn} videos={videos} playing={vidPlaying} setPlaying={setVidPlaying} />}
           </div>
-          {/* 폰에서 영상 칸이 제목 옆에 있으면 요약 상자는 그 아래 가로로 꽉 차게 */}
-          {oneLiner && videos.length > 0 && <p className="pd__oneline pd__oneline--m">{oneLiner}</p>}
+          {/* 한 줄 요약: 제목·영상 줄 아래에 가로로 꽉 차게 (영상 밑까지 이어지게) */}
+          {oneLiner && <p className="pd__oneline">{oneLiner}</p>}
 
           <div className="pd__two">
             <section className="pd__intro">
@@ -3302,6 +3324,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               {book.external && <p className="pd__fine">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>}
             </section>
             <section className="pd__facts">
+              <StageLine stage={st?.stage} />
               <dl>
                 {facts.map(([k, v]) => (
                   <div key={k}>
