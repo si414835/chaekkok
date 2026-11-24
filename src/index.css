@@ -6769,3 +6769,7 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 @media (min-width: 1100px) { .pd__data--pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; margin-top: 64px; } }
 /* 순위 자료가 없어 그래프가 하나뿐이면 가로로 꽉 채운다 */
 @media (min-width: 1100px) { .pd__data--pair > :only-child { grid-column: 1 / -1; } }
+/* 성별·연령 ↔ 순위·대출 넘기기 */
+.pd__data--pager { margin-top: 48px; }
+.pd__data--pager .fpager__page > .bk-sub, .pd__data--pager .fpager__page > .pd__data--pair { margin-top: 0; }
+@media (min-width: 1100px) { .pd__data--pager { margin-top: 64px; } }
