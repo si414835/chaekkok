@@ -6741,3 +6741,26 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 @keyframes fpager-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 .pd__facts .fpager__page .rankcard, .pd__facts .fpager__page .bk-sub { margin-top: 0; }
 .pd__data > :only-child { grid-column: 1 / -1; }
+/* 책 소개 가로로 길게 → 그 밑에 상세 정보 가로 한 줄 (2026-11-24) */
+.pd__stack { margin-top: 32px; }
+.pd__stack > .pd__facts--row { margin-top: 32px; }
+.pd__facts--row dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--ink); }
+.pd__facts--row dl > div { display: block; padding: 12px 12px 12px 0; border-bottom: 1px solid var(--line); }
+.pd__facts--row dt { font-size: 12.5px; color: var(--muted); }
+.pd__facts--row dd { margin: 5px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink); }
+.pd__facts--row dd .pd__dim { display: block; font-size: 12.5px; margin-top: 2px; }
+.pd__factsub { margin-top: 18px; }
+.pd__factsub .stline { margin: 0 0 14px; }
+.pd__factside .why, .pd__factside .fc { margin-top: 0; }
+.pd__data--one { display: block; margin-top: 44px; }
+@media (min-width: 1100px) {
+  .pd__stack { margin-top: 44px; }
+  .pd__facts--row dl { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); grid-auto-flow: column; }
+  .pd__facts--row dl > div { padding: 14px 16px; }
+  .pd__facts--row dl > div:first-child { padding-left: 0; }
+  .pd__facts--row dl > div + div { border-left: 1px solid var(--line); }
+  .pd__facts--row dd { font-size: 16px; }
+  .pd__factsub { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; margin-top: 22px; }
+  .pd__factsub .stline { margin: 0; }
+  .pd__data--one { display: block; margin-top: 64px; }
+}
