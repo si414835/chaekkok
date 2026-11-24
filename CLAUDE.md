@@ -6,6 +6,9 @@
 - 사이트: https://chaekkok.vercel.app (React+Vite, `src/App.jsx`, 서버 렌더 책 페이지 `api/page.js`)
 - Vercel: project `prj_41K6zw66W2KTFveQoAHxIAaoxn9M`, team `team_NAqeSLXJYaGk5V8xxRUrWH8E`
 - Supabase: project `dksazvdyezxokcbjuqvp` (SQL 원본은 `supabase/sql/`)
+- 수집은 **10:30 KST 전에 끝나야 함**(승환님이 점심에 블로그 올림). GitHub 예약이 늦거나 빠져서(11/24 정오까지 안 돎)
+  collect.yml에 예약 5개(04:07·05:23·06:41·07:37·08:19 KST) + pg_cron `kick_collect()`(04:12·07:02 KST, Vault 'gh_dispatch_token' 있을 때만 GitHub API로 시작).
+  '오늘 수집했는지 확인' 단계가 오늘 collect_runs 기록이 있으면 자동 실행(schedule, inputs.auto=true)을 건너뜀. 손으로 돌리면 항상 실행. (`supabase/sql/collect_kick.sql`)
 - 수집: `.github/workflows/collect.yml` 매일 04:07 KST → `collect.py`, `extra_collect.py`, `nl_recommend_collect.py`, `blog_draft.py`
 - 워크플로 수동 실행은 GraphQL이 막혀 있어 REST로:
   `gh api -X POST repos/si414835/chaekkok/actions/workflows/<file>.yml/dispatches -f ref=main`

@@ -2,9 +2,20 @@ name: 책콕 데이터 수집
 
 on:
   schedule:
-    # 정각은 GitHub 예약 실행이 몰려 몇 시간씩 늦어지거나 빠질 수 있어서(공식 문서) 정각을 피한다. 19:07 UTC = 04:07 KST (늦어져도 아침 전에 끝나도록 새벽에 시작)
-    - cron: '7 19 * * *'
+    # 수집은 10:30 KST 전에 끝나야 한다(점심에 블로그 글 올림). 한 번 40~80분 걸린다.
+    # GitHub 예약 실행은 몇 시간씩 늦거나 아예 빠지기도 해서(11/24는 정오까지 안 돎) 여러 번 걸어 둔다.
+    # 오늘 이미 돈 기록이 있으면 '오늘 수집했는지 확인' 단계에서 나머지를 건너뛴다.
+    - cron: '7 19 * * *'   # 04:07 KST
+    - cron: '23 20 * * *'  # 05:23 KST
+    - cron: '41 21 * * *'  # 06:41 KST
+    - cron: '37 22 * * *'  # 07:37 KST
+    - cron: '19 23 * * *'  # 08:19 KST (마지막 예비, 80분 걸려도 09:40에 끝남)
   workflow_dispatch:
+    inputs:
+      auto:
+        description: '자동 예비 실행(이미 오늘 수집했으면 건너뜀). 손으로 돌릴 땐 비워 두기'
+        required: false
+        default: 'false'
 
 concurrency:
   group: collect
@@ -25,7 +36,29 @@ jobs:
       - name: 필요한 패키지 설치
         run: pip install requests supabase pytrends pywebpush
 
+      - name: 오늘 수집했는지 확인
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          EVENT: ${{ github.event_name }}
+          AUTO: ${{ github.event.inputs.auto }}
+        run: |
+          python - <<'PY'
+          import os, datetime
+          from supabase import create_client
+          c = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_KEY'])
+          today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date().isoformat()
+          n = c.table('collect_runs').select('id', count='exact').eq('run_date', today).limit(1).execute().count or 0
+          auto = os.environ['EVENT'] == 'schedule' or os.environ.get('AUTO') == 'true'
+          skip = 'true' if (auto and n > 0) else 'false'
+          print(f'오늘({today}) 수집 기록 {n}건, 자동 실행={auto} → 건너뛰기={skip}')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'skip={skip}\n')
+          PY
+
       - name: 정보나루 데이터 수집 실행
+        if: steps.check.outputs.skip != 'true'
         env:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -33,7 +66,7 @@ jobs:
         run: python collect.py
 
       - name: 사서추천도서 수집 실행
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         env:
           NL_API_KEY: ${{ secrets.NL_API_KEY }}
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
@@ -42,7 +75,7 @@ jobs:
         run: python nl_recommend_collect.py
 
       - name: 추가 데이터 수집 (연령성별·지역·이용분석·출간예정)
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         env:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
           NL_API_KEY: ${{ secrets.NL_API_KEY }}
@@ -51,7 +84,7 @@ jobs:
         run: python extra_collect.py
 
       - name: 유튜브 언급량 수집 실행
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -59,28 +92,28 @@ jobs:
         run: python youtube_collect.py
 
       - name: 구글 트렌드 수집 실행
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python google_trends_collect.py
 
       - name: 복합 트렌드 스코어 계산
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python compute_composite.py
 
       - name: 화면용 캐시 새로 고침 (v_feed·키워드·적중 통계)
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python -c "import os; from supabase import create_client; print('새로 고침', create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_KEY']).rpc('refresh_cached_views').execute().data)"
 
       - name: 블로그 글 초안 만들기
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         env:
           # 줄거리(책 소개)용 정보나루 호출 2~3회를 위해 수집 한도(400)보다 조금 여유를 둔다
           API_DAILY_BATCH_LIMIT: '415'
@@ -90,7 +123,7 @@ jobs:
         run: python blog_draft.py
 
       - name: 휴대폰 알림 보내기
-        if: always()
+        if: always() && steps.check.outputs.skip != 'true'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
