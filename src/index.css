@@ -6724,3 +6724,20 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 .stline__step.is-now { color: var(--red); font-weight: 700; }
 .stline__note { margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-3); text-align: center; }
 .stline__note b { color: var(--ink); }
+/* 지금 단계 점: 숨 쉬듯 커졌다 작아졌다 */
+.stline__step.is-now .stline__dot { animation: stline-breathe 2.4s ease-in-out infinite; }
+@keyframes stline-breathe { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 2px var(--red); } 50% { transform: scale(1.22); box-shadow: 0 0 0 2px var(--red), 0 0 0 7px rgba(196, 48, 43, 0.14); } }
+@media (prefers-reduced-motion: reduce) { .stline__step.is-now .stline__dot { animation: none; } }
+/* 사실 표 ↔ 월별 대출 추이 넘기기 */
+.fpager { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.fpager__label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.fpager__dots { display: inline-flex; gap: 5px; margin-left: auto; margin-right: 4px; }
+.fpager__dots i { width: 6px; height: 6px; border-radius: 50%; background: #d4d3ce; }
+.fpager__dots i.is-on { background: var(--ink); }
+.fpager__btn { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: var(--ink); cursor: pointer; }
+.fpager__btn:hover:not(:disabled) { background: var(--ink); color: #fff; border-color: var(--ink); }
+.fpager__btn:disabled { opacity: 0.35; cursor: default; }
+.fpager__page { animation: fpager-in 0.25s ease; }
+@keyframes fpager-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+.pd__facts .fpager__page .rankcard, .pd__facts .fpager__page .bk-sub { margin-top: 0; }
+.pd__data > :only-child { grid-column: 1 / -1; }
