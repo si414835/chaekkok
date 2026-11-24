@@ -2749,10 +2749,13 @@ function WhyRising({ isbn }) {
 /* ================= 책 상세 (2026-11-18 '따뜻한 서재 × 책콕 블루' 시안) ================= */
 
 // 'A :부제', 'A =부제 /English' 에서 부제만
+// 정보나루 제목 "본제 :부제 =대등표제(영문) /책임표시"에서 부제만. 대등표제(= 뒤)는 버린다
+// 예: "시대예보 :수고인류의 시간 =Forecast of the times : the time of sugo sapiens" → "수고인류의 시간"
 function subtitleOf(t) {
   if (!t) return null
-  const m = t.match(/\s*(?::|\s=)\s*([^/]+?)\s*(?:\s\/.*)?$/)
-  const sub = m && m[1].trim()
+  const i = t.indexOf(':')
+  if (i < 0) return null
+  const sub = t.slice(i + 1).split(/\s=|\s\//)[0].trim()
   return sub && sub !== shortTitle(t) && !/^[\x00-\x7F]+$/.test(sub) ? sub : null
 }
 
@@ -2772,6 +2775,32 @@ function rankJourney(rows) {
   const days = dayDiff(worst.snapshot_date, now.snapshot_date)
   if (!days || worst.rank_now - now.rank_now < 5) return null
   return `${now.cat || '분야'} ${now.rank_now}위 · ${days}일 만에 ${worst.rank_now}위 → ${now.rank_now}위`
+}
+
+// 책 상세 한 줄 요약: 순위 흐름 · 단계 · 대출 증가 · 많이 빌린 독자를 한 문장으로 (2026-11-24)
+// 예: "사회과학 166위에서 14일 만에 41위로 오른 떠오름 단계 책으로, 10월 대출이 9월의 약 14배로 늘었고 40대 여성이 가장 많이 빌려요."
+function bookOneLiner({ cat, rankNow, journey, stage, lastM, prevM, monthOf, topGrp }) {
+  const j = journey && journey.match(/(\d+)일 만에 (\d+)위 → (\d+)위/)
+  const head = j
+    ? `${cat} ${j[2]}위에서 ${j[1]}일 만에 ${j[3]}위로 오른`
+    : rankNow != null
+      ? `${cat} ${rankNow}위인`
+      : ''
+  const kind = stage ? `${stage} 단계 책` : '책'
+  const parts = []
+  if (lastM?.loanCnt && prevM?.loanCnt) {
+    const r = lastM.loanCnt / prevM.loanCnt
+    const a = monthOf(lastM)
+    const b = monthOf(prevM)
+    if (r >= 2) parts.push(`${a}월 대출이 ${b}월의 약 ${Math.round(r)}배로 늘었고`)
+    else if (r >= 1.1) parts.push(`${a}월 대출이 ${b}월보다 ${Math.round((r - 1) * 100)}% 늘었고`)
+  }
+  if (topGrp) parts.push(`${grpLab(topGrp)}이 가장 많이 빌려요`)
+  if (!head && !parts.length) return null
+  const lead = `${head ? head + ' ' : ''}${kind}`
+  if (!parts.length) return `${lead}이에요.`
+  const tail = parts.join(' ').replace(/늘었고$/, '늘었어요')
+  return `${lead}으로, ${tail}.`
 }
 
 function BkShareIcon() {
@@ -3169,6 +3198,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
     st?.stage ? ['트렌드 단계', <>{st.stage}{st.reason ? <span className="pd__dim"> · {st.reason}</span> : null}</>] : null,
     st?.first_spotted ? ['책콕이 처음 포착', fmtDate(st.first_spotted)] : null,
   ].filter(Boolean)
+  const oneLiner = bookOneLiner({ cat, rankNow, journey, stage: st?.stage, lastM, prevM, monthOf, topGrp })
   const BuyList = (
     <div className="pd__buy" id="buy" ref={buyRef}>
       <p className="pd__kind">서점</p>
@@ -3269,6 +3299,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               {book.external && <p className="pd__fine">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>}
             </section>
             <section className="pd__facts">
+              {oneLiner && <p className="pd__oneline">{oneLiner}</p>}
               <dl>
                 {facts.map(([k, v]) => (
                   <div key={k}>
