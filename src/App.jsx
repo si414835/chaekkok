@@ -3366,7 +3366,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
 /* ================= 취향 찾기 (2026-11-20, 책결 비교 후) =================
    표지를 보고 좋아요·별로·모르겠어요를 고르면, 좋아한 책의 함께 빌린·마니아·다독자 목록을 합쳐
    '내 취향 중 지금 뜨는 책'을 보여 준다. AI·유료 API 없이 DB 함수(taste_recs)만 쓴다.
-   좋아요는 기기 번호로 익명 집계해 홈의 '책콕 사람들이 좋다고 고른 책'에 쓴다. */
+   좋아요는 기기 번호로 익명 집계해 홈의 '모두가 콕한 책'에 쓴다. */
 
 const TASTE_NEED = 5
 // 받침에 따라 '과/와' (한글이 아니면 '과')
@@ -3568,7 +3568,7 @@ function TastePage({ feed, loading }) {
             </>
           )}
           {recs && uniq.length === 0 && <p className="state">좋아한 책의 대출 기록이 아직 적어요. 몇 권 더 골라 주세요.</p>}
-          <p className="sub small">근거: 도서관 정보나루 이용분석(함께 빌린 책·마니아·다독자 추천). 좋아요는 이름 없이 집계돼 홈의 '책콕 사람들이 좋다고 고른 책'에 쓰여요.</p>
+          <p className="sub small">근거: 도서관 정보나루 이용분석(함께 빌린 책·마니아·다독자 추천). 좋아요는 이름 없이 집계돼 홈의 '모두가 콕한 책'에 쓰여요.</p>
         </section>
       )}
 
@@ -3589,7 +3589,7 @@ function TastePage({ feed, loading }) {
   )
 }
 
-// 홈: 책콕 사람들이 좋다고 고른 책 (최근 30일 좋아요 많은 순, 익명 집계)
+// 홈: 모두가 콕한 책 (최근 30일 좋아요 많은 순, 익명 집계)
 function TasteTop() {
   const [rows, setRows] = useState(null)
   useEffect(() => {
@@ -3597,7 +3597,7 @@ function TasteTop() {
   }, [])
   const list = (rows || []).filter((r, i, a) => a.findIndex((x) => shortTitle(x.title) === shortTitle(r.title)) === i).slice(0, 6)
   return (
-    <PSec title="책콕 사람들이 좋다고 고른 책" more={{ href: '/taste', label: '나도 고르기 →' }} className="tastetop">
+    <PSec title="모두가 콕한 책" more={{ href: '/taste', label: '나도 고르기 →' }} className="tastetop">
       {rows === null && <Loading />}
       {rows && list.length === 0 && <p className="psec__empty">아직 모으는 중이에요. 취향 찾기에서 첫 좋아요를 남겨 주세요.</p>}
       {list.length > 0 && (
