@@ -2943,8 +2943,30 @@ function NextReads({ isbn, co, coverOf, recs, words }) {
     deep.length && { id: 'deep', label: '깊게 읽는 독자', note: '이 분야를 많이 읽는 사람들이 함께 고른 책', list: deep },
     kw?.word && { id: 'kw', label: `#${kw.word}`, note: '같은 키워드 책 중 요즘 뜨는 순', list: kw.list, more: keywordHref(kw.word) },
   ].filter(Boolean)
-  if (!tabs.length) return null
   const cur = tabs.find((t) => t.id === tab) || tabs[0]
+  // 옆으로 넘기기 버튼: 더 넘길 쪽에만 보이고, 표지 높이 가운데에 둔다
+  const scRef = useRef(null)
+  const [nav, setNav] = useState({ prev: false, next: false, top: 70 })
+  const measure = () => {
+    const el = scRef.current
+    if (!el) return
+    const cover = el.querySelector('.bk-shelf__cover')
+    setNav({ prev: el.scrollLeft > 4, next: el.scrollLeft + el.clientWidth < el.scrollWidth - 4, top: cover ? cover.offsetTop + cover.offsetHeight / 2 : 70 })
+  }
+  useEffect(() => {
+    const el = scRef.current
+    if (!el) return
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(el)
+    const t = setTimeout(measure, 400)
+    return () => {
+      ro?.disconnect()
+      clearTimeout(t)
+    }
+  }, [cur?.id, cur?.list?.length])
+  const slide = (dir) => scRef.current?.scrollBy({ left: dir * scRef.current.clientWidth * 0.8, behavior: 'smooth' })
+  if (!tabs.length) return null
   return (
     <section className="bk-shelf bk-next rise" style={{ animationDelay: '0.3s' }}>
       <div className="bk-next__head">
@@ -2968,7 +2990,18 @@ function NextReads({ isbn, co, coverOf, recs, words }) {
           </>
         )}
       </p>
-      <div className="bk-shelf__scroll" style={{ '--n': cur.list.length }} key={cur.id}>
+      <div className="shelfnav__wrap">
+      {nav.prev && (
+        <button className="shelfnav shelfnav--prev" style={{ top: nav.top }} onClick={() => slide(-1)} aria-label="앞의 책 보기">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+        </button>
+      )}
+      {nav.next && (
+        <button className="shelfnav shelfnav--next" style={{ top: nav.top }} onClick={() => slide(1)} aria-label="다음 책 보기">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+        </button>
+      )}
+      <div className="bk-shelf__scroll" style={{ '--n': cur.list.length }} key={cur.id} ref={scRef} onScroll={measure}>
         <div className="bk-shelf__row">
           {cur.list.map((c) => (
             <a key={c.isbn13 || c.title} className="bk-shelf__item" href={`/book/${encodeURIComponent(c.isbn13)}`}>
@@ -2985,6 +3018,7 @@ function NextReads({ isbn, co, coverOf, recs, words }) {
             </a>
           ))}
         </div>
+      </div>
       </div>
     </section>
   )
@@ -3164,9 +3198,6 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
     <div className="detail pd">
       <header className="detail__bar pd__bar">
         <button className="iconbtn" onClick={back} aria-label="뒤로">{Icon.back()}</button>
-        <button className="iconbtn" onClick={onShare} aria-label={shared ? '링크를 복사했어요' : '공유'}>
-          {shared ? <span className="bk-round__done">✓</span> : <BkShareIcon />}
-        </button>
       </header>
 
       <div className="pd__grid">
@@ -3174,6 +3205,14 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
           <div className="pd__stage">
             <Cover src={book.cover_url} alt={shortTitle(book.title)} className="pd__cover" title={book.title} />
             <KokCat className="kokcat--stage" />
+            <div className="pd__quick">
+              <button className={saved ? 'is-on' : ''} onClick={onHeart} aria-pressed={saved} aria-label={saved ? '콕 했어요' : '콕 하기'} title={saved ? '콕 했어요' : '콕 하기'}>
+                {Icon.ginkgo(saved, 20)}
+              </button>
+              <button onClick={onShare} aria-label={shared ? '링크를 복사했어요' : '공유'} title={shared ? '링크를 복사했어요' : '공유'}>
+                {shared ? <span className="bk-round__done">✓</span> : <BkShareIcon />}
+              </button>
+            </div>
           </div>
           <div className="pd__acts" ref={actRef}>
             <button className="pbtn pbtn--lib" onClick={() => scrollTo(libRef)}>
@@ -3182,13 +3221,6 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             <button className="pbtn pbtn--shop" onClick={() => scrollTo(buyRef)}>
               서점에서 사기
             </button>
-          </div>
-          <div className="pd__mini">
-            <button className={`pd__kok${saved ? ' is-on' : ''}`} onClick={onHeart} aria-pressed={saved}>
-              {Icon.ginkgo(saved, 18)}
-              {saved ? '콕 했어요' : '콕 하기'}
-            </button>
-            <button onClick={onShare}>{shared ? '링크 복사됨' : '공유'}</button>
           </div>
           {wide && BuyList}
         </aside>

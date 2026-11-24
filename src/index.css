@@ -6356,10 +6356,6 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 .pd__cover { width: 184px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; border-radius: 2px; box-shadow: var(--shadow-book); }
 .pd__acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 20px; margin-top: 20px; }
 .pd__acts .pbtn { width: 100%; }
-.pd__mini { display: flex; gap: 20px; padding: 14px 20px 0; }
-.pd__mini button { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; font: inherit; font-size: 13.5px; color: var(--ink-3); cursor: pointer; }
-.pd__mini button:hover { color: var(--ink); }
-.pd__kok.is-on { color: var(--red); }
 .pd__main { padding: 0 20px; }
 .pd__crumb { margin: 28px 0 0; font-size: 12.5px; color: var(--muted); }
 .pd__crumb a:hover { color: var(--ink); }
@@ -6455,7 +6451,6 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
   .pd__stage { padding: 48px 0; }
   .pd__cover { width: 240px; }
   .pd__acts { grid-template-columns: 1fr; padding: 0; margin-top: 16px; }
-  .pd__mini { padding: 14px 0 0; }
   .pd__main { padding: 0; }
   .pd__crumb { margin-top: 0; font-size: 13px; }
   .pd__title { margin-top: 14px; font-size: 50px; letter-spacing: -0.045em; line-height: 1.15; }
@@ -6674,3 +6669,24 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 
 /* 도서관 홈페이지 바로가기 (소장 확인 줄) */
 .lib__hp { white-space: nowrap; text-decoration: none; align-self: center; display: inline-flex; align-items: center; }
+
+/* 상세: 콕·공유를 표지 판 오른쪽 위로 (2026-11-24) */
+.pd__quick { position: absolute; top: 12px; right: 12px; z-index: 4; display: flex; gap: 8px; }
+.pd__quick button { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: var(--ink-3); cursor: pointer; box-shadow: 0 2px 8px rgba(30, 30, 30, 0.08); }
+.pd__quick button:hover { color: var(--ink); border-color: var(--ink-3); }
+.pd__quick button.is-on { color: var(--red); }
+.pd__acts { margin-bottom: 4px; }
+/* 다음에 읽을 책: 옆으로 넘기기 버튼 */
+.shelfnav__wrap { position: relative; }
+.shelfnav { position: absolute; z-index: 3; transform: translateY(-50%); display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: rgba(255, 255, 255, 0.96); color: var(--ink); cursor: pointer; box-shadow: 0 4px 14px rgba(30, 30, 30, 0.14); }
+.shelfnav:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.shelfnav--prev { left: -4px; }
+.shelfnav--next { right: -4px; }
+@media (min-width: 1100px) {
+  .pd__stage { padding-top: 72px; }
+  .pd__quick { top: 16px; right: 16px; }
+  .pd__quick button { width: 42px; height: 42px; }
+  .shelfnav { width: 42px; height: 42px; }
+  .shelfnav--prev { left: -14px; }
+  .shelfnav--next { right: -14px; }
+}
