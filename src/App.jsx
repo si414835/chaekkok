@@ -3092,11 +3092,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   const recs = useBookRecs(isbn)
   const videos = useBookVideos(isbn)
   const [vidPlaying, setVidPlaying] = useState(false)
-  const [chartPage, setChartPage] = useState(0)
-  useEffect(() => {
-    setVidPlaying(false)
-    setChartPage(0)
-  }, [isbn])
+  useEffect(() => setVidPlaying(false), [isbn])
   const keywords = cleanKeywords(usage?.keywords).slice(0, 8)
   const libRef = useRef(null)
   const actRef = useRef(null)
@@ -3347,34 +3343,12 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             </section>
           </div>
 
-          {/* 순위 변화 그래프와 월별 대출 추이를 같은 자리에 겹쳐 두고 ‹ › 로 넘긴다 */}
-          <div className="pd__data pd__data--one">
-            {hist.length > 1 && (
-              <div className="fpager" aria-label="그래프 넘겨 보기">
-                <span className="fpager__label">{chartPage === 0 ? '순위 변화 · 다음 쪽은 월별 대출' : '월별 대출 · 2 / 2'}</span>
-                <span className="fpager__dots" aria-hidden="true">
-                  <i className={chartPage === 0 ? 'is-on' : ''} />
-                  <i className={chartPage === 1 ? 'is-on' : ''} />
-                </span>
-                <button className="fpager__btn" onClick={() => setChartPage(0)} disabled={chartPage === 0} aria-label="이전: 순위 변화">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
-                </button>
-                <button className="fpager__btn" onClick={() => setChartPage(1)} disabled={chartPage === 1} aria-label="다음: 월별 대출 추이">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
-                </button>
-              </div>
-            )}
-            {chartPage === 1 && hist.length > 1 ? (
-              <div className="fpager__page" key="loan">
-                <LoanChart bare history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '') + 'p'} />
-              </div>
-            ) : (
-              <div className="fpager__page" key="rank">
-                <RankChart embedded isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
-              </div>
-            )}
-          </div>
           {(usage?.loan_grps || []).length > 0 && <WhoBorrowed bare groups={usage?.loan_grps} cat={(book.classNameFull || '').split('>')[0].trim()} child={isChildBook(book)} />}
+          {/* 성별·연령 분포 뒤에 순위 변화와 월별 대출을 좌우 반반으로 한 블록에 (2026-11-24) */}
+          <div className="pd__two pd__data pd__data--pair">
+            <RankChart embedded isbn={book.isbn13} firstSpotted={st?.first_spotted} hit={hits?.get(book.isbn13)} />
+            {hist.length > 1 && <LoanChart bare history={usage?.loan_history} motionKey={isbn + (usage ? 'u' : '')} />}
+          </div>
           {!hasData && !loading && <p className="pd__fine">월별 대출과 누가 빌렸는지는 상위권 책부터 매일 채워지고 있어요.</p>}
 
           <NextReads isbn={book.isbn13} co={co} recs={recs} words={keywords.map((k) => k.word)} coverOf={(c) => c.cover_url || coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} />

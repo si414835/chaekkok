@@ -6764,3 +6764,8 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
   .pd__factsub .stline { margin: 0; }
   .pd__data--one { display: block; margin-top: 64px; }
 }
+/* 순위 변화 + 월별 대출: 성별·연령 분포 뒤, 좌우 반반 한 블록 */
+.pd__data--pair { margin-top: 48px; }
+@media (min-width: 1100px) { .pd__data--pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; margin-top: 64px; } }
+/* 순위 자료가 없어 그래프가 하나뿐이면 가로로 꽉 채운다 */
+@media (min-width: 1100px) { .pd__data--pair > :only-child { grid-column: 1 / -1; } }
