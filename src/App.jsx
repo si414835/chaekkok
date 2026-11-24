@@ -3505,7 +3505,11 @@ function TastePage({ feed, loading }) {
   const likes = Object.entries(votes).filter(([, v]) => v.v === 1)
   const dislikes = Object.entries(votes).filter(([, v]) => v.v === -1)
   // 좋아요·별로로 5권을 분류하면 바로 결과를 보여 준다 (모르겠어요는 세지 않음, 좋아요가 1권은 있어야 함)
-  const sorted = likes.length + dislikes.length
+  const sortedAll = likes.length + dislikes.length
+  // '마음에 드는 책이 없어요'를 누르면 새 판: 그때까지 고른 수를 기억해 두고 거기서 5권을 더 고른다
+  const [roundAt, setRoundAt] = useStored('chaekkok.taste.round', 0)
+  const [skipRecs, setSkipRecs] = useStored('chaekkok.taste.skiprecs', [])
+  const sorted = Math.max(0, sortedAll - Math.min(roundAt, sortedAll))
   const ready = sorted >= TASTE_NEED && likes.length > 0
   const show = ready
   const [recs, setRecs] = useState(null)
@@ -3536,25 +3540,35 @@ function TastePage({ feed, loading }) {
     if (!show || likes.length < 1) return
     let off = false
     supabase
-      .rpc('taste_recs', { p_like: likes.map(([k]) => k), p_dislike: dislikes.map(([k]) => k), p_seen: Object.keys(votes), p_limit: 40 })
+      .rpc('taste_recs', { p_like: likes.map(([k]) => k), p_dislike: dislikes.map(([k]) => k), p_seen: [...Object.keys(votes), ...skipRecs], p_limit: 40 })
       .then(({ data }) => !off && setRecs(data || []))
     return () => {
       off = true
     }
-  }, [show, likeKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [show, likeKey, skipRecs.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const deckRef = useRef(null)
   const reset = () => {
     setPrevSeen(Object.keys(votes).slice(-200))
     setSeed(Date.now() % 1e9)
     setVotes({})
+    setRoundAt(0)
+    setSkipRecs([])
     setRecs(null)
   }
   const seenT = new Set()
   const uniq = (recs || []).filter((r) => !seenT.has(shortTitle(r.title)) && seenT.add(shortTitle(r.title)))
   // 지금 뜨는 = 포착·떠오름·확산 (스테디는 꾸준한 인기라 아래 추천으로)
   const isUp = (r) => ['포착', '떠오름', '확산'].includes(r.stage)
-  const rising = uniq.filter(isUp).slice(0, 6)
-  const more = uniq.filter((r) => !isUp(r)).slice(0, 12)
+  // 추천 10권: 지금 뜨는 책 먼저, 나머지는 놓치기 쉬운 책 순서 그대로
+  const ten = [...uniq.filter(isUp), ...uniq.filter((r) => !isUp(r))].slice(0, 10)
   const viaTitle = (isbn) => votes[isbn]?.t
+  // 마음에 드는 책이 없어요 → 이번 10권은 다음 추천에서 빼고, 고르기 화면으로 올라가 5권을 새로 고른다
+  const again = () => {
+    setSkipRecs((a) => [...a, ...ten.map((r) => r.isbn13)].slice(-300))
+    setRoundAt(sortedAll)
+    setRecs(null)
+    setTimeout(() => (deckRef.current || document.body).scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }
 
 
   // 추천 카드: 큰 표지 + 제목·저자 + 한 줄(뜨는 책은 단계·순위, 나머지는 어떤 책 덕분인지)
@@ -3585,7 +3599,7 @@ function TastePage({ feed, loading }) {
         <span className="sub">표지를 보고 끌리면 좋아요, 아니면 별로를 눌러 주세요. 읽지 않은 책도 괜찮아요.</span>
       </header>
 
-      <section className="card taste__deck">
+      <section className="card taste__deck" ref={deckRef}>
         <KokCat className="kokcat--deck" />
         <div className="taste__progress">
           <span>
@@ -3645,42 +3659,23 @@ function TastePage({ feed, loading }) {
 
       {show && (
         <section className="card taste__result" ref={resRef}>
-          <h2 className="h2 display">내 취향 중 지금 뜨는 책</h2>
-          <p className="sub">좋아한 책과 함께 읽힌 책 가운데 지금 뜨고 있는 책이에요. 더 고를수록 바로 바뀌어요.</p>
+          <h2 className="h2 display">내 취향 추천 10권</h2>
+          <p className="sub">좋아한 책과 함께 읽힌 책이에요. 지금 뜨는 책이 먼저 나와요.</p>
           {recs === null && <Loading />}
-          {recs && rising.length === 0 && <p className="state">지금 뜨는 책 중에는 아직 맞는 책이 없어요. 아래 추천을 먼저 보세요.</p>}
-          <div className="taste__recs">
-            {rising.map((r) => (
-              <RecRow key={r.isbn13} r={r} />
-            ))}
-          </div>
-          {more.length > 0 && (
-            <>
-              <h3 className="h3 taste__h3">내 취향 추천</h3>
-              <p className="sub">흔한 베스트셀러는 뒤로, 놓치기 쉬운 책이 먼저 나와요.</p>
-              <div className="taste__recs">
-                {more.map((r) => (
-                  <RecRow key={r.isbn13} r={r} />
-                ))}
-              </div>
-            </>
+          {ten.length > 0 && (
+            <div className="taste__ten">
+              {ten.map((r) => (
+                <RecRow key={r.isbn13} r={r} />
+              ))}
+            </div>
           )}
-          {recs && uniq.length === 0 && <p className="state">좋아한 책의 대출 기록이 아직 적어요. 몇 권 더 골라 주세요.</p>}
-          <p className="sub small">근거: 도서관 정보나루 이용분석(함께 빌린 책·마니아·다독자 추천). 좋아요는 이름 없이 집계돼 홈의 '모두가 콕한 책'에 쓰여요.</p>
-        </section>
-      )}
-
-      {likes.length > 0 && (
-        <section className="card">
-          <h2 className="h3">내가 좋아요 한 책 {likes.length}권</h2>
-          <div className="taste__liked">
-            {likes.map(([k, v]) => (
-              <a key={k} href={`/book/${encodeURIComponent(k)}`} className="taste__likeditem">
-                <Cover src={v.c} alt="" className="taste__likedcover" title={v.t} />
-                <small>{v.t}</small>
-              </a>
-            ))}
+          {recs && ten.length === 0 && <p className="state">좋아한 책의 대출 기록이 아직 적어요. 몇 권 더 골라 주세요.</p>}
+          <div className="taste__again">
+            <button className="btn btn--soft" onClick={again}>
+              마음에 드는 책이 없어요
+            </button>
           </div>
+          <p className="sub small">근거: 도서관 정보나루 이용분석(함께 빌린 책·마니아·다독자 추천). 좋아요는 이름 없이 집계돼 홈의 '모두가 콕한 책'에 쓰여요.</p>
         </section>
       )}
     </div>

@@ -6773,3 +6773,14 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 .pd__data--pager { margin-top: 48px; }
 .pd__data--pager .fpager__page > .bk-sub, .pd__data--pager .fpager__page > .pd__data--pair { margin-top: 0; }
 @media (min-width: 1100px) { .pd__data--pager { margin-top: 64px; } }
+/* 취향 결과: 10권을 한 줄에 5권씩 두 줄로 (2026-11-24) */
+.taste .taste__ten { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 26px 18px; margin-top: 14px; }
+.taste .taste__ten .taste__rec { max-width: 170px; }
+.taste__again { display: flex; justify-content: center; margin: 34px 0 18px; }
+.taste__again .btn { min-width: 220px; }
+@media (max-width: 559px) {
+  .taste .taste__ten { gap: 16px 7px; }
+  .taste .taste__ten .taste__reccover { margin-bottom: 5px; }
+  .taste .taste__ten .taste__rectitle { font-size: 11.5px; }
+  .taste .taste__ten .taste__recby, .taste .taste__ten .taste__stage, .taste .taste__ten .taste__via { display: none; }
+}
