@@ -110,6 +110,7 @@ def get_target_books():
     rows = (
         supabase.table("trend_scores")
         .select("isbn13, trend_type, snapshot_date, rank_diff, loan_count, books(isbn13, title, author, addition_symbol)")
+        .in_("trend_type", ["rising", "popular"])  # 종합 점수 계산 뒤에 돌리면 composite 행이 1000행 한도를 다 채워 대상이 줄어들던 문제
         .order("snapshot_date", desc=True)
         .execute()
         .data
