@@ -6371,6 +6371,26 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
 .pd__tags a { color: var(--ink-soft); }
 .pd__tags a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .pd__dim { color: var(--muted); }
+/* 책 상세 '이 책을 이야기한 영상' (2026-11-24): 폰은 제목 옆 작은 칸, 누르면 가로로 꽉 차게 재생 */
+.pd__head.has-vid { display: grid; grid-template-columns: minmax(0, 1fr) 42%; gap: 14px; align-items: start; }
+.pd__head.has-vid.is-playing { grid-template-columns: minmax(0, 1fr); }
+.pvid { margin: 30px 0 0; min-width: 0; }
+.pd__head.is-playing .pvid { margin-top: 18px; }
+.pvid__frame { position: relative; aspect-ratio: 16 / 9; background: #111; overflow: hidden; }
+.pvid__frame iframe, .pvid__play { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.pvid__play { padding: 0; margin: 0; cursor: pointer; background: #111; }
+.pvid__play img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pvid__btn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(0, 0, 0, 0.66); color: #fff; }
+.pvid__play:hover .pvid__btn { background: #c4302b; }
+.pvid__cap { display: grid; gap: 2px; margin-top: 7px; }
+.pvid__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; line-height: 1.45; color: var(--ink); }
+.pvid__meta { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 11px; color: var(--muted); }
+.pvid__yt { flex: none; }
+.pvid__src { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pvid__nav { display: inline-flex; flex: none; margin-left: auto; }
+.pvid__nav button { position: relative; width: 18px; height: 18px; padding: 0; border: 0; background: none; cursor: pointer; }
+.pvid__nav button::before { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--line); }
+.pvid__nav button.is-on::before { background: var(--ink); }
 .pd__fine { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
 .pd__two > * { margin-top: 40px; }
 .pd__intro .psec__head { margin-bottom: 16px; }
@@ -6442,6 +6462,12 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
   .pd__sub { font-size: 19px; }
   .pd__by { margin-top: 14px; font-size: 15px; }
   .pd__two { display: grid; grid-template-columns: 1.3fr 1fr; gap: 56px; align-items: start; margin-top: 44px; }
+  .pd__head.has-vid, .pd__head.has-vid.is-playing { grid-template-columns: 1.3fr 1fr; gap: 56px; }
+  .pvid, .pd__head.is-playing .pvid { margin-top: 0; }
+  .pvid__btn { width: 54px; height: 54px; }
+  .pvid__cap { margin-top: 10px; }
+  .pvid__title { font-size: 13.5px; }
+  .pvid__meta { font-size: 12px; }
   .pd__two > * { margin-top: 0; }
   .pd__data { grid-template-columns: 1fr 1fr; margin-top: 64px; }
   .pd__intro p, .pd .bookintro p { font-size: 16.5px; line-height: 1.95; }

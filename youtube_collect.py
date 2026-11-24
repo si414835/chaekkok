@@ -12,6 +12,7 @@ v2 개선사항:
      부풀려지는 문제를 방지
 """
 
+import html
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -32,6 +33,65 @@ BOOK_KEYWORDS = [
     "책", "도서", "서평", "북리뷰", "북튜브", "완독", "독후감",
     "동화책", "그림책", "소설", "출판", "읽고", "독서",
 ]
+
+# 책 상세 '이 책을 이야기한 영상'에 붙일 영상 고르기 (book_videos, 2026-11-24)
+# 같은 검색 결과를 다시 쓰므로 유튜브 호출은 늘지 않는다.
+# 영상 제목에 책 제목이 있고, 저자 이름이나 아래 말 중 하나가 있어야 붙인다 (『사랑의 기술』 검색에 『독서의 기술』이 섞이는 것 방지).
+VIDEO_WORDS = ["서평", "리뷰", "독후감", "북튜브", "책 추천", "책추천", "줄거리", "요약", "완독", "읽고", "독서", "책 소개", "북토크"]
+VIDEOS_PER_BOOK = 3
+
+
+def norm(s: str) -> str:
+    return re.sub(r"[^0-9a-z가-힣]", "", (s or "").lower())
+
+
+def title_core(title: str) -> str:
+    """'서리꽃 2권'·'토지 1'·'파친코 (상)'처럼 권 표시를 떼어 영상 제목과 맞춰 본다."""
+    t = clean_title(title)
+    t = re.sub(r"[\(\[]?\s*(상|하|上|下|\d+\s*(권|부|편)?)\s*[\)\]]?\s*$", "", t).strip()
+    return t or clean_title(title)
+
+
+def pick_videos(items, book):
+    t = norm(title_core(book["title"]))
+    a = norm(clean_author(book.get("author") or ""))
+    out = []
+    for item in items:
+        vid = (item.get("id") or {}).get("videoId")
+        sn = item.get("snippet") or {}
+        vt = html.unescape(sn.get("title", ""))
+        desc = html.unescape(sn.get("description", ""))
+        if not vid or not t or t not in norm(vt):
+            continue
+        has_author = bool(a) and (a in norm(vt) or a in norm(desc))
+        has_word = any(w in (vt + " " + desc) for w in VIDEO_WORDS)
+        if len(t) <= 2 and not has_author:
+            continue
+        if not (has_author or has_word):
+            continue
+        th = sn.get("thumbnails") or {}
+        thumb = (th.get("high") or th.get("medium") or th.get("default") or {}).get("url")
+        out.append({
+            "video_id": vid,
+            "title": vt[:200],
+            "channel": html.unescape(sn.get("channelTitle", ""))[:100],
+            "thumb": thumb,
+            "published_at": sn.get("publishedAt"),
+        })
+        if len(out) >= VIDEOS_PER_BOOK:
+            break
+    return out
+
+
+def save_videos(isbn13, picks):
+    """그 책의 영상을 오늘 검색 결과로 바꾼다. 찾은 게 없으면 예전 것은 그대로 두고 30일 뒤 지운다(pg_cron)."""
+    if not picks:
+        return 0
+    supabase.table("book_videos").delete().eq("isbn13", isbn13).execute()
+    now = datetime.now(timezone.utc).isoformat()
+    rows = [{**v, "isbn13": isbn13, "rank": i + 1, "fetched_at": now} for i, v in enumerate(picks)]
+    supabase.table("book_videos").upsert(rows, on_conflict="isbn13,video_id").execute()
+    return len(rows)
 
 
 def kst_today_str():
@@ -135,7 +195,7 @@ def search_book_mentions(query: str):
     res = requests.get(YOUTUBE_SEARCH_URL, params=params, timeout=15)
     if res.status_code != 200:
         print(f"  [경고] '{query}' 검색 실패: {res.status_code} {res.text[:200]}")
-        return None
+        return None, []
 
     items = res.json().get("items", [])
     relevant = 0
@@ -144,7 +204,7 @@ def search_book_mentions(query: str):
         text = (snippet.get("title", "") + " " + snippet.get("description", "")).lower()
         if any(kw in text for kw in BOOK_KEYWORDS):
             relevant += 1
-    return relevant
+    return relevant, items
 
 
 def main():
@@ -153,22 +213,28 @@ def main():
 
     today = kst_today_str()
     saved = 0
+    videos = 0
     query_cache = {}  # 같은 제목(시리즈)은 한 번만 검색
 
     for book in targets:
         query = build_query(book["title"], book.get("author") or "")
 
         if query in query_cache:
-            count = query_cache[query]
+            count, items = query_cache[query]
             if count is None:
                 continue  # 이전에 이미 실패한 검색어 - 같은 실행 안에서 재시도 안 함
             print(f"  {book['title']}: {count}건 (캐시 재사용, 쿼리='{query}')")
         else:
-            count = search_book_mentions(query)
-            query_cache[query] = count  # 실패(None)도 캐시해서 중복 재시도 방지
+            count, items = search_book_mentions(query)
+            query_cache[query] = (count, items)  # 실패(None)도 캐시해서 중복 재시도 방지
             if count is None:
                 continue
             print(f"  {book['title']}: {count}건 (쿼리='{query}')")
+
+        try:
+            videos += save_videos(book["isbn13"], pick_videos(items, book))
+        except Exception as e:  # 영상 저장이 실패해도 언급량 수집은 계속
+            print(f"  [경고] 영상 저장 실패: {e}")
 
         row = {
             "isbn13": book["isbn13"],
@@ -181,7 +247,7 @@ def main():
         ).execute()
         saved += 1
 
-    print(f"\n[youtube] {saved}건 저장 (실제 API 호출: {len(query_cache)}회)")
+    print(f"\n[youtube] {saved}건 저장, 영상 {videos}개 (실제 API 호출: {len(query_cache)}회)")
 
 
 if __name__ == "__main__":

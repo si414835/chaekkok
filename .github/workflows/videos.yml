@@ -1,0 +1,22 @@
+name: 책 소개 영상 채우기 (수동)
+
+# 평소에는 매일 수집(collect.yml)의 '유튜브 언급량 수집' 단계가 같은 검색으로 영상도 채운다.
+# 이건 그날 바로 채우고 싶을 때 손으로 돌리는 것. 유튜브 검색 한도(하루 100회)를 수집과 나눠 쓰니 하루 한 번만.
+on:
+  workflow_dispatch:
+
+jobs:
+  videos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install requests supabase
+      - name: 유튜브 검색 → 언급량·영상 저장
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python youtube_collect.py

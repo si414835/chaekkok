@@ -2618,6 +2618,82 @@ function useEvidence(isbn) {
   return ev
 }
 
+// 책 상세 '이 책을 이야기한 영상' (book_videos, 2026-11-24). 유튜브 검색은 새벽 수집에서만 하고 화면은 저장된 것만 읽는다
+function useBookVideos(isbn) {
+  const [rows, setRows] = useState([])
+  useEffect(() => {
+    let off = false
+    setRows([])
+    shared(`vid:${isbn}`, () =>
+      supabase
+        .from('book_videos')
+        .select('video_id,title,channel,thumb')
+        .eq('isbn13', isbn)
+        .order('rank')
+        .limit(3)
+        .then(({ data }) => data || []),
+    )
+      .then((data) => !off && setRows(data))
+      .catch(() => {})
+    return () => {
+      off = true
+    }
+  }, [isbn])
+  return rows
+}
+
+// 썸네일만 먼저 보여 주고, 누르면 그 자리에서 유튜브 플레이어를 연다 (쿠키 적은 youtube-nocookie)
+function BookVideo({ videos, playing, setPlaying }) {
+  const [i, setI] = useState(0)
+  const v = videos[Math.min(i, videos.length - 1)]
+  if (!v) return null
+  const thumb = v.thumb || `https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg`
+  return (
+    <figure className={`pvid${playing ? ' is-playing' : ''}`}>
+      <div className="pvid__frame">
+        {playing ? (
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${v.video_id}?autoplay=1&rel=0&playsinline=1`}
+            title={v.title || '책 소개 영상'}
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        ) : (
+          <button className="pvid__play" onClick={() => setPlaying(true)} aria-label={`영상 재생: ${v.title || ''}`}>
+            <img src={thumb} alt="" loading="lazy" />
+            <span className="pvid__btn" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg>
+            </span>
+          </button>
+        )}
+      </div>
+      <figcaption className="pvid__cap">
+        <span className="pvid__title">{v.title}</span>
+        <span className="pvid__meta">
+          {v.channel && <span className="pvid__src">{v.channel}</span>}
+          <span className="pvid__yt">{v.channel ? '· ' : ''}YouTube</span>
+          {videos.length > 1 && (
+            <span className="pvid__nav">
+              {videos.map((x, k) => (
+                <button
+                  key={x.video_id}
+                  className={k === i ? 'is-on' : ''}
+                  onClick={() => {
+                    setI(k)
+                    setPlaying(false)
+                  }}
+                  aria-label={`${k + 1}번째 영상`}
+                />
+              ))}
+            </span>
+          )}
+        </span>
+      </figcaption>
+    </figure>
+  )
+}
+
 function evidenceOf(e) {
   if (!e) return []
   const cat = e.cat || '분야'
@@ -2928,6 +3004,9 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
   const ev = useEvidence(isbn)
   const rankHist = useRankHistory(isbn)
   const recs = useBookRecs(isbn)
+  const videos = useBookVideos(isbn)
+  const [vidPlaying, setVidPlaying] = useState(false)
+  useEffect(() => setVidPlaying(false), [isbn])
   const keywords = cleanKeywords(usage?.keywords).slice(0, 8)
   const libRef = useRef(null)
   const actRef = useRef(null)
@@ -3115,30 +3194,35 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
         </aside>
 
         <div className="pd__main">
-          <p className="pd__crumb">
-            <a href="/trend">트렌드</a> / {cat}
-            {st?.stage && (
-              <>
-                {' '}/ <span className="pd__stagel">{st.stage} 단계</span>
-              </>
-            )}
-          </p>
-          <h1 className="pd__title">{shortTitle(book.title)}</h1>
-          {subtitle && <p className="pd__sub">{subtitle}</p>}
-          <p className="pd__by">
-            {cleanAuthor(book.author)}
-            {pub ? ` · ${pub}` : ''}
-            {year ? ` · ${year}` : ''}
-          </p>
-          {keywords.length > 0 && (
-            <p className="pd__tags">
-              {keywords.slice(0, 5).map((k) => (
-                <a key={k.word} href={keywordHref(k.word)}>
-                  #{k.word}
-                </a>
-              ))}
-            </p>
-          )}
+          <div className={`pd__head${videos.length ? ' has-vid' : ''}${vidPlaying ? ' is-playing' : ''}`}>
+            <div className="pd__headtxt">
+              <p className="pd__crumb">
+                <a href="/trend">트렌드</a> / {cat}
+                {st?.stage && (
+                  <>
+                    {' '}/ <span className="pd__stagel">{st.stage} 단계</span>
+                  </>
+                )}
+              </p>
+              <h1 className="pd__title">{shortTitle(book.title)}</h1>
+              {subtitle && <p className="pd__sub">{subtitle}</p>}
+              <p className="pd__by">
+                {cleanAuthor(book.author)}
+                {pub ? ` · ${pub}` : ''}
+                {year ? ` · ${year}` : ''}
+              </p>
+              {keywords.length > 0 && (
+                <p className="pd__tags">
+                  {keywords.slice(0, 5).map((k) => (
+                    <a key={k.word} href={keywordHref(k.word)}>
+                      #{k.word}
+                    </a>
+                  ))}
+                </p>
+              )}
+            </div>
+            {videos.length > 0 && <BookVideo key={isbn} videos={videos} playing={vidPlaying} setPlaying={setVidPlaying} />}
+          </div>
 
           <div className="pd__two">
             <section className="pd__intro">
