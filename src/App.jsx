@@ -3384,8 +3384,20 @@ function sendVote(isbn13, vote, source = 'taste') {
   }
 }
 
+// 시드로 섞는 난수 (같은 시드 = 같은 순서라 새로고침해도 이어서 고를 수 있다)
+function seededRand(seed) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 // 표지 후보: 지금 순위권 어른 책을 분야별로 돌아가며 섞는다 (한 분야만 연달아 나오지 않게)
-function tastePool(feed) {
+// '처음부터 다시'를 누르면 시드가 바뀌어 다른 순서로 나오고, 지난번에 본 책은 맨 뒤로 간다 (같은 책이 돌고 돌던 문제, 2026-11-24)
+function tastePool(feed, seed = 1, prev = []) {
   const seen = new Set()
   const all = [...(feed.popular || []), ...(feed.composite || []), ...(feed.rising || [])].filter((b) => {
     const k = shortTitle(b.title)
@@ -3393,9 +3405,26 @@ function tastePool(feed) {
     seen.add(k)
     return true
   })
+  const rnd = seededRand(seed)
+  const shuffle = (arr) => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1))
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    return arr
+  }
+  const before = new Set(prev)
   const groups = {}
   for (const b of all) (groups[b.categoryLabel || '기타'] ||= []).push(b)
-  const keys = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length)
+  // 분야 안에서는 순위 위쪽 절반 안에서 섞고, 지난번에 본 책은 뒤로
+  for (const k of Object.keys(groups)) {
+    const g = groups[k]
+    const fresh = g.filter((b) => !before.has(b.isbn13))
+    const old = g.filter((b) => before.has(b.isbn13))
+    const half = Math.ceil(fresh.length / 2)
+    groups[k] = [...shuffle(fresh.slice(0, half)), ...shuffle(fresh.slice(half)), ...shuffle(old)]
+  }
+  const keys = shuffle(Object.keys(groups))
   const out = []
   for (let i = 0; out.length < all.length; i++) {
     for (const k of keys) if (groups[k][i]) out.push(groups[k][i])
@@ -3406,7 +3435,9 @@ function tastePool(feed) {
 
 function TastePage({ feed, loading }) {
   const [votes, setVotes] = useStored(TASTE_KEY, {})
-  const pool = useMemo(() => tastePool(feed), [feed])
+  const [seed, setSeed] = useStored('chaekkok.taste.seed', Date.now() % 1e9)
+  const [prevSeen, setPrevSeen] = useStored('chaekkok.taste.prev', [])
+  const pool = useMemo(() => tastePool(feed, seed, prevSeen), [feed, seed, prevSeen])
   const queue = pool.filter((b) => !(b.isbn13 in votes))
   const cur = queue[0]
   const likes = Object.entries(votes).filter(([, v]) => v.v === 1)
@@ -3450,6 +3481,8 @@ function TastePage({ feed, loading }) {
     }
   }, [show, likeKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const reset = () => {
+    setPrevSeen(Object.keys(votes).slice(-200))
+    setSeed(Date.now() % 1e9)
     setVotes({})
     setRecs(null)
   }
@@ -3457,27 +3490,30 @@ function TastePage({ feed, loading }) {
   const uniq = (recs || []).filter((r) => !seenT.has(shortTitle(r.title)) && seenT.add(shortTitle(r.title)))
   // 지금 뜨는 = 포착·떠오름·확산 (스테디는 꾸준한 인기라 아래 추천으로)
   const isUp = (r) => ['포착', '떠오름', '확산'].includes(r.stage)
-  const rising = uniq.filter(isUp).slice(0, 8)
+  const rising = uniq.filter(isUp).slice(0, 6)
   const more = uniq.filter((r) => !isUp(r)).slice(0, 12)
   const viaTitle = (isbn) => votes[isbn]?.t
 
 
-  const RecRow = ({ r }) => (
-    <a className="taste__rec" href={`/book/${encodeURIComponent(r.isbn13)}`}>
-      <Cover src={r.cover_url} alt="" className="taste__reccover" title={r.title} />
-      <span className="taste__recinfo">
-        <b>{shortTitle(r.title)}</b>
-        <small>{cleanAuthor(r.author)}</small>
-        {r.via && viaTitle(r.via) && <span className="taste__via">좋아한 「{viaTitle(r.via)}」{gwa(viaTitle(r.via))} 함께 읽힌 책</span>}
-        {r.stage && (
+  // 추천 카드: 큰 표지 + 제목·저자 + 한 줄(뜨는 책은 단계·순위, 나머지는 어떤 책 덕분인지)
+  const RecRow = ({ r }) => {
+    const via = r.via && viaTitle(r.via)
+    return (
+      <a className="taste__rec" href={`/book/${encodeURIComponent(r.isbn13)}`} title={via ? `좋아한 「${via}」${gwa(via)} 함께 읽힌 책` : undefined}>
+        <Cover src={r.cover_url} alt="" className="taste__reccover" title={r.title} />
+        <b className="taste__rectitle">{shortTitle(r.title)}</b>
+        <small className="taste__recby">{cleanAuthor(r.author)}</small>
+        {isUp(r) ? (
           <span className="taste__stage">
             <StageBadge stage={r.stage} />
-            {r.rank_now ? <span className="sub">분야 {r.rank_now}위</span> : null}
+            {r.rank_now ? <span>분야 {r.rank_now}위</span> : null}
           </span>
-        )}
-      </span>
-    </a>
-  )
+        ) : via ? (
+          <span className="taste__via">‘{via}’ 좋아하셨다면</span>
+        ) : null}
+      </a>
+    )
+  }
 
   return (
     <div className="taste">
@@ -3548,7 +3584,7 @@ function TastePage({ feed, loading }) {
       {show && (
         <section className="card taste__result" ref={resRef}>
           <h2 className="h2 display">내 취향 중 지금 뜨는 책</h2>
-          <p className="sub">좋아한 책을 빌린 사람들이 함께 빌린 책 · 마니아와 다독자가 고른 책 가운데, 책콕이 지금 뜨고 있다고 본 책이에요. 위에서 더 고를수록 결과가 바로 바뀌어요.</p>
+          <p className="sub">좋아한 책과 함께 읽힌 책 가운데 지금 뜨고 있는 책이에요. 더 고를수록 바로 바뀌어요.</p>
           {recs === null && <Loading />}
           {recs && rising.length === 0 && <p className="state">지금 뜨는 책 중에는 아직 맞는 책이 없어요. 아래 추천을 먼저 보세요.</p>}
           <div className="taste__recs">
@@ -3559,7 +3595,7 @@ function TastePage({ feed, loading }) {
           {more.length > 0 && (
             <>
               <h3 className="h3 taste__h3">내 취향 추천</h3>
-              <p className="sub">흔한 베스트셀러는 뒤로 미뤄서, 놓치기 쉬운 책이 먼저 나와요.</p>
+              <p className="sub">흔한 베스트셀러는 뒤로, 놓치기 쉬운 책이 먼저 나와요.</p>
               <div className="taste__recs">
                 {more.map((r) => (
                   <RecRow key={r.isbn13} r={r} />
