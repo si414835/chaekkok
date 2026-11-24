@@ -36,11 +36,11 @@ const CATEGORIES = ['전체', '어린이', '총류', '철학', '사회과학', '
 const CATEGORY_MERGE = { 언어: '문학', 종교: '철학' }
 
 const TABS = [
-  { id: 'composite', label: '종합', desc: '여러 신호를 합친 종합 점수순이에요' },
-  { id: 'popular', label: '꾸준한 인기', desc: '최근 30일 대출이 많은 순이에요' },
-  { id: 'rising', label: '급상승', desc: '최근 2주 사이 대출순위가 많이 오른 책을 모두 모았어요' },
-  { id: 'comeback', label: '역주행', desc: '나온 지 2년이 넘었는데 요즘 다시 순위가 오르는 책이에요' },
-  { id: 'recommended', label: '사서 추천', desc: '국립중앙도서관 사서가 최근 6개월 동안 추천한 책이에요' },
+  { id: 'composite', label: '종합', desc: '종합 점수순' },
+  { id: 'popular', label: '꾸준한 인기', desc: '최근 30일 대출순' },
+  { id: 'rising', label: '급상승', desc: '2주 사이 순위가 크게 오른 책' },
+  { id: 'comeback', label: '역주행', desc: '2년 넘은 책 중 다시 오르는 책' },
+  { id: 'recommended', label: '사서 추천', desc: '국립중앙도서관 사서 추천 (최근 6개월)' },
 ]
 
 const LIST_SIZE = 30
@@ -1776,7 +1776,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
     if (tab === 'comeback') return [b.pubYear ? `${b.pubYear}년 출간` : '다시 오르는 중']
     return [b.snapshotDate ? `${Number(b.snapshotDate.slice(5, 7))}월 추천` : '사서 추천', 'accent']
   }
-  const desc = demoActive ? `${demoLabel(prefs)}이 최근 30일 많이 빌린 순이에요` : TABS.find((t) => t.id === tab).desc
+  const desc = demoActive ? `${demoLabel(prefs)} 최근 30일 대출순` : TABS.find((t) => t.id === tab).desc
   const waiting = loading || (demoActive && demo.loading)
 
   if (wide) {
@@ -1786,7 +1786,7 @@ function Trend({ tab, feed, loading, error, prefs, interests, setInterests, onOp
         <i className="gal__line" aria-hidden="true" />
         <div className="gal__bar">
           <div>
-            <h1 className="gal__title">요즘 뜨는 책</h1>
+            <h1 className="gal__title">뜨는 책</h1>
             <p className="sub gal__desc">
               {DATE_LABEL} · {desc}
             </p>
@@ -3282,9 +3282,12 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
                   ))}
                 </p>
               )}
+              {oneLiner && <p className="pd__oneline">{oneLiner}</p>}
             </div>
             {videos.length > 0 && <BookVideo key={isbn} videos={videos} playing={vidPlaying} setPlaying={setVidPlaying} />}
           </div>
+          {/* 폰에서 영상 칸이 제목 옆에 있으면 요약 상자는 그 아래 가로로 꽉 차게 */}
+          {oneLiner && videos.length > 0 && <p className="pd__oneline pd__oneline--m">{oneLiner}</p>}
 
           <div className="pd__two">
             <section className="pd__intro">
@@ -3299,7 +3302,6 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               {book.external && <p className="pd__fine">아직 책콕 순위 기록이 없는 책이에요. 기본 정보와 표지는 도서관 정보나루 도서 정보예요.</p>}
             </section>
             <section className="pd__facts">
-              {oneLiner && <p className="pd__oneline">{oneLiner}</p>}
               <dl>
                 {facts.map(([k, v]) => (
                   <div key={k}>
