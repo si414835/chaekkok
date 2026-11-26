@@ -45,13 +45,19 @@ AGE_GROUPS = [("all", None, None), ("10", 10, 19), ("20", 20, 29), ("30", 30, 39
 GENDERS = ["all", "0", "1"]
 DEMO_PAGE_SIZE = 50
 USAGE_LIMIT = 160          # 하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수 (11-23: 170→160, 7일 인기대출 7회에 양보)
-USAGE_REFRESH_DAYS = 14    # 이 기간 안에 받은 책은 건너뜀 (월별 데이터라 2주면 충분)
+USAGE_REFRESH_DAYS = 30    # 이 기간 안에 받은 책은 건너뜀 (월별 데이터. 11-26: 14→30일, 다시 받기에 쓰던 호출을 아직 없는 책에 돌림)
 COLOAN_LIMIT = 30          # 같이 빌린 책 중 책콕에 없는 책을 하루에 몇 권 정식으로 등록할지
 DETAIL_LIMIT = 50          # 도서 상세로 분류·책 소개를 하루에 몇 권 채울지 (화면에 보이는 책부터)
 # 정보나루 호출 예산: 이 스크립트가 하루에 쓰는 최대 호출 수.
 # 하루 합계는 api_budget.py가 DB에서 같이 센다 (IP 미등록 키는 하루 500건 넘으면 막힘, 2026-11-03 실제 확인).
 CALL_BUDGET = int(os.environ.get("CALL_BUDGET", "280"))
 _calls = 0
+_slow = 0          # 시간 초과·연결 실패가 연달아 난 수 (11-26: 정보나루가 느린 날 82권을 시간 초과로 날림)
+SLOW_STOP = 3      # 연달아 이만큼 나면 서버가 느린 날로 보고 이번 실행은 정보나루를 그만 부른다 (남은 몫은 오후 보충 수집이 씀)
+
+
+class ServerSlow(BudgetExceeded):
+    pass
 
 
 def now_kst():
@@ -69,6 +75,9 @@ def call(api, params, retries=(5, 15, 30)):
     global _calls
     p = {"authKey": KEY, "format": "json", **params}
     last = None
+    global _slow
+    if _slow >= SLOW_STOP:
+        raise ServerSlow(f"정보나루 응답이 느려 이번 실행은 멈춤(시간 초과 {_slow}번 연속) - 오후 보충 수집에서 이어 받음")
     for attempt, wait in enumerate((0,) + tuple(retries)):
         if _calls >= CALL_BUDGET:  # 재시도도 한 번의 호출로 센다
             raise BudgetExceeded(f"이 스크립트 예산 {CALL_BUDGET}회를 다 씀")
@@ -77,7 +86,13 @@ def call(api, params, retries=(5, 15, 30)):
         if wait:
             time.sleep(wait)
         try:
-            res = requests.get(BASE + api, params=p, timeout=60)
+            try:
+                res = requests.get(BASE + api, params=p, timeout=30)
+            except (requests.Timeout, requests.ConnectionError) as e:
+                # 시간 초과는 다시 불러도 대개 또 초과라 재시도하지 않는다 (호출 수만 버림)
+                _slow += 1
+                raise RuntimeError(f"시간 초과/연결 실패({_slow}번 연속): {safe_err(e)}")
+            _slow = 0
             res.raise_for_status()
             data = res.json()
             err = (data.get("response") or {}).get("error")
@@ -90,7 +105,9 @@ def call(api, params, retries=(5, 15, 30)):
             return fix_isbns(data)  # 'ISBN1 ISBN2' → 13자리 하나
         except (BudgetExceeded, NoData):
             raise
-        except Exception as e:  # 연결 끊김, JSON 아님, API 오류 모두 재시도
+        except Exception as e:  # JSON 아님, API 오류는 재시도 (시간 초과는 위에서 바로 실패)
+            if "시간 초과/연결 실패" in str(e):
+                raise
             last = e
             print(f"  [재시도 {attempt + 1}] {api}: {safe_err(e)}")
     raise RuntimeError(safe_err(last))
@@ -590,7 +607,14 @@ def pick_usage_targets():
             fresh |= {r["isbn13"] for r in rows}
         except Exception as e:
             print(f"  [자료 없음 목록 조회 실패] {safe_err(e)}")
-    return [t for t in targets if t not in fresh][:USAGE_LIMIT]
+    # 아직 이용분석이 한 번도 없는 책(함께 빌린 책·소개가 비어 보이는 책)을 다시 받을 책보다 먼저
+    have = set()
+    for i in range(0, len(targets), 200):
+        have |= {r["isbn13"] for r in supabase.table("book_usage").select("isbn13")
+                 .in_("isbn13", targets[i:i + 200]).execute().data or []}
+    todo = [t for t in targets if t not in fresh]
+    todo = [t for t in todo if t not in have] + [t for t in todo if t in have]
+    return todo[:USAGE_LIMIT]
 
 
 def parse_usage(data):
