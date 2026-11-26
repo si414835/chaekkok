@@ -43,15 +43,20 @@ AGE_GROUPS = [("all", None, None), ("10", 10, 19), ("20", 20, 29), ("30", 30, 39
               ("40", 40, 49), ("50", 50, 59), ("60", 60, 99)]
 # 성별: 정보나루 gender 코드 그대로 저장 ('all'은 전체). 화면에서 남/여로 바꿔 보여준다.
 GENDERS = ["all", "0", "1"]
-DEMO_PAGE_SIZE = 50
-USAGE_LIMIT = 800 if api_budget.proxy_on() else 160  # (11-26: 중계 서버면 800)  하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수 (11-23: 170→160, 7일 인기대출 7회에 양보)
-USAGE_REFRESH_DAYS = 30    # 이 기간 안에 받은 책은 건너뜀 (월별 데이터. 11-26: 14→30일, 다시 받기에 쓰던 호출을 아직 없는 책에 돌림)
-COLOAN_LIMIT = 30          # 같이 빌린 책 중 책콕에 없는 책을 하루에 몇 권 정식으로 등록할지
-DETAIL_LIMIT = 400 if api_budget.proxy_on() else 50  # (11-26: 중계 서버면 400)  도서 상세로 분류·책 소개를 하루에 몇 권 채울지 (화면에 보이는 책부터)
+DEMO_PAGE_SIZE = 100 if api_budget.proxy_on() else 50  # 연령·성별 순위 깊이 (11-26: 중계 서버면 100위까지, 호출 수는 같음)
+_P = api_budget.proxy_on()
+# 아래 수는 워크플로가 환경변수로 바꿀 수 있다 (새벽 수집은 블로그 초안이 늦지 않게 적당히, 오후·저녁 보충 수집은 넉넉히)
+USAGE_LIMIT = int(os.environ.get("USAGE_LIMIT", "500" if _P else "160"))  # (11-26: 중계 서버면 800)  하루에 이용분석(키워드·같이 빌린 책·월별 대출)을 새로 받을 책 수 (11-23: 170→160, 7일 인기대출 7회에 양보)
+USAGE_REFRESH_DAYS = 30    # 일반 책
+USAGE_REFRESH_HOT_DAYS = 7 if _P else 30  # 단계가 붙은 책·7일 인기 책은 1주마다 새로 (월별 대출·함께 빌린 책이 빨리 바뀜, 11-26)
+# 이 기간 안에 받은 책은 건너뜀 (월별 데이터. 11-26: 14→30일, 다시 받기에 쓰던 호출을 아직 없는 책에 돌림)
+COLOAN_LIMIT = int(os.environ.get("COLOAN_LIMIT", "200" if _P else "30"))  # (11-26: 중계 서버면 200) 같이 빌린 책 중 책콕에 없는 책을 하루에 몇 권 정식으로 등록할지
+DETAIL_LIMIT = int(os.environ.get("DETAIL_LIMIT", "300" if _P else "50"))  # (11-26: 중계 서버면 400)  도서 상세로 분류·책 소개를 하루에 몇 권 채울지 (화면에 보이는 책부터)
 # 정보나루 호출 예산: 이 스크립트가 하루에 쓰는 최대 호출 수.
 # 하루 합계는 api_budget.py가 DB에서 같이 센다 (IP 미등록 키는 하루 500건 넘으면 막힘, 2026-11-03 실제 확인).
-CALL_BUDGET = int(os.environ.get("CALL_BUDGET", "2500" if api_budget.proxy_on() else "280"))  # 중계 서버(등록 IP)면 넉넉히
+CALL_BUDGET = int(os.environ.get("CALL_BUDGET", "6000" if _P else "280"))  # 중계 서버(등록 IP)면 넉넉히
 _calls = 0
+PAUSE = 0.2 if _P else 0.5  # 호출 사이 쉬는 시간(초)
 _slow = 0          # 시간 초과·연결 실패가 연달아 난 수 (11-26: 정보나루가 느린 날 82권을 시간 초과로 날림)
 SLOW_STOP = 3      # 연달아 이만큼 나면 서버가 느린 날로 보고 이번 실행은 정보나루를 그만 부른다 (남은 몫은 오후 보충 수집이 씀)
 
@@ -430,7 +435,7 @@ def collect_upcoming():
                            "pub_year": date[:4], "class_no": (str(d.get("KDC")).strip() or None) if d.get("KDC") else None,
                            "cover_url": d.get("TITLE_URL") or None,
                            "addition_symbol": str(d.get("EA_ADD_CODE") or "").strip() or None}
-        time.sleep(0.5)
+        time.sleep(PAUSE)
     if found:
         # 이미 도서관 대출 순위에 오른 책은 실제로 나온 책이므로 '출간예정'에서 뺀다
         keys = list(found)
@@ -508,7 +513,7 @@ def fill_upcoming_covers():
             supabase.table("books").update({"cover_url": url}).eq("isbn13", r["isbn13"]).is_("cover_url", "null").execute()
             got += 1
             print(f"  [표지] {r['title'][:20]} ← {src}")
-        time.sleep(0.5)
+        time.sleep(PAUSE)
     print(f"[출간예정 표지] 없던 {len(rows)}권 중 {got}권 찾음")
 
 
@@ -565,55 +570,70 @@ def collect_libraries():
 # ---------- 4. 도서별 이용분석 ----------
 
 def pick_usage_targets():
-    """상세 데이터를 받을 책: ① 오늘 단계가 붙은 책(모멘텀 순) ② 종합 상위 ③ 급상승 ④ 분야별 인기 상위.
-    최근 USAGE_REFRESH_DAYS 안에 받은 책은 건너뛴다."""
-    targets = []
-    # ⓪ 최근 7일 순위에 처음 보이는 새 책 (아직 이용분석이 없는 책): 30일 순위에 들기 전에 미리 자료를 받아 둔다
+    """상세 데이터(이용분석)를 받을 책.
+    ⓪ 최근 7일 순위의 새 책 ① 오늘 단계가 붙은 책(모멘텀 순) ② 종합 상위 ③ 급상승 ④ 분야별 인기.
+    순서: 아직 한 번도 없는 책 → 다시 받을 책. 다시 받기는 ⓪①(뜨거운 책)은 USAGE_REFRESH_HOT_DAYS, 나머지는 USAGE_REFRESH_DAYS.
+    (11-26 중계 서버로 하루 몫이 늘어 ⓪은 300권, ④는 화면에 보이는 인기 책 전부까지 넓힘)"""
+    targets, hot = [], set()
+    # ⓪ 최근 7일 순위의 책: 30일 순위에 들기 전에 미리 자료를 받아 둔다
     try:
         wk = supabase.table("loan_week").select("snapshot_date").order("snapshot_date", desc=True).limit(1).execute().data
         if wk:
             rows = (supabase.table("loan_week").select("isbn13").eq("snapshot_date", wk[0]["snapshot_date"])
-                    .order("rank").limit(300).execute().data or [])
+                    .order("rank").limit(2000 if _P else 300).execute().data or [])
             ids = list(dict.fromkeys(r["isbn13"] for r in rows))
-            known = set()
-            for i in range(0, len(ids), 200):
-                known |= {r["isbn13"] for r in supabase.table("book_usage").select("isbn13").in_("isbn13", ids[i:i + 200]).execute().data or []}
-            targets += [i for i in ids if i not in known][:40]
+            if not _P:  # 예전 몫(500건)일 때는 아직 이용분석 없는 책만 40권
+                known = set()
+                for i in range(0, len(ids), 200):
+                    known |= {r["isbn13"] for r in supabase.table("book_usage").select("isbn13").in_("isbn13", ids[i:i + 200]).execute().data or []}
+                ids = [i for i in ids if i not in known][:40]
+            targets += ids
+            hot |= set(ids)
     except Exception as e:
         print(f"  [7일 순위 새 책 조회 실패] {safe_err(e)}")
     latest = supabase.table("book_state").select("snapshot_date").order("snapshot_date", desc=True).limit(1).execute().data
     if latest:
         d = latest[0]["snapshot_date"]
         staged = (supabase.table("book_state").select("isbn13").eq("snapshot_date", d).not_.is_("stage", "null")
-                  .order("momentum", desc=True).limit(600).execute().data or [])
+                  .order("momentum", desc=True).limit(1000 if _P else 600).execute().data or [])
         targets += [r["isbn13"] for r in staged]
-    for ttype, order, limit, desc in [("composite", "score", 150, True), ("rising", "rank_diff", 60, True), ("popular", "rank", 400, False)]:
-        res = (supabase.table("v_feed_live").select("isbn13").eq("trend_type", ttype)
-               .order(order, desc=desc).limit(limit).execute())
-        targets += [r["isbn13"] for r in (res.data or [])]
+        hot |= {r["isbn13"] for r in staged}
+    feed_limits = [("composite", "score", 1000, True), ("rising", "rank_diff", 200, True), ("popular", "rank", 3000, False)] if _P \
+        else [("composite", "score", 150, True), ("rising", "rank_diff", 60, True), ("popular", "rank", 400, False)]
+    for ttype, order, limit, desc in feed_limits:
+        got = 0
+        while got < limit:  # 한 번에 1000행까지만 와서 나눠 읽는다
+            part = (supabase.table("v_feed_live").select("isbn13").eq("trend_type", ttype)
+                    .order(order, desc=desc).range(got, min(got + 1000, limit) - 1).execute().data or [])
+            targets += [r["isbn13"] for r in part]
+            got += len(part)
+            if len(part) < 1000:
+                break
     targets = list(dict.fromkeys(t for t in targets if t))
-    since = (datetime.now(timezone.utc) - timedelta(days=USAGE_REFRESH_DAYS)).isoformat()
-    fresh = set()
+    now = datetime.now(timezone.utc)
+    since_hot = (now - timedelta(days=USAGE_REFRESH_HOT_DAYS)).isoformat()
+    since_all = (now - timedelta(days=USAGE_REFRESH_DAYS)).isoformat()
+    fresh, have = set(), set()
     for i in range(0, len(targets), 200):
+        chunk = targets[i:i + 200]
         # 마니아·다독자 목록(2026-11-20 추가)이 아직 없는 책은 새로 받는다
-        rows = (supabase.table("book_usage").select("isbn13").gte("updated_at", since)
-                .not_.is_("mania_rec", "null")
-                .in_("isbn13", targets[i:i + 200]).execute().data or [])
-        fresh |= {r["isbn13"] for r in rows}
+        rows = (supabase.table("book_usage").select("isbn13,updated_at,mania_rec").in_("isbn13", chunk).execute().data or [])
+        for r in rows:
+            have.add(r["isbn13"])
+            limit = since_hot if r["isbn13"] in hot else since_all
+            if r.get("mania_rec") is not None and (r.get("updated_at") or "") >= limit:
+                fresh.add(r["isbn13"])
         # 최근에 '자료 없음'이었던 책도 건너뜀 (매일 같은 책을 다시 부르던 문제)
         try:
-            rows = (supabase.table("usage_nodata").select("isbn13").gte("checked_at", since)
-                    .in_("isbn13", targets[i:i + 200]).execute().data or [])
+            rows = (supabase.table("usage_nodata").select("isbn13").gte("checked_at", since_all)
+                    .in_("isbn13", chunk).execute().data or [])
             fresh |= {r["isbn13"] for r in rows}
         except Exception as e:
             print(f"  [자료 없음 목록 조회 실패] {safe_err(e)}")
     # 아직 이용분석이 한 번도 없는 책(함께 빌린 책·소개가 비어 보이는 책)을 다시 받을 책보다 먼저
-    have = set()
-    for i in range(0, len(targets), 200):
-        have |= {r["isbn13"] for r in supabase.table("book_usage").select("isbn13")
-                 .in_("isbn13", targets[i:i + 200]).execute().data or []}
     todo = [t for t in targets if t not in fresh]
     todo = [t for t in todo if t not in have] + [t for t in todo if t in have]
+    print(f"  [이용분석 대상] 후보 {len(targets)}권 중 새로 {len([t for t in todo if t not in have])}권·다시 {len([t for t in todo if t in have])}권 → 오늘 {min(len(todo), USAGE_LIMIT)}권")
     return todo[:USAGE_LIMIT]
 
 
@@ -673,7 +693,7 @@ def collect_usage():
             nodata.append(isbn)  # 실패가 아님: 정보나루에 이 책 이용 자료가 아직 없음
         except Exception as e:
             print(f"  [이용분석 실패] {isbn}: {safe_err(e)}")
-        time.sleep(0.5)
+        time.sleep(PAUSE)
     if nodata:
         try:
             now = datetime.now(timezone.utc).isoformat()
@@ -699,7 +719,13 @@ def collect_usage():
 def collect_coloan():
     """같이 빌린 책 중 책콕에 아직 없는 책을 정식으로 등록한다 (도서 상세 srchDtlList).
     등록되면 그 책도 표지·분야가 생기고, 다음 날부터 이용분석 대상이 될 수 있다."""
-    rows = supabase.table("book_usage").select("co_loan").execute().data or []
+    rows, start = [], 0
+    while True:  # 한 번에 1000행까지만 와서 나눠 읽는다
+        part = supabase.table("book_usage").select("co_loan").order("updated_at", desc=True).range(start, start + 999).execute().data or []
+        rows += part
+        if len(part) < 1000:
+            break
+        start += 1000
     want = list(dict.fromkeys(b.get("isbn13") for r in rows for b in (r.get("co_loan") or []) if b.get("isbn13")))
     have = set()
     for i in range(0, len(want), 200):
@@ -716,13 +742,16 @@ def collect_coloan():
             d["isbn13"] = isbn
             row = doc_to_book(d)
             row["cover_url"] = https(row.get("cover_url")) if row.get("cover_url") else None
+            # 같은 응답에 책 소개가 있으니 함께 저장 (나중에 상세를 다시 부르지 않게)
+            row["description"] = clean_desc(d.get("description"))
+            row["desc_checked_at"] = datetime.now(timezone.utc).isoformat()
             added.append(row)
         except BudgetExceeded as e:
             print(f"  [같이 빌린 책] {e}")
             break
         except Exception as e:
             print(f"  [같이 빌린 책 {isbn}] {safe_err(e)}")
-        time.sleep(0.5)
+        time.sleep(PAUSE)
     if added:
         supabase.table("books").upsert(added, on_conflict="isbn13", ignore_duplicates=True).execute()
     log_run("coloan", "ok", len(added))
@@ -785,7 +814,7 @@ def collect_details():
                 supabase.table("books").update(upd).eq("isbn13", isbn).execute()
             except Exception as e:
                 print(f"  [상세 저장 {isbn}] {safe_err(e)}")
-        time.sleep(0.5)
+        time.sleep(PAUSE)
     if nodata:
         try:
             now = datetime.now(timezone.utc).isoformat()

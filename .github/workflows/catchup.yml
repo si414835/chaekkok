@@ -1,8 +1,9 @@
-name: 오후 보충 수집 (이용분석·책 소개)
+name: 보충 수집 (이용분석·책 소개·함께 빌린 책 등록)
 
 # 새벽 수집이 정보나루가 느리거나 끊겨 다 못 받은 날, 그날 남은 정보나루 몫(수집분 400회 중 남은 것)으로
 # 이용분석(함께 빌린 책·월별 대출·책 소개)과 책 소개·분류를 이어 받는다. (2026-11-26)
-# 시작은 Supabase pg_cron 'kick-catchup'(13:02 KST)이 GitHub API로 한다. GitHub 예약은 늦거나 빠져서 쓰지 않음.
+# 2026-11-26 정보나루 IP 등록 후: 하루 몫(30,000건)이 넉넉해져 새벽에 다 못 받은 책을 여기서 크게 받는다.
+# 시작은 Supabase pg_cron 'kick-catchup'(13:02 KST)·'kick-catchup-eve'(20:02 KST)이 GitHub API로 한다. GitHub 예약은 늦거나 빠져서 쓰지 않음.
 # 남은 몫이 없으면 곧바로 끝난다.
 on:
   workflow_dispatch:
@@ -14,18 +15,21 @@ concurrency:
 jobs:
   catchup:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - run: pip install requests supabase
-      - name: 이용분석·책 소개 이어 받기
+      - name: 이용분석·책 소개·함께 빌린 책 이어 받기
         env:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
           D4L_PROXY: ${{ secrets.D4L_PROXY }}
           NL_API_KEY: ${{ secrets.NL_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: python extra_collect.py usage details
+          USAGE_LIMIT: '1500'
+          DETAIL_LIMIT: '1500'
+          COLOAN_LIMIT: '500'
+        run: python extra_collect.py usage coloan details

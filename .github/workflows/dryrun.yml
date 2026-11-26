@@ -1,0 +1,29 @@
+name: 수집 대상 미리 보기 (수동)
+
+# 정보나루는 부르지 않고, 오늘 이용분석·상세·함께 빌린 책 대상이 몇 권인지만 본다.
+on:
+  workflow_dispatch:
+
+jobs:
+  peek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -q requests supabase
+      - env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python - <<'PY'
+          import extra_collect as e, api_budget
+          print("중계 서버:", api_budget.proxy_on(), "| 이용분석", e.USAGE_LIMIT, "상세", e.DETAIL_LIMIT, "함께빌린책", e.COLOAN_LIMIT, "예산", e.CALL_BUDGET)
+          t = e.pick_usage_targets()
+          print("이용분석 오늘 대상:", len(t))
+          d = e.supabase.rpc("detail_targets", {"n": 1500}).execute().data or []
+          print("상세 대상:", len(d), "(소개 필요", sum(1 for r in d if r["need_desc"]), ")")
+          PY

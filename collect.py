@@ -304,6 +304,9 @@ def backfill_shallow_days(max_days=2):
 # 최근 7일 순위를 주요 분야만 따로 받아 새 책을 1~3주 빨리 책콕에 들인다 (loan_week 테이블, trend_scores와 섞지 않음).
 # 호출 수: 문학 2쪽 + 사회과학·철학·총류·역사·기술과학 1쪽 = 하루 7회
 WEEK_PARTS = [(8, 2), (3, 1), (1, 1), (0, 1), (9, 1), (5, 1)]
+# 중계 서버(등록 IP, 하루 30,000건)를 쓰면 10개 분야 모두 200위까지 (하루 20회, 2026-11-26)
+if api_budget.proxy_on():
+    WEEK_PARTS = [(k, 2) for k in (8, 3, 1, 0, 9, 5, 4, 6, 7, 2)]
 
 
 def collect_loan_week(snapshot_date=None):
