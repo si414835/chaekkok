@@ -28,6 +28,44 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
   return v;
 }
 
+// 고정 IP 중계 서버 (2026-11-26): 정보나루에 서버 IP(오라클 168.107.1.200)를 등록해 하루 30,000건까지 쓴다.
+// 등록 안 한 IP(이 함수가 도는 Supabase 서버)는 하루 합계가 500건을 넘으면 막혀서, 함수도 중계 서버를 거쳐 부른다.
+// 비밀값 D4L_PROXY = http://chaekkok:<비번>@168.107.1.200:8888. 없거나 중계 서버가 안 되면 바로 부른다.
+const PROXY = Deno.env.get("D4L_PROXY") ?? "";
+let proxyClient: Deno.HttpClient | null = null;
+let proxyDownUntil = 0;
+function proxyClientOrNull(): Deno.HttpClient | null {
+  if (!PROXY || Date.now() < proxyDownUntil) return null;
+  if (!proxyClient) {
+    try {
+      const u = new URL(PROXY);
+      proxyClient = Deno.createHttpClient({
+        proxy: { url: `${u.protocol}//${u.host}`, basicAuth: { username: decodeURIComponent(u.username), password: decodeURIComponent(u.password) } },
+      });
+    } catch (_e) {
+      proxyDownUntil = Date.now() + 10 * 60 * 1000;
+      return null;
+    }
+  }
+  return proxyClient;
+}
+async function d4lFetch(url: string, ms = 12000): Promise<Response> {
+  const client = proxyClientOrNull();
+  if (client) {
+    try {
+      const r = await fetch(url, { client, signal: AbortSignal.timeout(ms) });
+      const server = (r.headers.get("server") ?? "").toLowerCase();
+      if (r.status === 407 || (r.status >= 400 && server.includes("tinyproxy"))) throw new Error(`proxy ${r.status}`);
+      return r;
+    } catch (_e) {
+      proxyDownUntil = Date.now() + 2 * 60 * 1000; // 2분 동안은 바로 부른다
+    }
+  }
+  return await fetch(url, { signal: AbortSignal.timeout(ms) });
+}
+// 중계 서버가 있으면 하루 몫을 넉넉히 (전체 29,000 / 화면 3,000), 없으면 예전대로 (495 / 90)
+const SPEND_BODY = PROXY ? JSON.stringify({ p_total_cap: 29000, p_edge_cap: 3000 }) : "{}";
+
 // 정보나루 하루 호출 수: 화면(Edge Function) 몫은 하루 90회, 전체는 495회까지 (supabase/sql/api_budget.sql)
 // 한도에 닿으면 정보나루를 부르지 않고 '모름'으로 돌려준다. 막힌 요청은 세지 않는다.
 async function spend(): Promise<boolean> {
@@ -39,7 +77,7 @@ async function spend(): Promise<boolean> {
         Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         "Content-Type": "application/json",
       },
-      body: "{}",
+      body: SPEND_BODY,
       signal: AbortSignal.timeout(4000),
     });
     return (await res.json()) !== false;
@@ -60,7 +98,7 @@ async function api(path: string, params: Record<string, string | number>): Promi
   for (let attempt = 0; attempt < 2; attempt++) {
     if (!(await spend())) { hitLimit = true; return null; } // 오늘 한도에 닿으면 '모름'으로
     try {
-      const res = await fetch(`${BASE}${path}?${q}`, { signal: AbortSignal.timeout(12000) });
+      const res = await d4lFetch(`${BASE}${path}?${q}`);
       const data = await res.json();
       if (data?.response?.error) return null;
       return data;

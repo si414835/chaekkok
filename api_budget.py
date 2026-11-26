@@ -11,6 +11,8 @@ import os
 
 BATCH_LIMIT = int(os.environ.get("API_DAILY_BATCH_LIMIT", "400"))
 TOTAL_LIMIT = 495
+PROXY_BATCH_LIMIT = int(os.environ.get("API_PROXY_BATCH_LIMIT", "20000"))
+PROXY_TOTAL_LIMIT = 29000
 
 
 class BudgetExceeded(Exception):
@@ -34,10 +36,12 @@ def spend():
     except Exception as e:  # 카운터 기록이 안 되면 안전하게 멈춘다
         raise BudgetExceeded(f"호출 수 기록 실패: {type(e).__name__}")
     batch, total = r.get("batch"), r.get("total")
-    if isinstance(batch, int) and batch > BATCH_LIMIT:
-        raise BudgetExceeded(f"오늘 정보나루 호출이 수집 한도 {BATCH_LIMIT}회에 닿음")
-    if isinstance(total, int) and total > TOTAL_LIMIT:
-        raise BudgetExceeded(f"오늘 정보나루 호출이 하루 전체 한도 {TOTAL_LIMIT}회에 닿음")
+    # 중계 서버(등록 IP)를 쓰는 동안은 하루 30,000건 안에서 넉넉히 쓴다 (2026-11-26 정보나루에 IP 등록)
+    b_lim, t_lim = (PROXY_BATCH_LIMIT, PROXY_TOTAL_LIMIT) if proxy_on() else (BATCH_LIMIT, TOTAL_LIMIT)
+    if isinstance(batch, int) and batch > b_lim:
+        raise BudgetExceeded(f"오늘 정보나루 호출이 수집 한도 {b_lim}회에 닿음")
+    if isinstance(total, int) and total > t_lim:
+        raise BudgetExceeded(f"오늘 정보나루 호출이 하루 전체 한도 {t_lim}회에 닿음")
 
 
 def is_limit_error(msg):

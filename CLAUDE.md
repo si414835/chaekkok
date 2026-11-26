@@ -16,7 +16,10 @@
 - 정보나루 고정 IP 중계 서버 (2026-11-26): 오라클 무료 VM(춘천, VM.Standard.E2.1.Micro, Ubuntu 22.04) 공인 IP **168.107.1.200**, tinyproxy :8888
   (BasicAuth 사용자 chaekkok, 필터로 data4library.kr만 통과). GitHub Secret `D4L_PROXY`=http://chaekkok:<비번>@168.107.1.200:8888.
   수집 스크립트는 `api_budget.d4l_get()`으로 부르며, 중계 서버가 안 되면 그 실행은 바로 부른다. 점검: Actions '중계 서버 점검 (수동)'(proxytest.yml, 정보나루 API 안 씀).
-  목적: 정보나루 마이페이지에 서버 IP 등록 → 하루 30,000건(공지 2023-11-10). 등록 전까지 한도는 그대로 500.
+  정보나루 마이페이지에 서버 IP 등록함(11-26). 확인 결과: 등록 IP로는 하루 500건을 넘어도 정상, 등록 안 한 IP는 하루 합계 500건이 넘으면 '1일 500건 이상 요청 시 IP 등록이 필요합니다'로 막힘.
+  그래서 Edge Function(book-exist·library-info)도 `Deno.createHttpClient({proxy})`로 중계 서버를 거친다(Supabase 함수 비밀값 `D4L_PROXY`, 없으면 바로 부름).
+  한도: 중계 서버를 쓰면 수집 20,000·전체 29,000·화면 3,000(spend_edge_call 인자), 안 쓰면 예전 400·495·90. extra_collect는 중계 서버면 이용분석 800권·상세 400권·스크립트 예산 2,500.
+  확인 워크플로: '정보나루 IP 등록 확인 (수동)'(d4ltest.yml, inputs.n = 등록 IP로 부를 횟수, libSrch 1건씩).
   서버 들어가기: 오라클 Cloud Shell에 키 올리고 `ssh -i ~/ssh-key-*.key ubuntu@168.107.1.200`. 붙여넣기 앞에 `^[[200~`가 붙으니 명령 앞뒤에 `true;`.
 - 수집: `.github/workflows/collect.yml` 매일 04:07 KST → `collect.py`, `extra_collect.py`, `nl_recommend_collect.py`, `blog_draft.py`
 - 워크플로 수동 실행은 GraphQL이 막혀 있어 REST로:
