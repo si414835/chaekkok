@@ -12,18 +12,23 @@ jobs:
         env:
           D4L_PROXY: ${{ secrets.D4L_PROXY }}
         run: |
+          pip install -q requests
           python3 - <<'PY'
-          import os, urllib.request
+          import os, requests
+          from urllib.parse import urlsplit
           p = os.environ.get("D4L_PROXY")
           if not p:
               print("D4L_PROXY 시크릿이 없음"); raise SystemExit(1)
-          op = urllib.request.build_opener(urllib.request.ProxyHandler({"http": p}))
-          def go(u):
+          u = urlsplit(p.strip())
+          # 비밀번호는 찍지 않고 모양만 본다
+          print("형식:", u.scheme, "| 사용자:", u.username, "| 비밀번호 길이:", len(u.password or ""),
+                "| 영어·숫자만:", (u.password or "").isalnum() and (u.password or "").isascii(),
+                "| 주소:", u.hostname, "| 포트:", u.port, "| 앞뒤 공백:", p != p.strip())
+          px = {"http": p.strip()}
+          def go(url):
               try:
-                  r = op.open(u, timeout=30)
-                  return r.status, r.headers.get("Server")
-              except urllib.error.HTTPError as e:
-                  return e.code, e.headers.get("Server")
+                  r = requests.get(url, proxies=px, timeout=30)
+                  return r.status_code, r.headers.get("Server")
               except Exception as e:
                   return type(e).__name__, str(e)[:120]
           print("정보나루 첫 화면(통과해야 함):", go("http://data4library.kr/"))
