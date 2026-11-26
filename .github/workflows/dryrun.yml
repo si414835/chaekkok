@@ -54,9 +54,10 @@ jobs:
           from datetime import date, timedelta
           px = {"http": os.environ["D4L_PROXY"]}; key = os.environ["DATA4LIBRARY_KEY"]
           e = date.today() - timedelta(days=1); s = e - timedelta(days=29)
-          for api, extra in [("loanItemSrchByLib", {"startDt": str(s), "endDt": str(e)}), ("libSrch", {})]:
-              for code in ["32", "35", "51", "52"]:
+          for api, extra in [("loanItemSrchByLib", {"startDt": str(s), "endDt": str(e)}), ("loanItemSrch", {"startDt": str(s), "endDt": str(e)})]:
+              for code in ["11", "21", "32", "35"]:
                   r = requests.get("http://data4library.kr/api/" + api, params={"authKey": key, "format": "json", "region": code, "pageSize": 3, **extra}, proxies=px, timeout=40).json()
                   resp = r.get("response", {})
-                  print(api, code, "numFound", resp.get("numFound"), "error", resp.get("error"))
+                  docs = resp.get("docs") or []
+                  print(api, code, "keys", list(resp.keys())[:8], "docs", len(docs), "first", (docs[0].get("doc", {}).get("bookname") if docs else None), "error", resp.get("error"))
           PY
