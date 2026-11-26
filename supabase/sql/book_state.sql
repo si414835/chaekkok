@@ -131,12 +131,12 @@ begin
   regions as (
     select isbn13, count(distinct region) as n from region_popular
     where snapshot_date = (select max(snapshot_date) from region_popular where snapshot_date between p_date - 2 and p_date)
-    group by isbn13
+    and rank <= 100 group by isbn13  -- 2026-11-26: 지역 순위를 200위까지 받아도 판정은 예전처럼 100위까지
   ),
   demo as (
     select isbn13, count(distinct (age_group, gender)) as n from demo_popular
     where snapshot_date = (select max(snapshot_date) from demo_popular where snapshot_date between p_date - 2 and p_date)
-    group by isbn13
+    and rank <= 50 group by isbn13  -- 2026-11-26: 연령·성별 순위를 100위까지 받아도 판정은 예전처럼 50위까지
   ),
   sig as (
     select isbn13, source,

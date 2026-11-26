@@ -14,7 +14,9 @@ import html
 import os
 import re
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -57,6 +59,32 @@ DETAIL_LIMIT = int(os.environ.get("DETAIL_LIMIT", "300" if _P else "50"))  # (11
 CALL_BUDGET = int(os.environ.get("CALL_BUDGET", "6000" if _P else "280"))  # 중계 서버(등록 IP)면 넉넉히
 _calls = 0
 PAUSE = 0.2 if _P else 0.5  # 호출 사이 쉬는 시간(초)
+# 이용분석·상세·함께 빌린 책은 정보나루를 여러 개 동시에 부른다 (중계 서버일 때만, 11-26).
+# 정보나루 응답이 1~6초라 한 줄로 부르면 하루 몇천 권을 다 못 받는다. 너무 많이 겹치면 서버에 무리라 3개로.
+WORKERS = int(os.environ.get("D4L_WORKERS", "3" if _P else "1"))
+_lock = threading.Lock()
+
+
+def run_parallel(items, fn):
+    """items를 WORKERS개씩 동시에 fn으로 처리. fn이 BudgetExceeded를 내면 남은 것은 건너뛴다.
+    돌려주는 값: (fn 결과 목록, 멈춘 이유 또는 None)"""
+    stop = {"why": None}
+
+    def wrap(it):
+        if stop["why"]:
+            return None
+        try:
+            return fn(it)
+        except BudgetExceeded as e:
+            stop["why"] = str(e)
+            return None
+        finally:
+            time.sleep(PAUSE)
+
+    if WORKERS <= 1:
+        return [wrap(it) for it in items], stop["why"]
+    with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        return list(ex.map(wrap, items)), stop["why"]
 _slow = 0          # 시간 초과·연결 실패가 연달아 난 수 (11-26: 정보나루가 느린 날 82권을 시간 초과로 날림)
 SLOW_STOP = 3      # 연달아 이만큼 나면 서버가 느린 날로 보고 이번 실행은 정보나루를 그만 부른다 (남은 몫은 오후 보충 수집이 씀)
 
@@ -81,13 +109,14 @@ def call(api, params, retries=(5, 15, 30)):
     p = {"authKey": KEY, "format": "json", **params}
     last = None
     global _slow
-    if _slow >= SLOW_STOP:
+    if _slow >= SLOW_STOP * WORKERS:  # 여러 개 동시에 부를 때는 그만큼 더 너그럽게
         raise ServerSlow(f"정보나루 응답이 느려 이번 실행은 멈춤(시간 초과 {_slow}번 연속) - 오후 보충 수집에서 이어 받음")
     for attempt, wait in enumerate((0,) + tuple(retries)):
-        if _calls >= CALL_BUDGET:  # 재시도도 한 번의 호출로 센다
-            raise BudgetExceeded(f"이 스크립트 예산 {CALL_BUDGET}회를 다 씀")
+        with _lock:
+            if _calls >= CALL_BUDGET:  # 재시도도 한 번의 호출로 센다
+                raise BudgetExceeded(f"이 스크립트 예산 {CALL_BUDGET}회를 다 씀")
+            _calls += 1
         api_budget.spend()
-        _calls += 1
         if wait:
             time.sleep(wait)
         try:
@@ -95,9 +124,11 @@ def call(api, params, retries=(5, 15, 30)):
                 res = api_budget.d4l_get(BASE + api, params=p, timeout=30)
             except (requests.Timeout, requests.ConnectionError) as e:
                 # 시간 초과는 다시 불러도 대개 또 초과라 재시도하지 않는다 (호출 수만 버림)
-                _slow += 1
+                with _lock:
+                    _slow += 1
                 raise RuntimeError(f"시간 초과/연결 실패({_slow}번 연속): {safe_err(e)}")
-            _slow = 0
+            with _lock:
+                _slow = 0
             res.raise_for_status()
             data = res.json()
             err = (data.get("response") or {}).get("error")
@@ -279,6 +310,7 @@ def collect_demographics():
 # ---------- 2-1. 지역별 인기대출 (확산 판단용) ----------
 
 # 정보나루 시·도 코드. 강원·전북은 특별자치도 전환 뒤 코드가 바뀌었을 수 있어 51·52도 함께 조회 (0건이면 저장 안 함)
+REGION_PAGES = 2 if _P else 1  # 지역별 인기대출 쪽 수 (100위씩)
 REGIONS = ["11", "21", "22", "23", "24", "25", "26", "29", "31", "32", "33", "34", "35", "36", "37", "38", "39", "51", "52"]
 
 
@@ -297,8 +329,13 @@ def collect_regions():
     ok_regions, total = 0, 0
     for code in REGIONS:
         try:
-            data = call("loanItemSrchByLib", {**period, "region": code})
-            docs = [d for d in find_dicts_with(data, "isbn13") if d.get("bookname") and d.get("isbn13")]
+            docs = []
+            for page in range(1, REGION_PAGES + 1):  # 중계 서버면 200위까지 (11-26)
+                data = call("loanItemSrchByLib", {**period, "region": code, "pageNo": page})
+                got = [d for d in find_dicts_with(data, "isbn13") if d.get("bookname") and d.get("isbn13")]
+                docs += got
+                if len(got) < 100:
+                    break
             if not docs:
                 continue
             books = {d["isbn13"]: doc_to_book(d) for d in docs}
@@ -609,6 +646,21 @@ def pick_usage_targets():
             got += len(part)
             if len(part) < 1000:
                 break
+    # ⑤ 지역별 인기 책 (중계 서버일 때만): 지역 화면에 나오는 책도 함께 빌린 책·해시태그가 채워지게
+    if _P:
+        try:
+            rd = supabase.table("region_popular").select("snapshot_date").order("snapshot_date", desc=True).limit(1).execute().data
+            if rd:
+                got = 0
+                while True:
+                    part = (supabase.table("region_popular").select("isbn13").eq("snapshot_date", rd[0]["snapshot_date"])
+                            .order("rank").range(got, got + 999).execute().data or [])
+                    targets += [r["isbn13"] for r in part]
+                    got += len(part)
+                    if len(part) < 1000:
+                        break
+        except Exception as e:
+            print(f"  [지역 책 조회 실패] {safe_err(e)}")
     targets = list(dict.fromkeys(t for t in targets if t))
     now = datetime.now(timezone.utc)
     since_hot = (now - timedelta(days=USAGE_REFRESH_HOT_DAYS)).isoformat()
@@ -669,8 +721,7 @@ def collect_usage():
         log_run("usage", "failed", 0, e)
         print(f"::warning::이용분석 대상 조회 실패: {safe_err(e)}")
         return 0
-    ok, nodata = 0, []
-    for isbn in targets:
+    def one(isbn):
         try:
             data = call("usageAnalysisList", {"isbn13": isbn}, retries=(5,))
             keywords, co_loan, history, groups, mania, reader = parse_usage(data)
@@ -685,15 +736,20 @@ def collect_usage():
             if desc:
                 supabase.table("books").update({"description": desc, "desc_checked_at": datetime.now(timezone.utc).isoformat()}) \
                     .eq("isbn13", isbn).is_("desc_checked_at", "null").execute()
-            ok += 1
-        except BudgetExceeded as e:
-            print(f"  [이용분석] {e} - 남은 {len(targets) - ok - len(nodata)}권은 내일 받음")
-            break
+            return "ok"
         except NoData:
-            nodata.append(isbn)  # 실패가 아님: 정보나루에 이 책 이용 자료가 아직 없음
+            return "nodata"  # 실패가 아님: 정보나루에 이 책 이용 자료가 아직 없음
+        except BudgetExceeded:
+            raise
         except Exception as e:
             print(f"  [이용분석 실패] {isbn}: {safe_err(e)}")
-        time.sleep(PAUSE)
+            return "fail"
+
+    res, why = run_parallel(targets, one)
+    if why:
+        print(f"  [이용분석] {why} - 남은 책은 다음 수집에서 받음")
+    ok = sum(1 for r in res if r == "ok")
+    nodata = [t for t, r in zip(targets, res) if r == "nodata"]
     if nodata:
         try:
             now = datetime.now(timezone.utc).isoformat()
@@ -731,13 +787,12 @@ def collect_coloan():
     for i in range(0, len(want), 200):
         have |= {r["isbn13"] for r in supabase.table("books").select("isbn13").in_("isbn13", want[i:i + 200]).execute().data or []}
     todo = [i for i in want if i not in have and len(i) == 13][:COLOAN_LIMIT]
-    added = []
-    for isbn in todo:
+    def one(isbn):
         try:
             data = call("srchDtlList", {"isbn13": isbn, "loaninfoYN": "N"}, retries=(5,))
             found = [d for d in find_dicts_with(data, "bookname") if d.get("isbn13") or d.get("bookname")]
             if not found:
-                continue
+                return None
             d = dict(found[0])
             d["isbn13"] = isbn
             row = doc_to_book(d)
@@ -745,13 +800,17 @@ def collect_coloan():
             # 같은 응답에 책 소개가 있으니 함께 저장 (나중에 상세를 다시 부르지 않게)
             row["description"] = clean_desc(d.get("description"))
             row["desc_checked_at"] = datetime.now(timezone.utc).isoformat()
-            added.append(row)
-        except BudgetExceeded as e:
-            print(f"  [같이 빌린 책] {e}")
-            break
+            return row
+        except BudgetExceeded:
+            raise
         except Exception as e:
             print(f"  [같이 빌린 책 {isbn}] {safe_err(e)}")
-        time.sleep(PAUSE)
+            return None
+
+    res, why = run_parallel(todo, one)
+    if why:
+        print(f"  [같이 빌린 책] {why}")
+    added = [r for r in res if r]
     if added:
         supabase.table("books").upsert(added, on_conflict="isbn13", ignore_duplicates=True).execute()
     log_run("coloan", "ok", len(added))
@@ -778,10 +837,9 @@ def collect_details():
     if not todo:
         log_run("details", "ok", 0)
         return 0
-    classes, descs, nodata = 0, 0, []
-    for t in todo:
+    def one(t):
         isbn = t["isbn13"]
-        upd = {}
+        upd, got_class, got_desc, no_class = {}, 0, 0, False
         try:
             data = call("srchDtlList", {"isbn13": isbn, "loaninfoYN": "N"}, retries=(5,))
             book = next(iter(find_dicts_with(data, "bookname")), None) or {}
@@ -791,19 +849,17 @@ def collect_details():
                     upd["class_no"] = row["class_no"]
                     if row.get("class_name"):
                         upd["class_name"] = row["class_name"]
-                    classes += 1
+                    got_class = 1
                 else:
-                    nodata.append(isbn)
+                    no_class = True
             if t.get("need_desc"):
                 upd["description"] = clean_desc(book.get("description"))
                 upd["desc_checked_at"] = datetime.now(timezone.utc).isoformat()
-                descs += 1 if upd["description"] else 0
-        except BudgetExceeded as e:
-            print(f"  [상세 채우기] {e}")
-            break
+                got_desc = 1 if upd["description"] else 0
+        except BudgetExceeded:
+            raise
         except NoData:
-            if t.get("need_class"):
-                nodata.append(isbn)
+            no_class = bool(t.get("need_class"))
             if t.get("need_desc"):
                 upd["desc_checked_at"] = datetime.now(timezone.utc).isoformat()
         except Exception as e:
@@ -814,7 +870,15 @@ def collect_details():
                 supabase.table("books").update(upd).eq("isbn13", isbn).execute()
             except Exception as e:
                 print(f"  [상세 저장 {isbn}] {safe_err(e)}")
-        time.sleep(PAUSE)
+        return (got_class, got_desc, isbn if no_class else None)
+
+    res, why = run_parallel(todo, one)
+    if why:
+        print(f"  [상세 채우기] {why}")
+    res = [r for r in res if r]
+    classes = sum(r[0] for r in res)
+    descs = sum(r[1] for r in res)
+    nodata = [r[2] for r in res if r[2]]
     if nodata:
         try:
             now = datetime.now(timezone.utc).isoformat()

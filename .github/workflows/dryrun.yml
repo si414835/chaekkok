@@ -3,6 +3,10 @@ name: 수집 대상 미리 보기 (수동)
 # 정보나루는 부르지 않고, 오늘 이용분석·상세·함께 빌린 책 대상이 몇 권인지만 본다.
 on:
   workflow_dispatch:
+    inputs:
+      try_usage:
+        description: 이용분석을 몇 권 실제로 받아 볼지 (0이면 안 받음, 동시 호출 시험용)
+        default: '0'
 
 jobs:
   peek:
@@ -27,3 +31,12 @@ jobs:
           d = e.supabase.rpc("detail_targets", {"n": 1500}).execute().data or []
           print("상세 대상:", len(d), "(소개 필요", sum(1 for r in d if r["need_desc"]), ")")
           PY
+      - name: 이용분석 조금 받아 보기 (동시 호출 시험)
+        if: inputs.try_usage != '0'
+        env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          USAGE_LIMIT: ${{ inputs.try_usage }}
+        run: time python extra_collect.py usage
