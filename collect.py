@@ -299,6 +299,42 @@ def backfill_shallow_days(max_days=2):
             break
 
 
+# ---------- 2-0. 분야별 201~1000위 (화면 표시용, 2026-11-26) ----------
+# 책 상세의 '분야 순위'가 200위 밖이면 '인기대출 목록 밖'으로만 나와서, 1000위까지 순위만 따로 받는다 (loan_rank_deep).
+# trend_scores와 섞지 않아 피드·단계 판정은 그대로. 중계 서버(하루 30,000건)일 때만: 10개 분야 × 8쪽 = 하루 80회
+DEEP_PAGES = range(3, 11)
+
+
+def collect_loan_deep(snapshot_date=None):
+    if not api_budget.proxy_on():
+        return 0
+    snapshot_date = snapshot_date or kst_today_str()
+    done = supabase.table("loan_rank_deep").select("isbn13").eq("snapshot_date", snapshot_date).limit(1).execute().data
+    if done:
+        print("[201~1000위] 오늘 이미 받아서 건너뜀")
+        return 0
+    total = 0
+    for kdc in KDC_CODES:
+        rows = []
+        try:
+            for page in DEEP_PAGES:
+                data = fetch_loan_items(page_no=page, page_size=PAGE_SIZE, kdc=kdc, from_age=14, to_age=99, snapshot=snapshot_date)
+                got = data.get("response", {}).get("docs", [])
+                rows += [{"snapshot_date": snapshot_date, "kdc": str(kdc), "isbn13": it["doc"]["isbn13"],
+                          "rank": it["doc"].get("ranking"), "loan_count": it["doc"].get("loan_count")}
+                         for it in got if it.get("doc", {}).get("isbn13") and it["doc"].get("ranking")]
+                if len(got) < PAGE_SIZE:
+                    break
+            total += bulk_upsert("loan_rank_deep", rows, "snapshot_date,kdc,isbn13", ["snapshot_date", "kdc", "isbn13"])
+        except BudgetExceeded:
+            raise
+        except Exception as e:
+            print(f"::warning::201~1000위 {kdc} 실패: {e}")
+    log_run("popular_deep", None, "ok", total)
+    print(f"[201~1000위] {total}건 저장")
+    return total
+
+
 # ---------- 2-1. 최근 7일 인기대출 (새 책을 빨리 찾기) ----------
 # 30일 순위는 한 달 동안 꾸준히 빌린 책이 위에 머물러, 새 책이 들어오기까지 몇 주 걸린다.
 # 최근 7일 순위를 주요 분야만 따로 받아 새 책을 1~3주 빨리 책콕에 들인다 (loan_week 테이블, trend_scores와 섞지 않음).
@@ -354,6 +390,9 @@ def collect_loan_week(snapshot_date=None):
 def main():
     import sys
     # 예: python collect.py --backfill 2026-10-27 2026-10-28  -> 그 날짜들만 200위까지 다시 받기
+    if "--deep" in sys.argv:  # 201~1000위만 (2026-11-26)
+        collect_loan_deep()
+        return
     if "--backfill" in sys.argv:
         for d in sys.argv[sys.argv.index("--backfill") + 1:]:
             try:
@@ -383,6 +422,10 @@ def main():
         collect_loan_week()
     except BudgetExceeded as e:
         print(f"::warning::7일 인기대출 수집 중단 - {e}")
+    try:
+        collect_loan_deep()
+    except BudgetExceeded as e:
+        print(f"::warning::201~1000위 수집 중단 - {e}")
     try:
         backfill_shallow_days()
     except Exception as e:

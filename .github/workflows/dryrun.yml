@@ -7,6 +7,9 @@ on:
       probe_regions:
         description: 강원·전북 지역 코드 확인 (1이면 정보나루 8회 부름)
         default: '0'
+      run_deep:
+        description: 분야별 201~1000위 받기 (1이면 정보나루 약 80회)
+        default: '0'
       try_usage:
         description: 이용분석을 몇 권 실제로 받아 볼지 (0이면 안 받음, 동시 호출 시험용)
         default: '0'
@@ -61,3 +64,11 @@ jobs:
                   docs = resp.get("docs") or []
                   print(api, code, "keys", list(resp.keys())[:8], "docs", len(docs), "first", (docs[0].get("doc", {}).get("bookname") if docs else None), "error", resp.get("error"))
           PY
+      - name: 분야별 201~1000위 받기
+        if: inputs.run_deep == '1'
+        env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python collect.py --deep
