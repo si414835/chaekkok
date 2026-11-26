@@ -4,6 +4,10 @@ name: 정보나루 IP 등록 확인 (수동)
 # 가벼운 도서관 검색(libSrch, 1건)만 부른다.
 on:
   workflow_dispatch:
+    inputs:
+      n:
+        description: 등록 IP로 부를 횟수
+        default: "12"
 
 jobs:
   check:
@@ -12,6 +16,7 @@ jobs:
       - name: 등록 IP·미등록 IP 비교
         env:
           D4L_PROXY: ${{ secrets.D4L_PROXY }}
+          N: ${{ inputs.n }}
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
         run: |
           pip install -q requests
@@ -26,7 +31,8 @@ jobs:
                   return "오류: " + str(d.get("error"))[:80] if d.get("error") else f"정상(도서관 {d.get('numFound')}곳)"
               except Exception as e:
                   return type(e).__name__
-          for i in range(12):
-              print(f"등록 IP {i+1}:", one(px))
+          for i in range(int(os.environ.get("N", "12"))):
+              r = one(px)
+              if i % 10 == 9 or not r.startswith("정상"): print(f"등록 IP {i+1}:", r)
           print("미등록 IP:", one(None))
           PY
