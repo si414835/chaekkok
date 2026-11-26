@@ -6843,3 +6843,17 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
   .ptop5 .feat__go .pbtn { width: 180px; }
   .phome__panels { margin-top: 72px; }
 }
+
+/* 어디서 빌릴까요: 넓은 책 상세에서는 왼쪽 내 도서관 · 오른쪽 근처 도서관 찾기·바로 못 빌린다면 (2026-11-26)
+   그 밖(폰·시트)에서는 예전 순서 그대로: 내 도서관 → 근처 도서관 → 바로 못 빌린다면 → 안내 → 버튼 */
+.wsheet__cols { display: flex; flex-direction: column; }
+.wsheet__left, .wsheet__right { display: contents; }
+.wsheet__left > * { order: 1; }
+.wsheet__right > * { order: 2; }
+.wsheet__left > .wsheet__foot, .wsheet__left > .sheet__actions { order: 3; }
+@media (min-width: 1100px) {
+  .pd__libbody .wsheet__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 44px; align-items: start; }
+  .pd__libbody .wsheet__left, .pd__libbody .wsheet__right { display: block; }
+  .pd__libbody .wsheet__right { padding-top: 6px; }
+  .pd__libbody .wsheet__left .sheet__actions .btn { width: 100%; }
+}

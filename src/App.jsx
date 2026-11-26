@@ -5172,65 +5172,72 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = fal
           <span className="hl">{shortTitle(book.title)}</span>
         </p>
       </div>
-      {libs.length === 0 ? (
-        <p className="wsheet__empty">찜한 도서관이 없어요. 아래에서 근처 도서관을 찾아보세요.</p>
-      ) : (
-        <div className="libs wsheet__mine">
-          <p className="wsheet__label">내 도서관</p>
-          {state.error && <p className="state state--error">{state.error}</p>}
-          {libs.map((l) => {
-            const [label, tone] = status(state.results[l.libCode])
-            return (
-              <div key={l.libCode} className="lib">
-                <a className="lib__info" href={`/library/${l.libCode}`}>
-                  <strong>{l.name}</strong>
-                  <span className="sub">{l.address}</span>
-                  <span className="lib__more">도서관 페이지 보기 →</span>
-                </a>
-                {state.loading ? <span className="pill">확인 중…</span> : <span className={`pill pill--${tone}`}>{label}</span>}
-                {homeOf(l) ? (
-                  <a className="pill pill--btn lib__hp" href={homeOf(l)} target="_blank" rel="noopener noreferrer" aria-label={`${l.name} 홈페이지 (새 창)`}>
-                    홈페이지
+      {/* 넓은 화면 책 상세: 왼쪽 절반은 내 도서관, 오른쪽 절반은 근처 도서관 찾기·바로 못 빌린다면 (2026-11-26) */}
+      <div className="wsheet__cols">
+        <div className="wsheet__left">
+        {libs.length === 0 ? (
+          <p className="wsheet__empty">찜한 도서관이 없어요. 아래에서 근처 도서관을 찾아보세요.</p>
+        ) : (
+          <div className="libs wsheet__mine">
+            <p className="wsheet__label">내 도서관</p>
+            {state.error && <p className="state state--error">{state.error}</p>}
+            {libs.map((l) => {
+              const [label, tone] = status(state.results[l.libCode])
+              return (
+                <div key={l.libCode} className="lib">
+                  <a className="lib__info" href={`/library/${l.libCode}`}>
+                    <strong>{l.name}</strong>
+                    <span className="sub">{l.address}</span>
+                    <span className="lib__more">도서관 페이지 보기 →</span>
                   </a>
-                ) : (
-                  <a className="lib__go" href={`/library/${l.libCode}`} aria-label={`${l.name} 도서관 정보`}>
-                    {Icon.chev()}
-                  </a>
-                )}
-              </div>
-            )
-          })}
+                  {state.loading ? <span className="pill">확인 중…</span> : <span className={`pill pill--${tone}`}>{label}</span>}
+                  {homeOf(l) ? (
+                    <a className="pill pill--btn lib__hp" href={homeOf(l)} target="_blank" rel="noopener noreferrer" aria-label={`${l.name} 홈페이지 (새 창)`}>
+                      홈페이지
+                    </a>
+                  ) : (
+                    <a className="lib__go" href={`/library/${l.libCode}`} aria-label={`${l.name} 도서관 정보`}>
+                      {Icon.chev()}
+                    </a>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <p className="wsheet__foot">소장·대출 정보는 도서관 정보나루 기준이에요.</p>
+        <div className={`sheet__actions${inline ? ' wsheet__actions' : ''}`}>
+          <button className="btn btn--soft" onClick={onPick}>{libs.length > 0 ? '내 도서관 관리' : '도서관 이름으로 찾기'}</button>
+          {inline && onBuy && (
+            <button className="btn btn--primary" onClick={onBuy}>
+              구매하기 {Icon.chev()}
+            </button>
+          )}
         </div>
-      )}
-      <NearbyLibraries book={book} libs={libs} setLibs={setLibs} />
-      <Fold title="바로 못 빌린다면?" hint="책바다 · 희망도서 바로대출" open={altOpen} onToggle={() => setAltOpen(!altOpen)}>
-        <div className="alt">
-          <a className="alt__item press" href="https://books.nl.go.kr" target="_blank" rel="noopener noreferrer">
-            <span>
-              <b>책바다 (상호대차)</b>
-              <small>다른 지역 책을 내 도서관으로 택배 배송</small>
-            </span>
-            {Icon.chev()}
-          </a>
-          {libs[0] && homeOf(libs[0]) && (
-            <a className="alt__item press" href={homeOf(libs[0])} target="_blank" rel="noopener noreferrer">
+        </div>
+        <div className="wsheet__right">
+        <NearbyLibraries book={book} libs={libs} setLibs={setLibs} />
+        <Fold title="바로 못 빌린다면?" hint="책바다 · 희망도서 바로대출" open={altOpen} onToggle={() => setAltOpen(!altOpen)}>
+          <div className="alt">
+            <a className="alt__item press" href="https://books.nl.go.kr" target="_blank" rel="noopener noreferrer">
               <span>
-                <b>희망도서 바로대출</b>
-                <small>없는 신간을 동네 서점에서 바로 빌리기</small>
+                <b>책바다 (상호대차)</b>
+                <small>다른 지역 책을 내 도서관으로 택배 배송</small>
               </span>
               {Icon.chev()}
             </a>
-          )}
+            {libs[0] && homeOf(libs[0]) && (
+              <a className="alt__item press" href={homeOf(libs[0])} target="_blank" rel="noopener noreferrer">
+                <span>
+                  <b>희망도서 바로대출</b>
+                  <small>없는 신간을 동네 서점에서 바로 빌리기</small>
+                </span>
+                {Icon.chev()}
+              </a>
+            )}
+          </div>
+        </Fold>
         </div>
-      </Fold>
-      <p className="wsheet__foot">소장·대출 정보는 도서관 정보나루 기준이에요.</p>
-      <div className={`sheet__actions${inline ? ' wsheet__actions' : ''}`}>
-        <button className="btn btn--soft" onClick={onPick}>{libs.length > 0 ? '내 도서관 관리' : '도서관 이름으로 찾기'}</button>
-        {inline && onBuy && (
-          <button className="btn btn--primary" onClick={onBuy}>
-            구매하기 {Icon.chev()}
-          </button>
-        )}
       </div>
     </Wrap>
   )
