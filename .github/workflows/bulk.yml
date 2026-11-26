@@ -1,0 +1,76 @@
+name: 대량 보충 (수동)
+
+# 정보나루 등록 IP 하루 30,000건 중 남은 몫으로 책 연계 자료를 한꺼번에 채운다 (2026-11-26).
+#  ① 이용분석: 책콕의 모든 책 중 아직 없는 책 (해시태그·함께 빌린 책·마니아·다독자 추천·월별 대출·연령 성별·책 소개)
+#  ② 함께 빌린 책·추천 책 중 책콕에 없는 책 등록 (표지·분야·책 소개)
+#  ③ 책 소개·분류가 빈 책 채우기
+# 위를 여러 바퀴 돈다(새로 등록된 책도 다음 바퀴에 이용분석). 하루 합계가 API_PROXY_TOTAL_LIMIT(기본 28,500)에 닿으면 멈춘다.
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: 몇 바퀴 돌지
+        default: '4'
+      workers:
+        description: 동시에 부를 개수
+        default: '6'
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  bulk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install requests supabase
+      - name: 연계 자료 대량 보충
+        env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
+          NL_API_KEY: ${{ secrets.NL_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          USAGE_ALL: '1'
+          USAGE_LIMIT: '8000'
+          COLOAN_LIMIT: '8000'
+          DETAIL_LIMIT: '1000'
+          CALL_BUDGET: '28500'
+          D4L_WORKERS: ${{ inputs.workers }}
+        run: |
+          for r in $(seq 1 ${{ inputs.rounds }}); do
+            echo "===== $r 바퀴 ====="
+            python extra_collect.py usage coloan details || true
+            python - <<'PY'
+          import os
+          from supabase import create_client
+          sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+          from datetime import datetime, timedelta, timezone
+          d = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
+          r = sb.table("api_usage").select("calls").eq("day", d).execute().data
+          n = r[0]["calls"] if r else 0
+          print(f"[오늘 정보나루 호출 합계] {n}")
+          open("/tmp/calls", "w").write(str(n))
+          PY
+            if [ "$(cat /tmp/calls)" -ge 28400 ]; then echo "하루 몫을 다 씀 - 멈춤"; break; fi
+          done
+      - name: 화면용 캐시 새로 고침
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          from supabase import create_client
+          sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+          try:
+              sb.rpc("refresh_cached_views").execute(); print("캐시 새로 고침 완료")
+          except Exception as e:
+              print("캐시 새로 고침 실패", type(e).__name__)
+          PY

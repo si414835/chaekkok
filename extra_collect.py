@@ -661,6 +661,18 @@ def pick_usage_targets():
                         break
         except Exception as e:
             print(f"  [지역 책 조회 실패] {safe_err(e)}")
+    # ⑥ 대량 보충(USAGE_ALL=1)일 때: 책콕에 있는 모든 책 중 아직 이용분석이 없는 책
+    if os.environ.get("USAGE_ALL") == "1":
+        def all_ids(table):
+            out, got = [], 0
+            while True:
+                part = supabase.table(table).select("isbn13").order("isbn13").range(got, got + 999).execute().data or []
+                out += [r["isbn13"] for r in part]
+                got += len(part)
+                if len(part) < 1000:
+                    return out
+        have_any = set(all_ids("book_usage"))
+        targets += [i for i in all_ids("books") if i not in have_any and len(i) == 13]
     targets = list(dict.fromkeys(t for t in targets if t))
     now = datetime.now(timezone.utc)
     since_hot = (now - timedelta(days=USAGE_REFRESH_HOT_DAYS)).isoformat()
@@ -777,12 +789,16 @@ def collect_coloan():
     등록되면 그 책도 표지·분야가 생기고, 다음 날부터 이용분석 대상이 될 수 있다."""
     rows, start = [], 0
     while True:  # 한 번에 1000행까지만 와서 나눠 읽는다
-        part = supabase.table("book_usage").select("co_loan").order("updated_at", desc=True).range(start, start + 999).execute().data or []
+        part = (supabase.table("book_usage").select("co_loan,mania_rec,reader_rec").order("updated_at", desc=True)
+                .range(start, start + 999).execute().data or [])
         rows += part
         if len(part) < 1000:
             break
         start += 1000
-    want = list(dict.fromkeys(b.get("isbn13") for r in rows for b in (r.get("co_loan") or []) if b.get("isbn13")))
+    # 함께 빌린 책 + 마니아·다독자 추천 책 (11-26: 추천 카드도 표지·소개가 나오게)
+    want = list(dict.fromkeys(b.get("isbn13") for r in rows
+                              for b in (r.get("co_loan") or []) + (r.get("mania_rec") or []) + (r.get("reader_rec") or [])
+                              if b.get("isbn13")))
     have = set()
     for i in range(0, len(want), 200):
         have |= {r["isbn13"] for r in supabase.table("books").select("isbn13").in_("isbn13", want[i:i + 200]).execute().data or []}

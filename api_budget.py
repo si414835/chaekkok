@@ -11,8 +11,9 @@ import os
 
 BATCH_LIMIT = int(os.environ.get("API_DAILY_BATCH_LIMIT", "400"))
 TOTAL_LIMIT = 495
-PROXY_BATCH_LIMIT = int(os.environ.get("API_PROXY_BATCH_LIMIT", "20000"))
-PROXY_TOTAL_LIMIT = 29000
+PROXY_BATCH_LIMIT = int(os.environ.get("API_PROXY_BATCH_LIMIT", "28000"))
+# 등록 IP 하루 30,000건 중 1,000건 이상은 남긴다 (화면 몫·우리가 세지 못한 시험 호출 몫, 2026-11-26 승환님 요청)
+PROXY_TOTAL_LIMIT = int(os.environ.get("API_PROXY_TOTAL_LIMIT", "28500"))
 
 
 class BudgetExceeded(Exception):
