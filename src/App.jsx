@@ -878,7 +878,7 @@ function TopCarousel({ books, wide = false }) {
           if (o > n / 2) o -= n
           const a = Math.abs(o)
           const scale = [1, 0.74, 0.56][Math.min(a, 2)]
-          const x = (wide ? [0, 190, 320] : [0, 104, 172])[Math.min(a, 2)] * Math.sign(o)
+          const x = (wide ? [0, 230, 410] : [0, 104, 172])[Math.min(a, 2)] * Math.sign(o)
           const onClick = () => {
             if (swiped.current) {
               swiped.current = false
