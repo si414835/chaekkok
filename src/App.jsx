@@ -3420,18 +3420,6 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
           {/* 한 줄 요약: 제목·영상 줄 아래에 가로로 꽉 차게 (영상 밑까지 이어지게) */}
           {oneLiner && <p className="pd__oneline">{oneLiner}</p>}
 
-          {/* 도서관에서 빌리기: 한 줄 요약 바로 아래로 올림 (2026-11-26, 더 잘 보이게) */}
-          <section className="pd__lib" id="lib" ref={libRef}>
-            <div className="pd__libhead">
-              <p className="pd__kind">도서관에서 빌리기</p>
-              <h2 className="pd__h">내 도서관에 있을까요?</h2>
-              <p className="pd__note">자주 가는 도서관을 정하면 소장 여부와 지금 대출 가능한지 보여 드려요.</p>
-            </div>
-            <div className="pd__libbody">
-              <LibraryStatusSheet inline book={book} libs={libs} setLibs={setLibs} onClose={() => {}} onPick={onPickLibrary} />
-            </div>
-          </section>
-
           <div className="pd__stack">
             <section className="pd__intro">
               <div className="psec__head">
@@ -3504,6 +3492,16 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
 
           <NextReads isbn={book.isbn13} co={co} recs={recs} words={keywords.map((k) => k.word)} coverOf={(c) => c.cover_url || coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} />
 
+          <section className="pd__lib" id="lib" ref={libRef}>
+            <div className="pd__libhead">
+              <p className="pd__kind">도서관</p>
+              <h2 className="pd__h">내 도서관에 있을까요?</h2>
+              <p className="pd__note">자주 가는 도서관을 정하면 소장 여부와 지금 대출 가능한지 보여 드려요.</p>
+            </div>
+            <div className="pd__libbody">
+              <LibraryStatusSheet inline book={book} libs={libs} setLibs={setLibs} onClose={() => {}} onPick={onPickLibrary} />
+            </div>
+          </section>
           {!wide && BuyList}
           <p className="pd__source">자료: 도서관 정보나루{st?.snapshot_date ? ` · ${fmtDate(st.snapshot_date)} 수집` : ''}</p>
         </div>
