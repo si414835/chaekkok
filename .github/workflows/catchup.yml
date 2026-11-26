@@ -24,6 +24,7 @@ jobs:
       - name: 이용분석·책 소개 이어 받기
         env:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
           NL_API_KEY: ${{ secrets.NL_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

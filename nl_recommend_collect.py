@@ -106,7 +106,7 @@ def lookup_cover(isbn13):
     first_isbn = isbn13.split()[0]  # 'ISBN1 ISBN2'처럼 여러 개 붙어 오는 경우가 있음
     try:
         api_budget.spend()  # 정보나루 하루 호출 수에 같이 센다
-        res = requests.get(
+        res = api_budget.d4l_get(
             DETAIL_URL,
             params={"authKey": DATA4LIBRARY_KEY, "isbn13": first_isbn, "format": "json"},
             timeout=15,

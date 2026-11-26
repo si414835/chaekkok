@@ -199,7 +199,7 @@ def book_intro(isbn):
         import api_budget
         api_budget.init(supabase)
         api_budget.spend()
-        res = requests.get("http://data4library.kr/api/srchDtlList",
+        res = api_budget.d4l_get("http://data4library.kr/api/srchDtlList",
                            params={"authKey": key, "isbn13": isbn, "loaninfoYN": "N", "format": "json"}, timeout=30)
         detail = (res.json().get("response") or {}).get("detail") or []
         desc = ((detail[0] or {}).get("book") or {}).get("description") if detail else None

@@ -44,3 +44,37 @@ def is_limit_error(msg):
     """정보나루가 하루 한도로 막았다는 응답이면 True (재시도해도 소용없음)."""
     s = str(msg)
     return "500건" in s or "IP 등록" in s
+
+
+# ---------- 고정 IP 중계 서버 (2026-11-26) ----------
+# 정보나루는 서버 IP를 등록하면 하루 30,000건까지 허용한다(정보나루 공지 2023-11-10 「Open API 호출제한 안내」).
+# GitHub Actions는 IP가 매번 바뀌어서, 오라클 무료 서버(고정 공인 IP)의 tinyproxy를 거쳐 부른다.
+# GitHub Secret D4L_PROXY = http://chaekkok:<비밀번호>@<공인IP>:8888 (없으면 지금처럼 바로 부름)
+# 중계 서버가 꺼졌거나 막히면 그 실행에서는 바로 부르는 방식으로 돌아간다 → 수집이 멈추지 않는다.
+_proxy_url = os.environ.get("D4L_PROXY") or None
+_proxy_down = False
+
+
+def proxy_on():
+    return bool(_proxy_url) and not _proxy_down
+
+
+def d4l_get(url, **kwargs):
+    """정보나루 GET. 중계 서버가 있으면 거쳐 가고, 중계 서버 쪽 문제면 바로 부른다(호출 수는 이미 spend()로 1회 셈)."""
+    global _proxy_down
+    import requests
+    if proxy_on():
+        try:
+            res = requests.get(url, proxies={"http": _proxy_url, "https": _proxy_url}, **kwargs)
+            if res.status_code == 407 or (res.status_code >= 400 and "tinyproxy" in (res.headers.get("Server") or "").lower()):
+                # 407 비밀번호 틀림, tinyproxy가 직접 낸 오류(필터 403·연결 실패 500/502 등): 정보나루까지 안 간 것
+                raise requests.exceptions.ProxyError(f"중계 서버 응답 {res.status_code}")
+            return res
+        except requests.exceptions.ProxyError as e:
+            _proxy_down = True
+            print(f"  [중계 서버] 쓸 수 없어 이번 실행은 바로 부름: {type(e).__name__}")
+        except requests.exceptions.ConnectTimeout as e:
+            # 중계 서버 자체에 못 붙음 (오라클 서버 꺼짐 등)
+            _proxy_down = True
+            print(f"  [중계 서버] 연결 안 됨, 이번 실행은 바로 부름: {type(e).__name__}")
+    return requests.get(url, **kwargs)

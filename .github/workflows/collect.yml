@@ -61,6 +61,7 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         env:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python collect.py
@@ -70,6 +71,7 @@ jobs:
         env:
           NL_API_KEY: ${{ secrets.NL_API_KEY }}
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python nl_recommend_collect.py
@@ -78,6 +80,7 @@ jobs:
         if: always() && steps.check.outputs.skip != 'true'
         env:
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
           NL_API_KEY: ${{ secrets.NL_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -118,6 +121,7 @@ jobs:
           # 줄거리(책 소개)용 정보나루 호출 2~3회를 위해 수집 한도(400)보다 조금 여유를 둔다
           API_DAILY_BATCH_LIMIT: '415'
           DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python blog_draft.py

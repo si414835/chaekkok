@@ -87,7 +87,7 @@ def call(api, params, retries=(5, 15, 30)):
             time.sleep(wait)
         try:
             try:
-                res = requests.get(BASE + api, params=p, timeout=30)
+                res = api_budget.d4l_get(BASE + api, params=p, timeout=30)
             except (requests.Timeout, requests.ConnectionError) as e:
                 # 시간 초과는 다시 불러도 대개 또 초과라 재시도하지 않는다 (호출 수만 버림)
                 _slow += 1

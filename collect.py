@@ -48,7 +48,10 @@ def get_with_retry(url, params, max_retries=4, timeout=60):
         if "data4library" in url:
             api_budget.spend()  # 한도를 넘으면 여기서 BudgetExceeded
         try:
-            res = requests.get(url, params=params, timeout=timeout)
+            if "data4library" in url:
+                res = api_budget.d4l_get(url, params=params, timeout=timeout)
+            else:
+                res = requests.get(url, params=params, timeout=timeout)
             res.raise_for_status()
             data = res.json()
             api_error = (data.get("response") or {}).get("error")
