@@ -10,7 +10,7 @@
   collect.yml에 예약 5개(04:07·05:23·06:41·07:37·08:19 KST) + pg_cron `kick_collect()`(04:12·07:02 KST, Vault 'gh_dispatch_token' 있을 때만 GitHub API로 시작).
   토큰은 2026-11-25에 넣음(fine-grained, chaekkok·Actions 쓰기, **2027-11-25 만료** → 그 전에 새로 만들어 vault.update_secret로 교체). 시험: `select public.kick_collect();` 후 net._http_response가 204면 정상.
   '오늘 수집했는지 확인' 단계가 오늘 collect_runs 기록이 있으면 자동 실행(schedule, inputs.auto=true)을 건너뜀. 손으로 돌리면 항상 실행. (`supabase/sql/collect_kick.sql`)
-- 오후 보충 수집 (2026-11-26): `catchup.yml`(extra_collect.py usage details)을 pg_cron 'kick-catchup'(13:02 KST, `kick_catchup()`)이 시작. 그날 남은 수집 몫(400회 중)만 쓴다.
+- 보충 수집 (2026-11-26): `catchup.yml`(extra_collect.py usage coloan details)을 pg_cron 'kick-catchup'(13:02)·'kick-catchup-eve'(20:02 KST, `kick_catchup()`)이 시작. 중계 서버가 없으면 그날 남은 수집 몫(400회 중)만 쓴다.
   extra_collect는 정보나루 시간 초과·연결 실패가 3번 연속이면 그 실행에서 정보나루를 그만 부른다(시간 초과는 재시도 안 함, timeout 30초). 11/26 새벽에 시간 초과로 이용분석 82권·소개 50권을 날리고 3시간 반 걸렸었다.
   이용분석은 아직 없는 책 먼저, 다시 받기는 30일마다(14→30).
 - 정보나루 고정 IP 중계 서버 (2026-11-26): 오라클 무료 VM(춘천, VM.Standard.E2.1.Micro, Ubuntu 22.04) 공인 IP **168.107.1.200**, tinyproxy :8888
@@ -18,7 +18,11 @@
   수집 스크립트는 `api_budget.d4l_get()`으로 부르며, 중계 서버가 안 되면 그 실행은 바로 부른다. 점검: Actions '중계 서버 점검 (수동)'(proxytest.yml, 정보나루 API 안 씀).
   정보나루 마이페이지에 서버 IP 등록함(11-26). 확인 결과: 등록 IP로는 하루 500건을 넘어도 정상, 등록 안 한 IP는 하루 합계 500건이 넘으면 '1일 500건 이상 요청 시 IP 등록이 필요합니다'로 막힘.
   그래서 Edge Function(book-exist·library-info)도 `Deno.createHttpClient({proxy})`로 중계 서버를 거친다(Supabase 함수 비밀값 `D4L_PROXY`, 없으면 바로 부름).
-  한도: 중계 서버를 쓰면 수집 20,000·전체 29,000·화면 3,000(spend_edge_call 인자), 안 쓰면 예전 400·495·90. extra_collect는 중계 서버면 이용분석 800권·상세 400권·스크립트 예산 2,500.
+  한도: 중계 서버를 쓰면 수집 20,000·전체 29,000·화면 3,000(spend_edge_call 인자), 안 쓰면 예전 400·495·90.
+  수집량(11-26 재구성, 중계 서버일 때 / 아닐 때): 7일 인기 10개 분야×200위 / 6개 분야 / · 연령·성별 순위 100위 / 50위 ·
+  이용분석 새벽 500·보충 1500권 / 160권(뜨거운 책=7일 인기·단계 붙은 책은 7일마다, 나머지 30일마다 다시) · 상세 300·1500 / 50 · 함께 빌린 책 등록 200·500 / 30(소개도 함께 저장).
+  보충 수집은 13:02·20:02 KST(pg_cron kick-catchup, kick-catchup-eve). 수량은 환경변수 USAGE_LIMIT·DETAIL_LIMIT·COLOAN_LIMIT로 바꾼다.
+  대상 수만 보기: Actions '수집 대상 미리 보기 (수동)'(dryrun.yml, 정보나루 안 부름). PostgREST는 한 번에 1000행까지라 큰 조회는 range로 나눠 읽는다.
   확인 워크플로: '정보나루 IP 등록 확인 (수동)'(d4ltest.yml, inputs.n = 등록 IP로 부를 횟수, libSrch 1건씩).
   서버 들어가기: 오라클 Cloud Shell에 키 올리고 `ssh -i ~/ssh-key-*.key ubuntu@168.107.1.200`. 붙여넣기 앞에 `^[[200~`가 붙으니 명령 앞뒤에 `true;`.
 - 수집: `.github/workflows/collect.yml` 매일 04:07 KST → `collect.py`, `extra_collect.py`, `nl_recommend_collect.py`, `blog_draft.py`
