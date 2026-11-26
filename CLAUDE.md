@@ -23,6 +23,8 @@
   이용분석 새벽 500·보충 1500권 / 160권(뜨거운 책=7일 인기·단계 붙은 책은 7일마다, 나머지 30일마다 다시) · 상세 300·1500 / 50 · 함께 빌린 책 등록 200·500 / 30(소개도 함께 저장).
   보충 수집은 13:02·20:02 KST(pg_cron kick-catchup, kick-catchup-eve). 수량은 환경변수 USAGE_LIMIT·DETAIL_LIMIT·COLOAN_LIMIT로 바꾼다.
   대상 수만 보기: Actions '수집 대상 미리 보기 (수동)'(dryrun.yml, 정보나루 안 부름). PostgREST는 한 번에 1000행까지라 큰 조회는 range로 나눠 읽는다.
+  하루 상한은 `API_PROXY_TOTAL_LIMIT`(기본 28,500, 승환님 요청으로 1,000건 이상 남김). 대량 보충: Actions '대량 보충 (수동)'(bulk.yml, inputs rounds·workers):
+  모든 책 이용분석(USAGE_ALL=1) → 함께 빌린 책·마니아·다독자 추천 책 등록 → 소개·분류, 여러 바퀴. 11-26 저녁 처음 돌림(동시 6개, 초당 약 2권).
   확인 워크플로: '정보나루 IP 등록 확인 (수동)'(d4ltest.yml, inputs.n = 등록 IP로 부를 횟수, libSrch 1건씩).
   서버 들어가기: 오라클 Cloud Shell에 키 올리고 `ssh -i ~/ssh-key-*.key ubuntu@168.107.1.200`. 붙여넣기 앞에 `^[[200~`가 붙으니 명령 앞뒤에 `true;`.
 - 수집: `.github/workflows/collect.yml` 매일 04:07 KST → `collect.py`, `extra_collect.py`, `nl_recommend_collect.py`, `blog_draft.py`
