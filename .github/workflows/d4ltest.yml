@@ -1,0 +1,32 @@
+name: 정보나루 IP 등록 확인 (수동)
+
+# 중계 서버(등록한 IP)로 12번, 바로(등록 안 한 IP)로 1번 불러서 하루 500건을 넘겨도 되는지 본다.
+# 가벼운 도서관 검색(libSrch, 1건)만 부른다.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 등록 IP·미등록 IP 비교
+        env:
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+        run: |
+          pip install -q requests
+          python3 - <<'PY'
+          import os, requests
+          key = os.environ["DATA4LIBRARY_KEY"]; px = {"http": os.environ["D4L_PROXY"]}
+          url = "http://data4library.kr/api/libSrch"
+          def one(proxies):
+              try:
+                  r = requests.get(url, params={"authKey": key, "pageNo": 1, "pageSize": 1, "format": "json"}, proxies=proxies, timeout=30)
+                  d = r.json().get("response", {})
+                  return "오류: " + str(d.get("error"))[:80] if d.get("error") else f"정상(도서관 {d.get('numFound')}곳)"
+              except Exception as e:
+                  return type(e).__name__
+          for i in range(12):
+              print(f"등록 IP {i+1}:", one(px))
+          print("미등록 IP:", one(None))
+          PY
