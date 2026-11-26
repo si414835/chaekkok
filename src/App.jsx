@@ -1047,35 +1047,140 @@ function LibPanel({ libs }) {
   )
 }
 
-// 서점 면 (남색): 요즘 뜨는 작가의 곧 나올 책 + 서점 비교
-function ShopPanel({ list: all }) {
-  const list = (all || []).filter((b) => daysUntil(b.publish_date) != null).slice(0, 4)
+// 지역 면 (남색, 2026-11-26): 대한민국 지도. 지역에 마우스를 올리면 그 지역 인기 책 3권, 누르면 30위까지 목록.
+// 자료: 정보나루 지역별 인기대출(region_popular) → v_region_map (지역마다 자기 최신 날짜의 30위까지)
+// 강원(32)·전북(35)은 정보나루 지역 인기대출이 비어 있다 (11-26 확인: 32·35는 결과 0건, 51·52는 '지역코드를 확인'). 지도에는 점선으로.
+const REGION_NO_DATA = new Set(['32', '35'])
+function RegionMapPanel() {
+  const [shape, setShape] = useState(null)
+  const [rows, setRows] = useState(null)
+  const [sel, setSel] = useStored('chaekkok.region', '11')
+  const [hover, setHover] = useState(null) // { code, x, y }
+  const wrapRef = useRef(null)
+  const listRef = useRef(null)
+  useEffect(() => {
+    let off = false
+    import('./koreaMap.js').then((m) => !off && setShape(m))
+    supabase
+      .from('v_region_map')
+      .select('region,rank,isbn13,title,author,cover_url,addition_symbol')
+      .order('rank')
+      .limit(1000)
+      .then(({ data }) => !off && setRows(data || []))
+    return () => {
+      off = true
+    }
+  }, [])
+  const byRegion = useMemo(() => {
+    const m = {}
+    for (const r of rows || []) {
+      if ((r.addition_symbol || '').startsWith('7')) continue // 어린이 책은 뺀다 (다른 면과 같게)
+      ;(m[r.region] ||= []).push(r)
+    }
+    return m
+  }, [rows])
+  const nameOf = (c) => REGION_LIST.find(([k]) => k === c)?.[1] || ''
+  const onMove = (code) => (e) => {
+    const box = wrapRef.current?.getBoundingClientRect()
+    if (!box) return
+    setHover({ code, x: e.clientX - box.left, y: e.clientY - box.top, w: box.width })
+  }
+  const pick = (code) => {
+    setSel(code)
+    setHover(null)
+    if (listRef.current) listRef.current.scrollTop = 0
+  }
+  const selList = byRegion[sel] || []
+  const tip = hover && (byRegion[hover.code] || [])
   return (
-    <section className="ppanel ppanel--shop">
+    <section className="ppanel ppanel--shop ppanel--map">
       <div className="ppanel__top">
-        <span className="ppanel__kind">서점</span>
+        <span className="ppanel__kind">지역</span>
       </div>
-      <h3>곧 서점에 나올 책</h3>
-      <p className="ppanel__sub">요즘 뜨는 책을 쓴 작가의 다음 책</p>
-      {list.length > 0 ? (
-        <ul className="ppanel__list">
-          {list.map((b) => (
-            <li key={b.isbn13}>
-              <a href={`/book/${encodeURIComponent(b.isbn13)}`}>
-                <span>
-                  <b>{shortTitle(b.title)}</b>
-                  <small> · {b.matched_author || cleanAuthor(b.author)}</small>
-                </span>
-                <span className="num">{fmtDate(b.publish_date)} 출간</span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="ppanel__sub">지금은 출간을 앞둔 책이 없어요.</p>
-      )}
+      <h3>지역별 인기 책</h3>
+      <p className="ppanel__sub">지역에 마우스를 올리면 인기 책 3권, 누르면 그 지역 순위를 보여 드려요</p>
+      <div className="rmap">
+        <div className="rmap__map" ref={wrapRef} onMouseLeave={() => setHover(null)}>
+          {shape ? (
+            <svg viewBox={shape.KOREA_VIEWBOX} role="img" aria-label="대한민국 시·도 지도">
+              {Object.entries(shape.KOREA_PATHS).map(([code, d]) => {
+                const none = REGION_NO_DATA.has(code)
+                return (
+                  <path
+                    key={code}
+                    d={d}
+                    className={`rmap__r${none ? ' is-none' : ''}${sel === code ? ' is-sel' : ''}${hover?.code === code ? ' is-hover' : ''}`}
+                    onMouseMove={onMove(code)}
+                    onClick={() => !none && pick(code)}
+                    tabIndex={none ? -1 : 0}
+                    role="button"
+                    aria-label={`${nameOf(code)}${none ? ' (자료 없음)' : ''}`}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !none && (e.preventDefault(), pick(code))}
+                  />
+                )
+              })}
+            </svg>
+          ) : (
+            <div className="rmap__ph" />
+          )}
+          {hover && (
+            <div
+              className={`rmap__tip${hover.y < 170 ? ' is-below' : ''}`}
+              style={{ left: Math.min(Math.max(hover.x, 106), Math.max(hover.w - 106, 106)), top: hover.y }}
+            >
+              <b>{nameOf(hover.code)}</b>
+              {REGION_NO_DATA.has(hover.code) ? (
+                <small>정보나루에 이 지역 대출 자료가 없어요</small>
+              ) : tip.length ? (
+                <ol>
+                  {tip.slice(0, 3).map((b, i) => (
+                    <li key={b.isbn13}>
+                      <span className="num">{i + 1}</span>
+                      <Cover src={b.cover_url} alt="" className="rmap__tipcover" title={b.title} />
+                      <span>{shortTitle(b.title)}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <small>{rows === null ? '불러오는 중이에요…' : '오늘은 자료가 없어요'}</small>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="rmap__side">
+          <p className="rmap__name">
+            {nameOf(sel)} <small>공공도서관 인기대출</small>
+          </p>
+          {rows === null ? (
+            <p className="ppanel__sub">불러오는 중이에요…</p>
+          ) : selList.length ? (
+            <ol className="rmap__list" ref={listRef}>
+              {selList.map((b, i) => (
+                <li key={b.isbn13}>
+                  <a href={`/book/${encodeURIComponent(b.isbn13)}`}>
+                    <span className="num">{i + 1}</span>
+                    <span className="rmap__t">
+                      <b>{shortTitle(b.title)}</b>
+                      <small>{cleanAuthor(b.author)}</small>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="ppanel__sub">이 지역은 오늘 자료가 없어요.</p>
+          )}
+        </div>
+      </div>
       <div className="ppanel__foot">
-        <span>교보문고 · 알라딘 · YES24 · 쿠팡 · 네이버 도서 — 책마다 한 번에 비교해요</span>
+        <span>최근 30일 대출 기준 · 어린이 책 제외 · 강원·전북은 정보나루에 지역 자료가 없어요</span>
+        <span className="rmap__credit">
+          지도:{' '}
+          <a href="https://mapsvg.com/maps/south-korea" target="_blank" rel="noopener noreferrer">
+            MapSVG
+          </a>{' '}
+          (CC BY 4.0)
+        </span>
       </div>
     </section>
   )
@@ -1162,7 +1267,7 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
             </div>
             <div className="phome__panels">
               <LibPanel libs={libs || []} />
-              <ShopPanel list={upcoming} />
+              <RegionMapPanel />
             </div>
             <TasteTop />
             {hitStats?.matured_total ? (

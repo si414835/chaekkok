@@ -6784,3 +6784,39 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
   .taste .taste__ten .taste__rectitle { font-size: 11.5px; }
   .taste .taste__ten .taste__recby, .taste .taste__ten .taste__stage, .taste .taste__ten .taste__via { display: none; }
 }
+
+/* ---- 홈 지역 지도 (2026-11-26) ---- */
+.rmap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.rmap__map { position: relative; max-width: 340px; width: 100%; margin: 0 auto; }
+.rmap__map svg { display: block; width: 100%; height: auto; overflow: visible; }
+.rmap__ph { aspect-ratio: 524 / 631; }
+.rmap__r { fill: rgba(255, 255, 255, 0.05); stroke: rgba(255, 255, 255, 0.55); stroke-width: 0.9; stroke-linejoin: round; cursor: pointer; transition: fill 0.15s; outline: none; }
+.rmap__r.is-hover, .rmap__r:focus-visible { fill: rgba(255, 255, 255, 0.2); stroke: #fff; }
+.rmap__r.is-sel { fill: rgba(246, 200, 90, 0.42); stroke: #f6c85a; }
+.rmap__r.is-none { fill: transparent; stroke: rgba(255, 255, 255, 0.3); stroke-dasharray: 3 3; cursor: default; }
+.rmap__tip { position: absolute; z-index: 5; transform: translate(-50%, calc(-100% - 14px)); width: 210px; padding: 12px 14px; background: #fff; color: var(--ink); border-radius: 3px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3); pointer-events: none; }
+.rmap__tip.is-below { transform: translate(-50%, 18px); }
+.rmap__tip b { display: block; font-family: var(--display); font-size: 14.5px; font-weight: 700; }
+.rmap__tip small { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.rmap__tip ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 7px; }
+.rmap__tip li { display: grid; grid-template-columns: 12px 26px minmax(0, 1fr); align-items: center; gap: 7px; font-size: 12.5px; line-height: 1.35; }
+.rmap__tip li .num { color: var(--muted); font-size: 12px; }
+.rmap__tip li > span:last-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rmap__tipcover { width: 26px; height: 38px; object-fit: cover; border-radius: 1px; }
+.rmap__side { min-width: 0; display: flex; flex-direction: column; }
+.rmap__name { margin: 0 0 6px; font-family: var(--display); font-size: 18px; font-weight: 700; color: #fff; }
+.rmap__name small { margin-left: 4px; font-family: var(--body, inherit); font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, 0.6); }
+.rmap__list { list-style: none; margin: 0; padding: 0 4px 0 0; max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.3) transparent; }
+.rmap__list a { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: baseline; gap: 6px; padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, 0.16); }
+.rmap__list a:hover b { text-decoration: underline; text-underline-offset: 3px; }
+.rmap__list .num { font-size: 13px; color: rgba(255, 255, 255, 0.55); }
+.rmap__t b { display: block; font-family: var(--display); font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rmap__t small { display: block; margin-top: 2px; font-size: 12px; color: rgba(255, 255, 255, 0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rmap__credit { font-size: 11.5px; }
+.rmap__credit a { color: rgba(255, 255, 255, 0.75); text-decoration: underline; text-underline-offset: 2px; }
+@media (min-width: 1100px) {
+  .rmap { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+  .rmap__map { margin-left: -12px; }
+  .rmap__map { max-width: none; }
+  .rmap__list { max-height: 352px; }
+}
