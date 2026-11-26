@@ -13,6 +13,11 @@
 - 오후 보충 수집 (2026-11-26): `catchup.yml`(extra_collect.py usage details)을 pg_cron 'kick-catchup'(13:02 KST, `kick_catchup()`)이 시작. 그날 남은 수집 몫(400회 중)만 쓴다.
   extra_collect는 정보나루 시간 초과·연결 실패가 3번 연속이면 그 실행에서 정보나루를 그만 부른다(시간 초과는 재시도 안 함, timeout 30초). 11/26 새벽에 시간 초과로 이용분석 82권·소개 50권을 날리고 3시간 반 걸렸었다.
   이용분석은 아직 없는 책 먼저, 다시 받기는 30일마다(14→30).
+- 정보나루 고정 IP 중계 서버 (2026-11-26): 오라클 무료 VM(춘천, VM.Standard.E2.1.Micro, Ubuntu 22.04) 공인 IP **168.107.1.200**, tinyproxy :8888
+  (BasicAuth 사용자 chaekkok, 필터로 data4library.kr만 통과). GitHub Secret `D4L_PROXY`=http://chaekkok:<비번>@168.107.1.200:8888.
+  수집 스크립트는 `api_budget.d4l_get()`으로 부르며, 중계 서버가 안 되면 그 실행은 바로 부른다. 점검: Actions '중계 서버 점검 (수동)'(proxytest.yml, 정보나루 API 안 씀).
+  목적: 정보나루 마이페이지에 서버 IP 등록 → 하루 30,000건(공지 2023-11-10). 등록 전까지 한도는 그대로 500.
+  서버 들어가기: 오라클 Cloud Shell에 키 올리고 `ssh -i ~/ssh-key-*.key ubuntu@168.107.1.200`. 붙여넣기 앞에 `^[[200~`가 붙으니 명령 앞뒤에 `true;`.
 - 수집: `.github/workflows/collect.yml` 매일 04:07 KST → `collect.py`, `extra_collect.py`, `nl_recommend_collect.py`, `blog_draft.py`
 - 워크플로 수동 실행은 GraphQL이 막혀 있어 REST로:
   `gh api -X POST repos/si414835/chaekkok/actions/workflows/<file>.yml/dispatches -f ref=main`
