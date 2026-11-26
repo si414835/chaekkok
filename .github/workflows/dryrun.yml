@@ -4,6 +4,9 @@ name: 수집 대상 미리 보기 (수동)
 on:
   workflow_dispatch:
     inputs:
+      probe_regions:
+        description: 강원·전북 지역 코드 확인 (1이면 정보나루 8회 부름)
+        default: '0'
       try_usage:
         description: 이용분석을 몇 권 실제로 받아 볼지 (0이면 안 받음, 동시 호출 시험용)
         default: '0'
@@ -40,3 +43,20 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           USAGE_LIMIT: ${{ inputs.try_usage }}
         run: time python extra_collect.py usage
+      - name: 강원·전북 지역 코드 확인
+        if: inputs.probe_regions == '1'
+        env:
+          DATA4LIBRARY_KEY: ${{ secrets.DATA4LIBRARY_KEY }}
+          D4L_PROXY: ${{ secrets.D4L_PROXY }}
+        run: |
+          python - <<'PY'
+          import os, requests
+          from datetime import date, timedelta
+          px = {"http": os.environ["D4L_PROXY"]}; key = os.environ["DATA4LIBRARY_KEY"]
+          e = date.today() - timedelta(days=1); s = e - timedelta(days=29)
+          for api, extra in [("loanItemSrchByLib", {"startDt": str(s), "endDt": str(e)}), ("libSrch", {})]:
+              for code in ["32", "35", "51", "52"]:
+                  r = requests.get("http://data4library.kr/api/" + api, params={"authKey": key, "format": "json", "region": code, "pageSize": 3, **extra}, proxies=px, timeout=40).json()
+                  resp = r.get("response", {})
+                  print(api, code, "numFound", resp.get("numFound"), "error", resp.get("error"))
+          PY
