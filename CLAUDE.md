@@ -10,6 +10,9 @@
   collect.yml에 예약 5개(04:07·05:23·06:41·07:37·08:19 KST) + pg_cron `kick_collect()`(04:12·07:02 KST, Vault 'gh_dispatch_token' 있을 때만 GitHub API로 시작).
   토큰은 2026-11-25에 넣음(fine-grained, chaekkok·Actions 쓰기, **2027-11-25 만료** → 그 전에 새로 만들어 vault.update_secret로 교체). 시험: `select public.kick_collect();` 후 net._http_response가 204면 정상.
   '오늘 수집했는지 확인' 단계가 오늘 collect_runs 기록이 있으면 자동 실행(schedule, inputs.auto=true)을 건너뜀. 손으로 돌리면 항상 실행. (`supabase/sql/collect_kick.sql`)
+- 오후 보충 수집 (2026-11-26): `catchup.yml`(extra_collect.py usage details)을 pg_cron 'kick-catchup'(13:02 KST, `kick_catchup()`)이 시작. 그날 남은 수집 몫(400회 중)만 쓴다.
+  extra_collect는 정보나루 시간 초과·연결 실패가 3번 연속이면 그 실행에서 정보나루를 그만 부른다(시간 초과는 재시도 안 함, timeout 30초). 11/26 새벽에 시간 초과로 이용분석 82권·소개 50권을 날리고 3시간 반 걸렸었다.
+  이용분석은 아직 없는 책 먼저, 다시 받기는 30일마다(14→30).
 - 수집: `.github/workflows/collect.yml` 매일 04:07 KST → `collect.py`, `extra_collect.py`, `nl_recommend_collect.py`, `blog_draft.py`
 - 워크플로 수동 실행은 GraphQL이 막혀 있어 REST로:
   `gh api -X POST repos/si414835/chaekkok/actions/workflows/<file>.yml/dispatches -f ref=main`
