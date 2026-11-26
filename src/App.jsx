@@ -839,7 +839,7 @@ function Featured({ book }) {
 }
 
 // 폰 홈: TOP 5가 돌아가며 나오는 회전 진열 (4초마다 넘어가고, 밀어서·눌러서도 넘김)
-function TopCarousel({ books }) {
+function TopCarousel({ books, wide = false }) {
   const stateMap = useContext(StateCtx)
   const n = books.length
   const [idx, setIdx] = useState(0)
@@ -878,7 +878,7 @@ function TopCarousel({ books }) {
           if (o > n / 2) o -= n
           const a = Math.abs(o)
           const scale = [1, 0.74, 0.56][Math.min(a, 2)]
-          const x = [0, 104, 172][Math.min(a, 2)] * Math.sign(o)
+          const x = (wide ? [0, 190, 320] : [0, 104, 172])[Math.min(a, 2)] * Math.sign(o)
           const onClick = () => {
             if (swiped.current) {
               swiped.current = false
@@ -1240,20 +1240,15 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
         {!loading && !error && top5.length > 0 && (
           <>
             <PlainKeyword keywords={keywords} />
+            {/* 오늘의 콕 TOP 5: 넓은 화면도 폰처럼 돌아가는 표지 넘기기 (2026-11-26) */}
             <PSec title="오늘의 콕 TOP 5" more={{ href: '/trend', label: '트렌드 전체 →' }} className="ptop5" cat>
-              {wide ? (
-                <>
-                  <Featured book={top5[0]} />
-                  <div className="shelfgrid ptop5__rest">
-                    {top5.slice(1).map((b, i) => (
-                      <ShelfItem key={b.isbn13} book={b} num={i + 2} />
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <TopCarousel books={top5} />
-              )}
+              <TopCarousel books={top5} wide={wide} />
             </PSec>
+            {/* 도서관·지역 지도 두 면: TOP 5 바로 아래로 (2026-11-26) */}
+            <div className="phome__panels">
+              <LibPanel libs={libs || []} />
+              <RegionMapPanel />
+            </div>
             <div className="phome__row phome__row--half">
               <PSec title="대출 급상승" note="지난주 대비" className="phome__rise">
                 <RiseList books={rising} />
@@ -1264,10 +1259,6 @@ function Home({ feed, keywords, loading, error, upcoming, hitStats, unread, libs
                   시작하기 →
                 </a>
               </PSec>
-            </div>
-            <div className="phome__panels">
-              <LibPanel libs={libs || []} />
-              <RegionMapPanel />
             </div>
             <TasteTop />
             {hitStats?.matured_total ? (
