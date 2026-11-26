@@ -6820,3 +6820,13 @@ body { font-family: var(--font); letter-spacing: -0.012em; }
   .rmap__map { max-width: none; }
   .rmap__list { max-height: 352px; }
 }
+
+/* 책 상세 (2026-11-26): 표지 크게, 도서관에서 빌리기를 한 줄 요약 바로 아래로 */
+.pd__cover { width: 224px; }
+.pd__lib { margin-top: 28px; }
+.pd__lib + .pd__stack { margin-top: 8px; }
+@media (min-width: 1100px) {
+  .pd__grid { grid-template-columns: 360px minmax(0, 1fr); gap: 64px; }
+  .pd__cover { width: 290px; }
+  .pd__lib { margin-top: 32px; }
+}

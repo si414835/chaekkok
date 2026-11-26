@@ -2,6 +2,7 @@
 //   action 'nearby'  : 이 책을 가진 도서관을 지역에서 찾고, 가까운 몇 곳은 지금 대출 가능한지 확인
 //   action 'library' : 도서관 한 곳의 운영 정보, 시간대·요일별 대출 비율, 최근 인기대출, 신착도서
 //   action 'books'   : 책콕에 없는 책의 기본 정보·표지, 책 소개 (정보나루 도서 상세). 책콕에 있는 책이면 소개를 books에 저장
+//   action 'usage'   : 이용분석이 아직 없는 책을 상세 화면에서 열면 그 자리에서 받아 book_usage에 저장 (2026-11-26)
 // 정보나루가 끊기거나 비어 있으면 '모름'으로 돌려줘서 화면이 잘못된 값을 보여주지 않게 한다.
 // 배포: Supabase Edge Function 'library-info' (verify_jwt 끔, 입력값 검증으로 대신함)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -333,6 +334,52 @@ async function books(body: Record<string, unknown>) {
   return json({ books: out.map((b, i) => b ?? { isbn13: isbns[i], found: false }) });
 }
 
+// 이용분석(해시태그·함께 빌린 책·마니아·다독자 추천·월별 대출·연령 성별)을 그 자리에서 받는다 (2026-11-26)
+// 새벽 수집(extra_collect.py parse_usage)과 같은 모양으로 저장해서 화면이 '자료가 아직 없어요'를 덜 보이게 한다.
+const isbnOne = (v: unknown) => {
+  const parts = String(v ?? "").split(/\s+/).filter(Boolean);
+  return parts.find((x) => /^\d{13}$/.test(x)) ?? parts[0] ?? "";
+};
+const toInt = (v: unknown) => {
+  const n = parseInt(String(v ?? "").replace(/,/g, ""), 10);
+  return Number.isFinite(n) ? n : null;
+};
+async function usage(body: Record<string, unknown>) {
+  const isbn = String(body.isbn ?? "");
+  if (!/^\d{13}$/.test(isbn)) return json({ error: "bad isbn" }, 400);
+  const out = await cached(`us:${isbn}`, 6 * 60 * 60 * 1000, async () => {
+    const d = await api("usageAnalysisList", { isbn13: isbn });
+    if (!d) return null;
+    const r = d.response ?? {};
+    // deno-lint-ignore no-explicit-any
+    const items = (key: string, inner: string): any[] => (Array.isArray(r[key]) ? r[key] : []).map((x: any) => x?.[inner] ?? x).filter((x: unknown) => x && typeof x === "object");
+    const bookList = (key: string) =>
+      items(key, "book").filter((b) => b.bookname).slice(0, 10)
+        .map((b) => ({ isbn13: isbnOne(b.isbn13), title: String(b.bookname).trim(), author: b.authors ?? null, publisher: b.publisher ?? null }));
+    const row = {
+      isbn13: isbn,
+      keywords: items("keywords", "keyword").filter((k) => k.word).slice(0, 20).map((k) => ({ word: k.word, weight: toInt(k.weight) })),
+      co_loan: bookList("coLoanBooks"),
+      mania_rec: bookList("maniaRecBooks"),
+      reader_rec: bookList("readerRecBooks"),
+      loan_history: items("loanHistory", "loan").map((h) => ({ month: h.month ?? null, loanCnt: toInt(h.loanCnt), ranking: toInt(h.ranking) })),
+      loan_grps: items("loanGrps", "loanGrp").map((g) => ({ age: g.age ?? null, gender: g.gender ?? null, loanCnt: toInt(g.loanCnt), ranking: toInt(g.ranking) })),
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      dbc ??= createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+      // 책콕에 있는 책만 저장된다 (book_usage가 books를 참조)
+      await dbc.from("book_usage").upsert(row, { onConflict: "isbn13" });
+      const desc = cleanDesc(r.book?.description ?? "");
+      if (desc) await dbc.from("books").update({ description: desc, desc_checked_at: row.updated_at }).eq("isbn13", isbn).is("desc_checked_at", null);
+    } catch (_e) {
+      // 저장 실패는 화면에 영향 없음
+    }
+    return row;
+  });
+  return json({ usage: out, limit: hitLimit });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -348,5 +395,6 @@ Deno.serve(async (req) => {
   if (body.action === "nearby") return nearby(body);
   if (body.action === "library") return library(body);
   if (body.action === "books") return books(body);
+  if (body.action === "usage") return usage(body);
   return json({ error: "unknown action" }, 400);
 });

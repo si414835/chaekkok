@@ -2064,17 +2064,29 @@ function FilterSheet({ prefs, onApply, onClose }) {
 /* ================= 책 상세 ================= */
 
 function useBook(isbn, index) {
-  const [extra, setExtra] = useState({ base: null, usage: null, coCovers: {}, loading: true })
+  const [extra, setExtra] = useState({ base: null, usage: null, coCovers: {}, deepRank: null, loading: true })
   const known = index.get(isbn)
   useEffect(() => {
     let off = false
     async function run() {
-      setExtra({ base: null, usage: null, coCovers: {}, loading: true })
-      const [bookRes, usageRes] = await Promise.all([
+      setExtra({ base: null, usage: null, coCovers: {}, deepRank: null, loading: true })
+      const [bookRes, usageRes, deepRes] = await Promise.all([
         supabase.from('books').select('*').eq('isbn13', isbn).maybeSingle(),
         supabase.from('book_usage').select('*').eq('isbn13', isbn).maybeSingle(),
+        // 분야 201~1000위 (화면 표시용, 2026-11-26)
+        supabase.from('loan_rank_deep').select('rank,kdc,snapshot_date').eq('isbn13', isbn).order('snapshot_date', { ascending: false }).order('rank').limit(1),
       ])
-      const usage = usageRes.data
+      let usage = usageRes.data
+      // 이용분석이 아직 없는 책은 그 자리에서 받아 온다 (library-info가 받아서 book_usage에 저장, 2026-11-26)
+      if (!usage && !IS_BOT) {
+        try {
+          const { data } = await supabase.functions.invoke('library-info', { body: { action: 'usage', isbn } })
+          if (data?.usage) usage = data.usage
+        } catch {
+          /* 못 받으면 예전처럼 안내 문구 */
+        }
+      }
+      const deepRank = deepRes.data?.[0] || null
       let coCovers = {}
       const coIsbns = (usage?.co_loan || []).map((c) => c.isbn13).filter(Boolean).slice(0, 10)
       if (coIsbns.length) {
@@ -2108,7 +2120,7 @@ function useBook(isbn, index) {
           }
         }
       }
-      if (!off) setExtra({ base, usage, coCovers, loading: false })
+      if (!off) setExtra({ base, usage, coCovers, deepRank, loading: false })
     }
     run()
     return () => {
@@ -3191,7 +3203,7 @@ function DetailMain({ wide, children }) {
 
 function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, hits }) {
   const wide = useWide()
-  const { book, usage, coCovers, loading, base } = useBook(isbn, index)
+  const { book, usage, coCovers, loading, base, deepRank } = useBook(isbn, index)
   const ev = useEvidence(isbn)
   const rankHist = useRankHistory(isbn)
   const recs = useBookRecs(isbn)
@@ -3321,7 +3333,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
 
   const scrollTo = (r) => r.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const facts = [
-    rankNow != null ? ['분야 순위', <>{cat} {rankNow}위{journey ? <span className="pd__dim">{journey.split(' · ')[1]}</span> : ev?.rank_prev ? <span className="pd__dim">지난번 {ev.rank_prev}위</span> : null}</>] : ['분야 순위', <span className="pd__dim">인기대출 목록 밖</span>],
+    rankNow != null ? ['분야 순위', <>{cat} {rankNow}위{journey ? <span className="pd__dim">{journey.split(' · ')[1]}</span> : ev?.rank_prev ? <span className="pd__dim">지난번 {ev.rank_prev}위</span> : null}</>] : deepRank ? ['분야 순위', <>{cat} {deepRank.rank}위<span className="pd__dim">최근 30일 대출</span></>] : ['분야 순위', <span className="pd__dim">1000위 밖</span>],
     lastM ? [`${monthOf(lastM)}월 대출`, <>{lastM.loanCnt.toLocaleString()}회{prevM?.loanCnt ? <span className="pd__dim">{monthOf(prevM)}월보다 {lastM.loanCnt >= prevM.loanCnt ? '+' : ''}{Math.round((lastM.loanCnt / prevM.loanCnt - 1) * 100).toLocaleString()}%</span> : null}</>] : null,
     topGrp ? ['많이 빌린 독자', grpLab(topGrp)] : null,
     st?.stage ? ['트렌드 단계', <>{st.stage}{st.reason ? <span className="pd__dim">{st.reason}</span> : null}</>] : null,
@@ -3417,6 +3429,18 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
           {/* 한 줄 요약: 제목·영상 줄 아래에 가로로 꽉 차게 (영상 밑까지 이어지게) */}
           {oneLiner && <p className="pd__oneline">{oneLiner}</p>}
 
+          {/* 도서관에서 빌리기: 한 줄 요약 바로 아래로 올림 (2026-11-26, 더 잘 보이게) */}
+          <section className="pd__lib" id="lib" ref={libRef}>
+            <div className="pd__libhead">
+              <p className="pd__kind">도서관에서 빌리기</p>
+              <h2 className="pd__h">내 도서관에 있을까요?</h2>
+              <p className="pd__note">자주 가는 도서관을 정하면 소장 여부와 지금 대출 가능한지 보여 드려요.</p>
+            </div>
+            <div className="pd__libbody">
+              <LibraryStatusSheet inline book={book} libs={libs} setLibs={setLibs} onClose={() => {}} onPick={onPickLibrary} />
+            </div>
+          </section>
+
           <div className="pd__stack">
             <section className="pd__intro">
               <div className="psec__head">
@@ -3485,20 +3509,10 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
               </div>
             )
           })()}
-          {!hasData && !loading && <p className="pd__fine">월별 대출과 누가 빌렸는지는 상위권 책부터 매일 채워지고 있어요.</p>}
+          {!hasData && !loading && <p className="pd__fine">정보나루에 이 책의 월별 대출·이용자 기록이 아직 없어요.</p>}
 
           <NextReads isbn={book.isbn13} co={co} recs={recs} words={keywords.map((k) => k.word)} coverOf={(c) => c.cover_url || coCovers[c.isbn13] || index.get(c.isbn13)?.cover_url} />
 
-          <section className="pd__lib" id="lib" ref={libRef}>
-            <div className="pd__libhead">
-              <p className="pd__kind">도서관</p>
-              <h2 className="pd__h">내 도서관에 있을까요?</h2>
-              <p className="pd__note">자주 가는 도서관을 정하면 소장 여부와 지금 대출 가능한지 보여 드려요.</p>
-            </div>
-            <div className="pd__libbody">
-              <LibraryStatusSheet inline book={book} libs={libs} setLibs={setLibs} onClose={() => {}} onPick={onPickLibrary} />
-            </div>
-          </section>
           {!wide && BuyList}
           <p className="pd__source">자료: 도서관 정보나루{st?.snapshot_date ? ` · ${fmtDate(st.snapshot_date)} 수집` : ''}</p>
         </div>
