@@ -5,7 +5,7 @@
 초안을 blog_drafts 표에 저장하면, 책콕의 /draft 화면에서 제목·본문·태그를 복사해 붙여 넣는다.
 
 양식(고정)
-  제목  M월 D일 요즘 도서관에서 뜨는 책 N권 추천 | 『책 이름』…
+  제목  『책 이름』 · 『책 이름』… | 요즘 도서관에서 뜨는 책 N권 추천 (M월 D일)
   본문  이모티콘 없는 줄글 완성본(붙여 넣기만 하면 됨). 사람이 쓴 블로그처럼 읽히게 —
         같은 뜻의 문장을 여러 개 두고 날짜·순서로 돌려 쓰고, 숫자는 '네 배 가까이'처럼 말로, 같은 설명(예보 계산법·
         책 소개 출처)은 글 전체에서 한 번만, 신뢰도 같은 내부 용어는 뺀다.
@@ -405,9 +405,13 @@ def build(day):
             "intro": book_intro(s["isbn13"]),
         })
     names = [it["name"] for it in items]
-    title = f"{md} 요즘 도서관에서 뜨는 책 {len(items)}권 추천 | " + " · ".join(f"『{n}』" for n in names)
-    if len(title) > 60:
-        title = f"{md} 요즘 도서관에서 뜨는 책 {len(items)}권 추천 | 『{names[0]}』 외"
+    # 책 이름을 맨 앞에 (블로그 검색 유입의 약 1/4이 책 제목 검색, 2026-11-27 승환님 요청)
+    # 60자 안에 들어가는 만큼 책 이름을 넣고 나머지는 '외 N권'
+    title = " · ".join(f"『{n}』" for n in names) + f" | 요즘 도서관에서 뜨는 책 {len(items)}권 추천 ({md})"
+    for k in range(len(names) - 1, 0, -1):
+        if len(title) <= 60:
+            break
+        title = " · ".join(f"『{n}』" for n in names[:k]) + f" 외 {len(names) - k}권 | 요즘 도서관에서 뜨는 책 추천 ({md})"
 
     opening = pick([
         f"오늘도 도서관에서 요즘 부쩍 많이 빌려 가는 책 {len(items)}권을 골라 왔어요.",
