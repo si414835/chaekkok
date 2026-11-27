@@ -17,6 +17,7 @@ import requests
 import xml.etree.ElementTree as ET
 from supabase import create_client
 from isbn_util import isbn_candidates
+from text_util import strip_tags
 
 NL_KEY = os.environ["NL_API_KEY"]
 # 표지 이미지는 정보나루 도서 상세 조회(srchDtlList)에서 가져온다 (없으면 국립중앙도서관 표지 사용)
@@ -57,8 +58,7 @@ def strip_html(text):
     """추천사에 섞인 HTML 태그 제거하고 순수 텍스트만 남긴다."""
     if not text:
         return ""
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = html.unescape(text)
+    text = strip_tags(text)  # 제목 꺾쇠(<…>)는 남김 (2026-11-27)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 

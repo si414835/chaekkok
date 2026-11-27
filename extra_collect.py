@@ -29,6 +29,7 @@ supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 import api_budget  # noqa: E402
 from api_budget import BudgetExceeded  # noqa: E402
 from isbn_util import fix_isbns  # noqa: E402
+from text_util import strip_tags  # noqa: E402
 
 
 class NoData(RuntimeError):
@@ -836,8 +837,8 @@ def collect_coloan():
 
 def clean_desc(t):
     """정보나루 책 소개: 태그·엔티티를 걷어내고 공백 정리 (화면에 그대로 보여 준다)"""
-    t = html.unescape(re.sub(r"<br\s*/?>", "\n", t or "", flags=re.I))
-    t = re.sub(r"<[^>]+>", " ", t)
+    # 제목 꺾쇠(<복자에게>)는 남기고 진짜 태그만 지운다 (2026-11-27, text_util 참고)
+    t = strip_tags(t, keep_lines=True)
     t = re.sub(r"[ \t]+", " ", t)
     t = re.sub(r"\s*\n\s*", "\n", t).strip()
     return t or None

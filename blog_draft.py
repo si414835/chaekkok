@@ -33,6 +33,8 @@ from datetime import datetime, timedelta, timezone
 import requests
 from supabase import create_client
 
+from text_util import strip_tags
+
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 SITE = "https://chaekkok.vercel.app"
 # 블로그에서 들어온 방문을 Vercel Analytics의 UTM Parameters에서 따로 셀 수 있게 꼬리표를 붙인다
@@ -208,7 +210,7 @@ def book_intro(isbn):
         return None
     if not desc:
         return None
-    text = re.sub(r"<[^>]+>", " ", html.unescape(desc))
+    text = strip_tags(desc)  # 제목 꺾쇠(<…>)는 남김 (2026-11-27)
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"([!?])(?=[^\s!?”\"'’)])", r"\1 ", text)  # '신화!오직'처럼 붙은 문장 띄우기
     text = re.sub(r"[★☆◆◇■□●○▶▷※]+[^★☆◆◇■□●○▶▷※]{0,80}?[★☆◆◇■□●○▶▷※]+", " ", text)  # '★★ 수상! ★★' 같은 광고 문구 빼기
