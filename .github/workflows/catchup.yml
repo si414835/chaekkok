@@ -30,6 +30,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           USAGE_LIMIT: '1500'
+          # 화면 목록 밖 책도 이용분석이 없으면 받는다 (아직 안 받은 책이 먼저, 2026-11-27)
+          USAGE_ALL: '1'
           DETAIL_LIMIT: '1500'
           COLOAN_LIMIT: '500'
         run: python extra_collect.py usage coloan details
