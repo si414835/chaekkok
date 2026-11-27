@@ -4,7 +4,7 @@ name: 대량 보충 (수동)
 #  ① 이용분석: 책콕의 모든 책 중 아직 없는 책 (해시태그·함께 빌린 책·마니아·다독자 추천·월별 대출·연령 성별·책 소개)
 #  ② 함께 빌린 책·추천 책 중 책콕에 없는 책 등록 (표지·분야·책 소개)
 #  ③ 책 소개·분류가 빈 책 채우기
-# 위를 여러 바퀴 돈다(새로 등록된 책도 다음 바퀴에 이용분석). 하루 합계가 API_PROXY_TOTAL_LIMIT(기본 28,500)에 닿으면 멈춘다.
+# 위를 여러 바퀴 돈다(새로 등록된 책도 다음 바퀴에 이용분석). 하루 합계가 inputs.cap(기본 28,500)에 닿으면 멈춘다.
 on:
   workflow_dispatch:
     inputs:
@@ -14,6 +14,9 @@ on:
       workers:
         description: 동시에 부를 개수
         default: '6'
+      cap:
+        description: 오늘 정보나루 호출 합계를 여기까지 (등록 IP 한도 30,000)
+        default: '28500'
 
 concurrency:
   group: collect
@@ -40,7 +43,9 @@ jobs:
           USAGE_LIMIT: '8000'
           COLOAN_LIMIT: '8000'
           DETAIL_LIMIT: '1000'
-          CALL_BUDGET: '28500'
+          CALL_BUDGET: ${{ inputs.cap }}
+          API_PROXY_BATCH_LIMIT: ${{ inputs.cap }}
+          API_PROXY_TOTAL_LIMIT: ${{ inputs.cap }}
           D4L_WORKERS: ${{ inputs.workers }}
         run: |
           for r in $(seq 1 ${{ inputs.rounds }}); do
@@ -57,7 +62,7 @@ jobs:
           print(f"[오늘 정보나루 호출 합계] {n}")
           open("/tmp/calls", "w").write(str(n))
           PY
-            if [ "$(cat /tmp/calls)" -ge 28400 ]; then echo "하루 몫을 다 씀 - 멈춤"; break; fi
+            if [ "$(cat /tmp/calls)" -ge $(( ${{ inputs.cap }} - 100 )) ]; then echo "하루 몫을 다 씀 - 멈춤"; break; fi
           done
       - name: 화면용 캐시 새로 고침
         if: always()
