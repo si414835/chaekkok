@@ -47,6 +47,7 @@
 - 흔한 책 보정: `mv_neighbor_freq`(이웃 목록 등장 수)를 extra_collect 이용분석 단계 끝에 `refresh_neighbor_freq()`로 새로 고침. `book_recs`·`taste_recs`가 ln(전체/(1+등장 수))로 순서를 낮춘다.
 - 취향 찾기(/taste): `taste_votes`(기기 번호·책마다 마지막 선택, RLS 잠김) ← `taste_vote` RPC만으로 기록. 콕 추가/해제도 source='kok'로 +1/0. 홈 '모두가 콕한 책'은 `taste_top`(최근 30일). 비어 있으면 아직 투표가 없는 것.
 - '누가 빌렸나' 분야 비교는 `field_demo(대분류, 어린이여부)`: 그룹 8개 이상인 같은 분야 책들의 비율 평균. 책이 5권 미만이면 화면은 남녀 비율만 보여 준다 (loan_grps는 그 책이 순위에 든 그룹만 와서 전체 분포가 아님).
+- 도서관 '대출 가능/대출 중'은 정보나루 bookExist의 **전날 상태**(정보나루 공지 2020-07-27 '조회일 기준 전날 대출상태')라 실시간과 다를 수 있다. 화면 라벨은 '어제 대출 가능/어제 대출 중'(11-28 화서다산도서관 타관대출중 제보).
 - ISBN은 `isbn_util.py`로 13자리 하나만 저장 (API가 'ISBN1 ISBN2'로 줄 때가 있음).
 - 정보나루 하루 500건(IP 미등록 키) 나눠 쓰기 (`supabase/sql/api_budget.sql`, 2026-11-23): 수집은 `add_batch_calls`로 batch 400회, 화면(book-exist·library-info)은 `spend_edge_call`로 하루 90회, 전체 495회. 막힌 요청은 세지 않음. `api_usage.edge_calls`가 화면 몫.
 - 검색 로봇(구글 렌더러 등)은 화면·함수 둘 다 정보나루를 안 부른다(App.jsx `IS_BOT`, 함수의 `isBot`). 11/23에 구글 로봇이 책 상세를 그리며 하루 400회를 써서 수집·소장 확인이 다 막혔었다.
