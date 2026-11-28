@@ -3053,6 +3053,8 @@ a.lib__info {
 }
 .lib__state {
   min-width: 0;
+  line-height: 1.15;
+  text-align: center;
 }
 .lib__acts .lib__state {
   padding-left: 9px;

@@ -3496,7 +3496,7 @@ function Detail({ isbn, index, wish, toggleWish, libs, setLibs, onPickLibrary, h
             <div className="pd__libhead">
               <p className="pd__kind">도서관</p>
               <h2 className="pd__h">내 도서관에 있을까요?</h2>
-              <p className="pd__note">자주 가는 도서관을 정하면 소장 여부와 지금 대출 가능한지 보여 드려요.</p>
+              <p className="pd__note">자주 가는 도서관을 정하면 소장 여부와 어제 기준 대출 가능 여부를 보여 드려요.</p>
             </div>
             <div className="pd__libbody">
               <LibraryStatusSheet inline book={book} libs={libs} setLibs={setLibs} onClose={() => {}} onPick={onPickLibrary} />
@@ -4633,8 +4633,9 @@ const hourLabel = (h) => (h === 0 ? '자정' : h < 12 ? `오전 ${h}시` : h ===
 
 function libStatus(l) {
   if (l.hasBook === false) return ['확인 안 됨', 'muted']
-  if (l.loanAvailable === true) return ['대출 가능', 'up']
-  if (l.loanAvailable === false) return ['대출 중', 'warn']
+  // 정보나루 loanAvailable은 '조회일 기준 전날 대출상태'라 실시간이 아니다 (정보나루 공지 2020-07-27, 2026-11-28 사용자 제보)
+  if (l.loanAvailable === true) return ['어제 대출 가능', 'up']
+  if (l.loanAvailable === false) return ['어제 대출 중', 'warn']
   return ['소장', 'muted'] // 소장 목록에는 있지만 지금 대출 가능한지는 확인 안 한 곳
 }
 
@@ -4780,7 +4781,7 @@ function NearbyLibraries({ book, libs, setLibs }) {
               {list.length - FIRST}곳 더 보기
             </button>
           )}
-          <p className="nearby__note">대출 상태는 하루 한 번 바뀌어요. 가기 전에 전화로 확인해 보세요.</p>
+          <p className="nearby__note">대출 상태는 어제 기준이에요. 가기 전에 전화나 홈페이지로 확인해 보세요.</p>
         </>
       )}
     </Fold>
@@ -5159,7 +5160,8 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = fal
     if (!r || r.error) return [r?.limit ? '확인 못 함' : '확인 실패', 'muted']
     if (!r.hasBook) return ['소장 안 함', 'muted']
     if (r.loanAvailable == null) return ['소장 중', 'up']
-    return r.loanAvailable ? ['대출 가능', 'up'] : ['대출 중', 'warn']
+    // 정보나루 대출 여부는 전날 상태라 오늘 빌려 갔거나 상호대차 중이면 다를 수 있다 (2026-11-28)
+    return r.loanAvailable ? ['어제 대출 가능', 'up'] : ['어제 대출 중', 'warn']
   }
 
   const [altOpen, setAltOpen] = useState(false)
@@ -5205,7 +5207,7 @@ function LibraryStatusSheet({ book, libs, setLibs, onClose, onPick, inline = fal
             })}
           </div>
         )}
-        <p className="wsheet__foot">소장·대출 정보는 도서관 정보나루 기준이에요.</p>
+        <p className="wsheet__foot">소장·대출 정보는 도서관 정보나루 기준이에요. 대출 여부는 어제 상태라 지금과 다를 수 있으니, 가기 전에 홈페이지에서 확인해 주세요.</p>
         <div className={`sheet__actions${inline ? ' wsheet__actions' : ''}`}>
           <button className="btn btn--soft" onClick={onPick}>{libs.length > 0 ? '내 도서관 관리' : '도서관 이름으로 찾기'}</button>
           {inline && onBuy && (
